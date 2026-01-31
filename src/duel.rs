@@ -107,6 +107,28 @@ pub struct DuelResult {
 }
 
 /// A sword fighting duel between two opponents.
+///
+/// # Examples
+///
+/// ```
+/// use insult_arena_mcp::{Duel, Duelist, DuelState};
+///
+/// // Start a new duel (Challenger goes first)
+/// let mut duel = Duel::new();
+/// assert!(matches!(duel.state(), DuelState::AwaitingInsult { attacker: Duelist::Challenger }));
+///
+/// // Challenger throws an insult
+/// duel.throw_insult("You fight like a dairy farmer!".to_string()).unwrap();
+/// assert!(matches!(duel.state(), DuelState::AwaitingComeback { attacker: Duelist::Challenger }));
+///
+/// // Defender responds correctly (Parry!)
+/// let exchange = duel.respond("How appropriate. You fight like a cow.".to_string()).unwrap();
+/// assert!(exchange.result.is_parried());
+/// assert_eq!(exchange.winner, Duelist::Defender);
+///
+/// // Winner of the exchange attacks next
+/// assert!(matches!(duel.state(), DuelState::AwaitingInsult { attacker: Duelist::Defender }));
+/// ```
 #[derive(Debug, Clone)]
 pub struct Duel {
     /// Current state of the duel.
@@ -183,6 +205,16 @@ impl Duel {
 
     /// Throws an insult. Returns error if not the right time.
     ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::{Duel, DuelState};
+    ///
+    /// let mut duel = Duel::new();
+    /// duel.throw_insult("You fight like a dairy farmer!".to_string()).unwrap();
+    /// assert!(matches!(duel.state(), DuelState::AwaitingComeback { .. }));
+    /// ```
+    ///
     /// # Errors
     ///
     /// Returns an error if it's not time to throw an insult.
@@ -206,6 +238,20 @@ impl Duel {
     }
 
     /// Responds with a comeback. Returns the exchange result.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::{Duel, Duelist};
+    ///
+    /// let mut duel = Duel::new();
+    /// duel.throw_insult("You fight like a dairy farmer!".to_string()).unwrap();
+    ///
+    /// // Correct response
+    /// let exchange = duel.respond("How appropriate. You fight like a cow.".to_string()).unwrap();
+    /// assert!(exchange.result.is_parried());
+    /// assert_eq!(exchange.winner, Duelist::Defender);
+    /// ```
     ///
     /// # Errors
     ///

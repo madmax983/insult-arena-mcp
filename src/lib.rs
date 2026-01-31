@@ -24,7 +24,7 @@
 //!
 //! ## Example
 //!
-//! ```rust,ignore
+//! ```rust,no_run
 //! use insult_arena_mcp::InsultServer;
 //!
 //! let server = InsultServer::new();

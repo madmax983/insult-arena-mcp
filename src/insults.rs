@@ -99,6 +99,16 @@ impl InsultBank {
 
     /// Gets a random insult for an attacker to use.
     ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::InsultBank;
+    ///
+    /// let bank = InsultBank::new();
+    /// let pair = bank.random_insult();
+    /// println!("Insult: {}", pair.insult);
+    /// ```
+    ///
     /// # Panics
     ///
     /// Panics if the insult bank is empty. This should never happen as the
@@ -114,6 +124,25 @@ impl InsultBank {
 
     /// Checks if a comeback is correct for a given insult.
     /// Returns the matching pair if found.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::InsultBank;
+    ///
+    /// let bank = InsultBank::new();
+    /// let result = bank.check_comeback(
+    ///     "You fight like a dairy farmer!",
+    ///     "How appropriate. You fight like a cow."
+    /// );
+    /// assert!(result.is_some());
+    ///
+    /// let result = bank.check_comeback(
+    ///     "You fight like a dairy farmer!",
+    ///     "I am rubber, you are glue"
+    /// );
+    /// assert!(result.is_none());
+    /// ```
     #[must_use]
     pub fn check_comeback(&self, insult: &str, comeback: &str) -> Option<&InsultPair> {
         self.pairs.iter().find(|pair| {
@@ -122,6 +151,16 @@ impl InsultBank {
     }
 
     /// Finds the correct comeback for an insult.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::InsultBank;
+    ///
+    /// let bank = InsultBank::new();
+    /// let comeback = bank.find_comeback("You fight like a dairy farmer!");
+    /// assert_eq!(comeback, Some("How appropriate. You fight like a cow."));
+    /// ```
     #[must_use]
     pub fn find_comeback(&self, insult: &str) -> Option<&str> {
         self.pairs
@@ -131,6 +170,17 @@ impl InsultBank {
     }
 
     /// Finds insults that match a partial string (for learning mode).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::InsultBank;
+    ///
+    /// let bank = InsultBank::new();
+    /// let matches = bank.search_insults("dairy");
+    /// assert_eq!(matches.len(), 1);
+    /// assert!(matches[0].insult.contains("dairy farmer"));
+    /// ```
     #[must_use]
     pub fn search_insults(&self, query: &str) -> Vec<&InsultPair> {
         let query_lower = query.to_lowercase();
