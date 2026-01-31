@@ -531,15 +531,18 @@ impl InsultServer {
                             "🏆 DUEL OVER! {} WINS! (Score: {}-{})",
                             exchange.winner, challenger, defender
                         );
-                        format!("TOUCHÉ! Perfect parry! {} wins the duel!", exchange.winner)
+                        format!(
+                            "TOUCHÉ! Sharp wit! {} wins the duel with a score of {}-{}!",
+                            exchange.winner, challenger, defender
+                        )
                     } else {
                         info!(
                             "   Score: Challenger {} - {} Defender",
                             challenger, defender
                         );
                         format!(
-                            "TOUCHÉ! Perfect parry! {} wins the exchange and attacks next!",
-                            exchange.winner
+                            "TOUCHÉ! Sharp wit! {} wins the exchange! (Score: {}-{})",
+                            exchange.winner, challenger, defender
                         )
                     }
                 } else {
@@ -549,15 +552,18 @@ impl InsultServer {
                             "🏆 DUEL OVER! {} WINS! (Score: {}-{})",
                             exchange.winner, challenger, defender
                         );
-                        format!("You failed to parry! {} wins the duel!", exchange.winner)
+                        format!(
+                            "OOF! Clumsy response! {} wins the duel with a score of {}-{}!",
+                            exchange.winner, challenger, defender
+                        )
                     } else {
                         info!(
                             "   Score: Challenger {} - {} Defender",
                             challenger, defender
                         );
                         format!(
-                            "You failed to parry! {} wins the exchange and attacks again!",
-                            exchange.winner
+                            "OOF! Clumsy response! {} wins the exchange! (Score: {}-{})",
+                            exchange.winner, challenger, defender
                         )
                     }
                 };

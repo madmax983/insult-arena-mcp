@@ -112,21 +112,36 @@ impl InsultBank {
             .expect("InsultBank should never be empty")
     }
 
+    /// Normalizes text for fuzzy matching (removes punctuation, lowercase).
+    fn normalize(text: &str) -> String {
+        text.chars()
+            .filter(|c| c.is_alphanumeric())
+            .flat_map(char::to_lowercase)
+            .collect()
+    }
+
     /// Checks if a comeback is correct for a given insult.
     /// Returns the matching pair if found.
     #[must_use]
     pub fn check_comeback(&self, insult: &str, comeback: &str) -> Option<&InsultPair> {
+        let normalized_comeback = Self::normalize(comeback);
         self.pairs.iter().find(|pair| {
-            pair.insult.eq_ignore_ascii_case(insult) && pair.comeback.eq_ignore_ascii_case(comeback)
+            // We assume the insult stored in state is correct/exact, but
+            // we should probably be lenient on the insult match too if it came from user input.
+            // However, typically the insult is passed from the pending state which is exact.
+            // But let's be safe and normalize both checks just in case.
+            pair.insult.eq_ignore_ascii_case(insult)
+                && Self::normalize(pair.comeback) == normalized_comeback
         })
     }
 
     /// Finds the correct comeback for an insult.
     #[must_use]
     pub fn find_comeback(&self, insult: &str) -> Option<&str> {
+        let normalized_insult = Self::normalize(insult);
         self.pairs
             .iter()
-            .find(|pair| pair.insult.eq_ignore_ascii_case(insult))
+            .find(|pair| Self::normalize(pair.insult) == normalized_insult)
             .map(|pair| pair.comeback)
     }
 
@@ -205,5 +220,22 @@ mod tests {
         let results = bank.search_insults("dairy");
         assert_eq!(results.len(), 1);
         assert!(results[0].insult.contains("dairy farmer"));
+    }
+
+    #[test]
+    fn check_comeback_lenient_matching() {
+        let bank = InsultBank::new();
+        // Missing period, different casing, extra spaces
+        let result = bank.check_comeback(
+            "You fight like a dairy farmer!",
+            "how appropriate you fight like a cow",
+        );
+        assert!(result.is_some(), "Should match despite missing punctuation");
+
+        let result = bank.check_comeback(
+            "You fight like a dairy farmer!",
+            "How appropriate... you fight like a cow!!!",
+        );
+        assert!(result.is_some(), "Should match despite extra punctuation");
     }
 }
