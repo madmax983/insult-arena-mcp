@@ -3,3 +3,6 @@ Cargo.lock
 *.swp
 *.swo
 .DS_Store
+
+# Local Claude settings (use settings.local.example.json as template)
+.claude/settings.local.json
