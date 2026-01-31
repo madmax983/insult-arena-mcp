@@ -11,103 +11,103 @@ pub struct InsultPair {
     pub comeback: &'static str,
 }
 
+static INSULTS: [InsultPair; 16] = [
+    InsultPair {
+        insult: "You fight like a dairy farmer!",
+        comeback: "How appropriate. You fight like a cow.",
+    },
+    InsultPair {
+        insult: "This is the END for you, you gutter-crawling cur!",
+        comeback: "And I've got a little TIP for you. Get the POINT?",
+    },
+    InsultPair {
+        insult: "I've spoken with apes more polite than you!",
+        comeback: "I'm glad to hear you attended your family reunion.",
+    },
+    InsultPair {
+        insult: "Soon you'll be wearing my sword like a shish kebab!",
+        comeback: "First you'd better stop waving it like a feather duster.",
+    },
+    InsultPair {
+        insult: "People fall at my feet when they see me coming!",
+        comeback: "Even BEFORE they smell your breath?",
+    },
+    InsultPair {
+        insult: "I'm not going to take your insolence sitting down!",
+        comeback: "Your hemorrhoids are flaring up again, eh?",
+    },
+    InsultPair {
+        insult: "I once owned a dog that was smarter than you.",
+        comeback: "He must have taught you everything you know.",
+    },
+    InsultPair {
+        insult: "Nobody's ever drawn blood from me and nobody ever will!",
+        comeback: "You run THAT fast?",
+    },
+    InsultPair {
+        insult: "Have you stopped wearing diapers yet?",
+        comeback: "Why? Did you want to borrow one?",
+    },
+    InsultPair {
+        insult: "There are no words for how disgusting you are.",
+        comeback: "Yes there are. You just never learned them.",
+    },
+    InsultPair {
+        insult: "You make me want to puke.",
+        comeback: "You make me think somebody already did.",
+    },
+    InsultPair {
+        insult: "My handkerchief will wipe up your blood!",
+        comeback: "So you got that job as a janitor, after all.",
+    },
+    InsultPair {
+        insult: "I got this scar on my face during a mighty struggle!",
+        comeback: "I hope now you've learned to stop picking your nose.",
+    },
+    InsultPair {
+        insult: "I've heard you are a contemptible sneak.",
+        comeback: "Too bad no one's ever heard of YOU at all.",
+    },
+    InsultPair {
+        insult: "You're no match for my brains, you poor fool.",
+        comeback: "I'd be in real trouble if you ever used them.",
+    },
+    InsultPair {
+        insult: "Every enemy I've met I've annihilated!",
+        comeback: "With your breath, I'm sure they all suffocated.",
+    },
+];
+
 /// Bank of classic insults for sword fighting.
-#[derive(Debug, Clone)]
-pub struct InsultBank {
-    pairs: Vec<InsultPair>,
-}
+///
+/// This struct is zero-sized and uses static storage for the insults,
+/// avoiding heap allocations.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct InsultBank;
 
 impl InsultBank {
     /// Creates a new insult bank with all classic Monkey Island insults.
     #[must_use]
-    pub fn new() -> Self {
-        Self {
-            pairs: vec![
-                InsultPair {
-                    insult: "You fight like a dairy farmer!",
-                    comeback: "How appropriate. You fight like a cow.",
-                },
-                InsultPair {
-                    insult: "This is the END for you, you gutter-crawling cur!",
-                    comeback: "And I've got a little TIP for you. Get the POINT?",
-                },
-                InsultPair {
-                    insult: "I've spoken with apes more polite than you!",
-                    comeback: "I'm glad to hear you attended your family reunion.",
-                },
-                InsultPair {
-                    insult: "Soon you'll be wearing my sword like a shish kebab!",
-                    comeback: "First you'd better stop waving it like a feather duster.",
-                },
-                InsultPair {
-                    insult: "People fall at my feet when they see me coming!",
-                    comeback: "Even BEFORE they smell your breath?",
-                },
-                InsultPair {
-                    insult: "I'm not going to take your insolence sitting down!",
-                    comeback: "Your hemorrhoids are flaring up again, eh?",
-                },
-                InsultPair {
-                    insult: "I once owned a dog that was smarter than you.",
-                    comeback: "He must have taught you everything you know.",
-                },
-                InsultPair {
-                    insult: "Nobody's ever drawn blood from me and nobody ever will!",
-                    comeback: "You run THAT fast?",
-                },
-                InsultPair {
-                    insult: "Have you stopped wearing diapers yet?",
-                    comeback: "Why? Did you want to borrow one?",
-                },
-                InsultPair {
-                    insult: "There are no words for how disgusting you are.",
-                    comeback: "Yes there are. You just never learned them.",
-                },
-                InsultPair {
-                    insult: "You make me want to puke.",
-                    comeback: "You make me think somebody already did.",
-                },
-                InsultPair {
-                    insult: "My handkerchief will wipe up your blood!",
-                    comeback: "So you got that job as a janitor, after all.",
-                },
-                InsultPair {
-                    insult: "I got this scar on my face during a mighty struggle!",
-                    comeback: "I hope now you've learned to stop picking your nose.",
-                },
-                InsultPair {
-                    insult: "I've heard you are a contemptible sneak.",
-                    comeback: "Too bad no one's ever heard of YOU at all.",
-                },
-                InsultPair {
-                    insult: "You're no match for my brains, you poor fool.",
-                    comeback: "I'd be in real trouble if you ever used them.",
-                },
-                InsultPair {
-                    insult: "Every enemy I've met I've annihilated!",
-                    comeback: "With your breath, I'm sure they all suffocated.",
-                },
-            ],
-        }
+    pub const fn new() -> Self {
+        Self
     }
 
     /// Returns all insult pairs.
     #[must_use]
-    pub fn all_pairs(&self) -> &[InsultPair] {
-        &self.pairs
+    pub fn all_pairs(&self) -> &'static [InsultPair] {
+        &INSULTS
     }
 
     /// Gets a random insult for an attacker to use.
     ///
     /// # Panics
     ///
-    /// Panics if the insult bank is empty. This should never happen as the
-    /// bank is always initialized with the classic Monkey Island insults.
+    /// Panics if the insult bank is empty (which should never happen).
     #[must_use]
-    #[allow(clippy::expect_used)] // Invariant: InsultBank is never constructed empty
-    pub fn random_insult(&self) -> &InsultPair {
+    #[allow(clippy::expect_used)]
+    pub fn random_insult(&self) -> &'static InsultPair {
         use rand::seq::SliceRandom;
-        self.pairs
+        INSULTS
             .choose(&mut rand::thread_rng())
             .expect("InsultBank should never be empty")
     }
@@ -115,16 +115,16 @@ impl InsultBank {
     /// Checks if a comeback is correct for a given insult.
     /// Returns the matching pair if found.
     #[must_use]
-    pub fn check_comeback(&self, insult: &str, comeback: &str) -> Option<&InsultPair> {
-        self.pairs.iter().find(|pair| {
+    pub fn check_comeback(&self, insult: &str, comeback: &str) -> Option<&'static InsultPair> {
+        INSULTS.iter().find(|pair| {
             pair.insult.eq_ignore_ascii_case(insult) && pair.comeback.eq_ignore_ascii_case(comeback)
         })
     }
 
     /// Finds the correct comeback for an insult.
     #[must_use]
-    pub fn find_comeback(&self, insult: &str) -> Option<&str> {
-        self.pairs
+    pub fn find_comeback(&self, insult: &str) -> Option<&'static str> {
+        INSULTS
             .iter()
             .find(|pair| pair.insult.eq_ignore_ascii_case(insult))
             .map(|pair| pair.comeback)
@@ -132,18 +132,12 @@ impl InsultBank {
 
     /// Finds insults that match a partial string (for learning mode).
     #[must_use]
-    pub fn search_insults(&self, query: &str) -> Vec<&InsultPair> {
+    pub fn search_insults(&self, query: &str) -> Vec<&'static InsultPair> {
         let query_lower = query.to_lowercase();
-        self.pairs
+        INSULTS
             .iter()
             .filter(|pair| pair.insult.to_lowercase().contains(&query_lower))
             .collect()
-    }
-}
-
-impl Default for InsultBank {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

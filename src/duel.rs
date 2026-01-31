@@ -128,7 +128,7 @@ pub struct Duel {
 impl Duel {
     /// Creates a new duel. Challenger attacks first.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             state: DuelState::AwaitingInsult {
                 attacker: Duelist::Challenger,
@@ -144,10 +144,17 @@ impl Duel {
 
     /// Creates a duel with custom wins needed.
     #[must_use]
-    pub fn with_wins_needed(wins_needed: u8) -> Self {
+    pub const fn with_wins_needed(wins_needed: u8) -> Self {
         Self {
             wins_needed,
-            ..Self::new()
+            state: DuelState::AwaitingInsult {
+                attacker: Duelist::Challenger,
+            },
+            pending_insult: None,
+            challenger_score: 0,
+            defender_score: 0,
+            exchanges: Vec::new(),
+            insult_bank: InsultBank::new(),
         }
     }
 
