@@ -7,7 +7,8 @@
       "mcp__insult-arena__list_insults",
       "mcp__insult-arena__throw_insult",
       "mcp__insult-arena__get_duel_state",
-      "mcp__insult-arena__respond"
+      "mcp__insult-arena__respond",
+      "mcp__insult-arena__get_hint"
     ]
   },
   "enableAllProjectMcpServers": true,

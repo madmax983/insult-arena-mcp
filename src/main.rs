@@ -8,11 +8,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use insult_arena_mcp::InsultServer;
-use rust_mcp_sdk::mcp_server::{hyper_server, HyperServerOptions};
+use rust_mcp_sdk::ToMcpServerHandler;
+use rust_mcp_sdk::mcp_server::{HyperServerOptions, hyper_server};
 use rust_mcp_sdk::schema::{
     Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerCapabilitiesTools,
 };
-use rust_mcp_sdk::ToMcpServerHandler;
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]

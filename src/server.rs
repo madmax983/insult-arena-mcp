@@ -4,14 +4,14 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use rust_mcp_sdk::mcp_server::hyper_runtime::HyperRuntime;
+use rust_mcp_sdk::McpServer;
 use rust_mcp_sdk::mcp_server::ServerHandler;
+use rust_mcp_sdk::mcp_server::hyper_runtime::HyperRuntime;
 use rust_mcp_sdk::schema::schema_utils::CallToolError;
 use rust_mcp_sdk::schema::{
     CallToolRequestParams, CallToolResult, CustomNotification, ListToolsResult,
     PaginatedRequestParams, RpcError, TextContent, Tool, ToolInputSchema,
 };
-use rust_mcp_sdk::McpServer;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::sync::{Mutex, RwLock};
@@ -80,7 +80,10 @@ impl InsultServer {
         };
 
         for session_id in sessions {
-            if let Err(e) = runtime.notify_custom(&session_id, notification.clone()).await {
+            if let Err(e) = runtime
+                .notify_custom(&session_id, notification.clone())
+                .await
+            {
                 warn!("Failed to send notification to {}: {}", session_id, e);
             }
         }
@@ -232,8 +235,7 @@ fn tool_register_as_challenger() -> Tool {
     Tool {
         name: "register_as_challenger".to_string(),
         description: Some(
-            "Register yourself as the Challenger. The Challenger throws insults first."
-                .to_string(),
+            "Register yourself as the Challenger. The Challenger throws insults first.".to_string(),
         ),
         input_schema: empty_input_schema(),
         annotations: None,
@@ -371,21 +373,24 @@ impl InsultServer {
         let duel_guard = self.duel.lock().await;
         let state = duel_guard.as_ref().map(duel_state_view);
 
-        if let Some(state) = state {
-            DuelResponse::success_with_role(
-                "You are now the Challenger! Throw the first insult when ready.",
-                state,
-                "Challenger",
-            )
-            .to_json()
-        } else {
-            json!({
-                "success": true,
-                "message": "Registered as Challenger. Call start_duel to begin!",
-                "your_role": "Challenger"
-            })
-            .to_string()
-        }
+        state.map_or_else(
+            || {
+                json!({
+                    "success": true,
+                    "message": "Registered as Challenger. Call start_duel to begin!",
+                    "your_role": "Challenger"
+                })
+                .to_string()
+            },
+            |state| {
+                DuelResponse::success_with_role(
+                    "You are now the Challenger! Throw the first insult when ready.",
+                    state,
+                    "Challenger",
+                )
+                .to_json()
+            },
+        )
     }
 
     async fn handle_register_as_defender(&self, session_id: Option<String>) -> String {
@@ -402,26 +407,29 @@ impl InsultServer {
         let duel_guard = self.duel.lock().await;
         let state = duel_guard.as_ref().map(duel_state_view);
 
-        if let Some(state) = state {
-            DuelResponse::success_with_role(
-                "You are now the Defender! Wait for an insult, then respond with a comeback.",
-                state,
-                "Defender",
-            )
-            .to_json()
-        } else {
-            json!({
-                "success": true,
-                "message": "Registered as Defender. Wait for Challenger to start_duel!",
-                "your_role": "Defender"
-            })
-            .to_string()
-        }
+        state.map_or_else(
+            || {
+                json!({
+                    "success": true,
+                    "message": "Registered as Defender. Wait for Challenger to start_duel!",
+                    "your_role": "Defender"
+                })
+                .to_string()
+            },
+            |state| {
+                DuelResponse::success_with_role(
+                    "You are now the Defender! Wait for an insult, then respond with a comeback.",
+                    state,
+                    "Defender",
+                )
+                .to_json()
+            },
+        )
     }
 
-    async fn get_role_for_session(&self, session_id: &Option<String>) -> Option<Duelist> {
+    async fn get_role_for_session(&self, session_id: Option<&String>) -> Option<Duelist> {
         let sessions = self.sessions.lock().await;
-        let session = session_id.as_ref()?;
+        let session = session_id?;
 
         if sessions.challenger.as_ref() == Some(session) {
             Some(Duelist::Challenger)
@@ -439,7 +447,7 @@ impl InsultServer {
         };
 
         let view = duel_state_view(duel);
-        let role = self.get_role_for_session(&session_id).await;
+        let role = self.get_role_for_session(session_id.as_ref()).await;
 
         if let Some(role) = role {
             DuelResponse::success_with_role("Current duel state:", view, &role.to_string())
