@@ -461,4 +461,64 @@ mod tests {
             .unwrap();
         assert_eq!(duel.scores(), (1, 1));
     }
+
+    #[test]
+    fn should_return_error_when_throwing_insult_in_finished_duel() {
+        let mut duel = Duel::with_wins_needed(1);
+        duel.throw_insult("You fight like a dairy farmer!".to_string())
+            .unwrap();
+        duel.respond("wrong".to_string()).unwrap();
+
+        assert!(duel.is_finished());
+
+        let result =
+            duel.throw_insult("People fall at my feet when they see me coming!".to_string());
+        assert!(matches!(result, Err(InsultError::DuelOver)));
+    }
+
+    #[test]
+    fn should_return_error_when_responding_in_finished_duel() {
+        let mut duel = Duel::with_wins_needed(1);
+        duel.throw_insult("You fight like a dairy farmer!".to_string())
+            .unwrap();
+        duel.respond("wrong".to_string()).unwrap();
+
+        assert!(duel.is_finished());
+
+        let result = duel.respond("How appropriate. You fight like a cow.".to_string());
+        assert!(matches!(result, Err(InsultError::DuelOver)));
+    }
+
+    #[test]
+    fn should_respect_custom_wins_needed() {
+        let mut duel = Duel::with_wins_needed(1);
+
+        duel.throw_insult("You fight like a dairy farmer!".to_string())
+            .unwrap();
+        duel.respond("wrong".to_string()).unwrap();
+
+        assert!(duel.is_finished());
+        let result = duel.result().unwrap();
+        assert_eq!(result.winner, Duelist::Challenger);
+        assert_eq!(result.challenger_score, 1);
+        assert_eq!(result.defender_score, 0);
+    }
+
+    #[test]
+    fn should_provide_correct_comeback_on_failure() {
+        let mut duel = Duel::new();
+        duel.throw_insult("You fight like a dairy farmer!".to_string())
+            .unwrap();
+
+        let exchange = duel
+            .respond("I am rubber, you are glue".to_string())
+            .unwrap();
+
+        match exchange.result {
+            ExchangeResult::Failed { correct, .. } => {
+                assert_eq!(correct, "How appropriate. You fight like a cow.");
+            }
+            ExchangeResult::Parried { .. } => panic!("Expected failed exchange"),
+        }
+    }
 }
