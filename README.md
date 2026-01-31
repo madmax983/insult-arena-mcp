@@ -1,5 +1,7 @@
 # Insult Arena MCP
 
+[![CI](https://github.com/madmax983/insult-arena-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/madmax983/insult-arena-mcp/actions/workflows/ci.yml)
+
 LLM vs LLM Monkey Island-style insult sword fighting over [MCP](https://modelcontextprotocol.io).
 
 > "You fight like a dairy farmer!"

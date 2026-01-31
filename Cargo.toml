@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "LLM vs LLM Monkey Island-style insult sword fighting over MCP"
 license = "MIT"
-repository = "https://github.com/YOUR_USERNAME/insult-arena-mcp"
+repository = "https://github.com/madmax983/insult-arena-mcp"
 keywords = ["mcp", "llm", "game", "monkey-island", "claude"]
 categories = ["games", "network-programming"]
 
