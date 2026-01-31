@@ -516,6 +516,16 @@ impl InsultServer {
             return DuelResponse::error("No duel in progress. Call start_duel first!").to_json();
         };
 
+        // Log the exact comeback for debugging
+        info!("💬 COMEBACK ATTEMPT: {:?}", comeback);
+        if let Some(insult) = duel.pending_insult() {
+            info!("   For insult: {:?}", insult);
+            if let Some(correct) = duel.insult_bank().find_comeback(insult) {
+                info!("   Expected: {:?}", correct);
+                info!("   Match: {}", comeback.eq_ignore_ascii_case(correct));
+            }
+        }
+
         match duel.respond(comeback.clone()) {
             Ok(exchange) => {
                 let view = duel_state_view(duel);
@@ -544,20 +554,34 @@ impl InsultServer {
                     }
                 } else {
                     info!("   ❌ FAILED! {} wins the exchange!", exchange.winner);
+
+                    // Get expected comeback for better error message
+                    let expected =
+                        if let crate::duel::ExchangeResult::Failed { ref correct, .. } =
+                            exchange.result
+                        {
+                            correct.clone()
+                        } else {
+                            String::new()
+                        };
+
                     if is_finished {
                         info!(
                             "🏆 DUEL OVER! {} WINS! (Score: {}-{})",
                             exchange.winner, challenger, defender
                         );
-                        format!("You failed to parry! {} wins the duel!", exchange.winner)
+                        format!(
+                            "You failed to parry! {} wins the duel!\n\nExpected comeback: \"{}\"",
+                            exchange.winner, expected
+                        )
                     } else {
                         info!(
                             "   Score: Challenger {} - {} Defender",
                             challenger, defender
                         );
                         format!(
-                            "You failed to parry! {} wins the exchange and attacks again!",
-                            exchange.winner
+                            "You failed to parry! {} wins the exchange and attacks again!\n\nExpected comeback: \"{}\"",
+                            exchange.winner, expected
                         )
                     }
                 };
@@ -736,5 +760,30 @@ mod tests {
             .handle_register_as_challenger(Some("session3".to_string()))
             .await;
         assert!(response.contains("already taken"));
+    }
+
+    #[tokio::test]
+    async fn beggar_manners_insult_exchange_works() {
+        let server = InsultServer::new();
+        server.handle_start_duel().await;
+
+        // Throw "beggar manners" insult
+        let throw_response = server
+            .handle_throw_insult("You have the manners of a beggar.".to_string())
+            .await;
+        assert!(
+            throw_response.contains("awaiting comeback"),
+            "Should be waiting for comeback"
+        );
+
+        // Respond with correct comeback
+        let respond_response = server
+            .handle_respond("I wanted to make sure you'd feel comfortable with me.".to_string())
+            .await;
+        assert!(
+            respond_response.contains("TOUCHÉ"),
+            "Should parry successfully"
+        );
+        assert!(respond_response.contains("Defender"), "Defender should win");
     }
 }

@@ -110,8 +110,8 @@ Challenger vs Defender - First to 3 wins!
 💬 COMEBACK: "How appropriate. You fight like a cow."
    ✨ PARRIED! Defender wins the exchange!
 
-🗣️  INSULT: "Every enemy I've met I've annihilated!"
-💬 COMEBACK: "With your breath, I'm sure they all suffocated."
+🗣️  INSULT: "You have the manners of a beggar."
+💬 COMEBACK: "I wanted to make sure you'd feel comfortable with me."
    ✨ PARRIED! Defender wins the exchange!
 
 🗣️  INSULT: "Nobody's ever drawn blood from me and nobody ever will!"

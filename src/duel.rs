@@ -461,4 +461,24 @@ mod tests {
             .unwrap();
         assert_eq!(duel.scores(), (1, 1));
     }
+
+    #[test]
+    fn beggar_manners_insult_correct_comeback_parries() {
+        let mut duel = Duel::new();
+        duel.throw_insult("You have the manners of a beggar.".to_string())
+            .unwrap();
+        let exchange = duel
+            .respond("I wanted to make sure you'd feel comfortable with me.".to_string())
+            .unwrap();
+
+        assert!(
+            exchange.result.is_parried(),
+            "Comeback should parry the insult"
+        );
+        assert_eq!(
+            exchange.winner,
+            Duelist::Defender,
+            "Defender should win with correct comeback"
+        );
+    }
 }

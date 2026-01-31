@@ -29,7 +29,7 @@ impl InsultBank {
                 },
                 InsultPair {
                     insult: "This is the END for you, you gutter-crawling cur!",
-                    comeback: "And I've got a little TIP for you. Get the POINT?",
+                    comeback: "And I've got a little TIP for you, get the POINT?",
                 },
                 InsultPair {
                     insult: "I've spoken with apes more polite than you!",
@@ -45,7 +45,7 @@ impl InsultBank {
                 },
                 InsultPair {
                     insult: "I'm not going to take your insolence sitting down!",
-                    comeback: "Your hemorrhoids are flaring up again, eh?",
+                    comeback: "Your hemorrhoids are flaring up again eh?",
                 },
                 InsultPair {
                     insult: "I once owned a dog that was smarter than you.",
@@ -61,7 +61,7 @@ impl InsultBank {
                 },
                 InsultPair {
                     insult: "There are no words for how disgusting you are.",
-                    comeback: "Yes there are. You just never learned them.",
+                    comeback: "Yes, there are. You just never learned them.",
                 },
                 InsultPair {
                     insult: "You make me want to puke.",
@@ -84,8 +84,8 @@ impl InsultBank {
                     comeback: "I'd be in real trouble if you ever used them.",
                 },
                 InsultPair {
-                    insult: "Every enemy I've met I've annihilated!",
-                    comeback: "With your breath, I'm sure they all suffocated.",
+                    insult: "You have the manners of a beggar.",
+                    comeback: "I wanted to make sure you'd feel comfortable with me.",
                 },
             ],
         }
@@ -114,10 +114,14 @@ impl InsultBank {
 
     /// Checks if a comeback is correct for a given insult.
     /// Returns the matching pair if found.
+    /// Trims whitespace from both insult and comeback before comparing.
     #[must_use]
     pub fn check_comeback(&self, insult: &str, comeback: &str) -> Option<&InsultPair> {
+        let insult_trimmed = insult.trim();
+        let comeback_trimmed = comeback.trim();
         self.pairs.iter().find(|pair| {
-            pair.insult.eq_ignore_ascii_case(insult) && pair.comeback.eq_ignore_ascii_case(comeback)
+            pair.insult.eq_ignore_ascii_case(insult_trimmed)
+                && pair.comeback.eq_ignore_ascii_case(comeback_trimmed)
         })
     }
 
@@ -205,5 +209,41 @@ mod tests {
         let results = bank.search_insults("dairy");
         assert_eq!(results.len(), 1);
         assert!(results[0].insult.contains("dairy farmer"));
+    }
+
+    #[test]
+    fn beggar_manners_comeback_exact_match() {
+        let bank = InsultBank::new();
+        let comeback = bank.find_comeback("You have the manners of a beggar.");
+        assert_eq!(
+            comeback,
+            Some("I wanted to make sure you'd feel comfortable with me.")
+        );
+    }
+
+    #[test]
+    fn punctuation_matters_for_comebacks() {
+        let bank = InsultBank::new();
+
+        // Without period should fail
+        let result = bank.check_comeback(
+            "You have the manners of a beggar.",
+            "I wanted to make sure you'd feel comfortable with me",
+        );
+        assert!(result.is_none(), "Missing period should not match");
+
+        // Trailing space is now trimmed and should succeed
+        let result = bank.check_comeback(
+            "You have the manners of a beggar.",
+            "I wanted to make sure you'd feel comfortable with me. ",
+        );
+        assert!(result.is_some(), "Trailing whitespace should be trimmed");
+
+        // Wrong comeback for insult should fail
+        let result = bank.check_comeback(
+            "You have the manners of a beggar.",
+            "How appropriate. You fight like a cow.",
+        );
+        assert!(result.is_none(), "Wrong comeback should not match");
     }
 }
