@@ -57,10 +57,17 @@ impl InsultServer {
         let runtime_guard: tokio::sync::RwLockReadGuard<'_, Option<Arc<HyperRuntime>>> =
             self.runtime.read().await;
         let Some(runtime) = runtime_guard.as_ref() else {
+            warn!("⚠️  Cannot send notification: Runtime not initialized");
             return;
         };
 
         let sessions = runtime.sessions().await;
+        info!("📡 Active sessions: {} connected", sessions.len());
+
+        if sessions.is_empty() {
+            info!("   No active sessions to notify");
+            return;
+        }
 
         // Build params as a Map<String, Value>
         let mut params = serde_json::Map::new();
@@ -79,19 +86,23 @@ impl InsultServer {
             params: Some(params),
         };
 
+        info!(
+            "📢 Broadcasting to {} session(s): {}'s turn",
+            sessions.len(),
+            state.next_to_act.as_deref().unwrap_or("unknown")
+        );
+
         for session_id in sessions {
+            info!("   → Sending to session: {}", session_id);
             if let Err(e) = runtime
                 .notify_custom(&session_id, notification.clone())
                 .await
             {
-                warn!("Failed to send notification to {}: {}", session_id, e);
+                warn!("   ✗ Failed to send notification to {}: {}", session_id, e);
+            } else {
+                info!("   ✓ Notification sent to {}", session_id);
             }
         }
-
-        info!(
-            "📢 Broadcasted turn notification: {}'s turn",
-            state.next_to_act.as_deref().unwrap_or("unknown")
-        );
     }
 }
 
@@ -735,7 +746,7 @@ mod tests {
 
         // Correct comeback
         let respond_response = server
-            .handle_respond("How appropriate. You fight like a cow.".to_string())
+            .handle_respond("How appropriate. You fight like a cow!".to_string())
             .await;
         assert!(respond_response.contains("TOUCHÉ"));
         assert!(respond_response.contains("Defender"));

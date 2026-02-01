@@ -362,7 +362,7 @@ mod tests {
         duel.throw_insult("You fight like a dairy farmer!".to_string())
             .unwrap();
         let exchange = duel
-            .respond("How appropriate. You fight like a cow.".to_string())
+            .respond("How appropriate. You fight like a cow!".to_string())
             .unwrap();
 
         assert!(exchange.result.is_parried());
@@ -385,7 +385,7 @@ mod tests {
         let mut duel = Duel::new();
         duel.throw_insult("You fight like a dairy farmer!".to_string())
             .unwrap();
-        duel.respond("How appropriate. You fight like a cow.".to_string())
+        duel.respond("How appropriate. You fight like a cow!".to_string())
             .unwrap();
 
         // Defender won, so defender attacks next
@@ -457,7 +457,7 @@ mod tests {
 
         duel.throw_insult("You fight like a dairy farmer!".to_string())
             .unwrap();
-        duel.respond("How appropriate. You fight like a cow.".to_string())
+        duel.respond("How appropriate. You fight like a cow!".to_string())
             .unwrap();
         assert_eq!(duel.scores(), (1, 1));
     }

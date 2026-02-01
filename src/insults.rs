@@ -25,7 +25,7 @@ impl InsultBank {
             pairs: vec![
                 InsultPair {
                     insult: "You fight like a dairy farmer!",
-                    comeback: "How appropriate. You fight like a cow.",
+                    comeback: "How appropriate. You fight like a cow!",
                 },
                 InsultPair {
                     insult: "This is the END for you, you gutter-crawling cur!",
@@ -33,7 +33,7 @@ impl InsultBank {
                 },
                 InsultPair {
                     insult: "I've spoken with apes more polite than you!",
-                    comeback: "I'm glad to hear you attended your family reunion.",
+                    comeback: "I'm glad to hear you attended your family reunion!",
                 },
                 InsultPair {
                     insult: "Soon you'll be wearing my sword like a shish kebab!",
@@ -165,7 +165,7 @@ mod tests {
     fn dairy_farmer_comeback_is_cow() {
         let bank = InsultBank::new();
         let comeback = bank.find_comeback("You fight like a dairy farmer!");
-        assert_eq!(comeback, Some("How appropriate. You fight like a cow."));
+        assert_eq!(comeback, Some("How appropriate. You fight like a cow!"));
     }
 
     #[test]
@@ -173,7 +173,7 @@ mod tests {
         let bank = InsultBank::new();
         let result = bank.check_comeback(
             "You fight like a dairy farmer!",
-            "How appropriate. You fight like a cow.",
+            "How appropriate. You fight like a cow!",
         );
         assert!(result.is_some());
     }
@@ -183,7 +183,7 @@ mod tests {
         let bank = InsultBank::new();
         let result = bank.check_comeback(
             "YOU FIGHT LIKE A DAIRY FARMER!",
-            "how appropriate. you fight like a cow.",
+            "how appropriate. you fight like a cow!",
         );
         assert!(result.is_some());
     }
@@ -242,7 +242,7 @@ mod tests {
         // Wrong comeback for insult should fail
         let result = bank.check_comeback(
             "You have the manners of a beggar.",
-            "How appropriate. You fight like a cow.",
+            "How appropriate. You fight like a cow!",
         );
         assert!(result.is_none(), "Wrong comeback should not match");
     }
