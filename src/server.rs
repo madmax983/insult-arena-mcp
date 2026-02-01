@@ -69,21 +69,27 @@ impl InsultServer {
             return;
         }
 
-        // Build params as a Map<String, Value>
-        let mut params = serde_json::Map::new();
-        params.insert("type".to_string(), json!("turn_notification"));
-        params.insert("state".to_string(), json!(state));
-        params.insert(
-            "message".to_string(),
-            json!(format!(
+        let notification_params = TurnNotificationParams {
+            msg_type: "turn_notification",
+            state,
+            message: format!(
                 "It's {}'s turn!",
                 state.next_to_act.as_deref().unwrap_or("unknown")
-            )),
-        );
+            ),
+        };
+
+        let params = if let Ok(serde_json::Value::Object(map)) =
+            serde_json::to_value(&notification_params)
+        {
+            Some(map)
+        } else {
+            warn!("Failed to serialize notification params");
+            None
+        };
 
         let notification = CustomNotification {
             method: "notifications/turn".to_string(),
-            params: Some(params),
+            params,
         };
 
         info!(
@@ -147,6 +153,14 @@ pub struct DuelStateView {
     /// The winner (if duel is over).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub winner: Option<String>,
+}
+
+#[derive(Serialize)]
+struct TurnNotificationParams<'a> {
+    #[serde(rename = "type")]
+    msg_type: &'static str,
+    state: &'a DuelStateView,
+    message: String,
 }
 
 impl DuelResponse {
@@ -228,11 +242,15 @@ fn string_param_schema(name: &str, description: &str) -> ToolInputSchema {
 }
 
 // Tool definitions
-fn tool_start_duel() -> Tool {
+fn create_tool(name: &str, description: &str) -> Tool {
+    create_tool_with_input(name, description, empty_input_schema())
+}
+
+fn create_tool_with_input(name: &str, description: &str, input_schema: ToolInputSchema) -> Tool {
     Tool {
-        name: "start_duel".to_string(),
-        description: Some("Start a new insult sword fighting duel! The Challenger throws the first insult. First to 3 exchange wins takes the duel.".to_string()),
-        input_schema: empty_input_schema(),
+        name: name.to_string(),
+        description: Some(description.to_string()),
+        input_schema,
         annotations: None,
         execution: None,
         icons: vec![],
@@ -240,109 +258,64 @@ fn tool_start_duel() -> Tool {
         output_schema: None,
         title: None,
     }
+}
+
+fn tool_start_duel() -> Tool {
+    create_tool(
+        "start_duel",
+        "Start a new insult sword fighting duel! The Challenger throws the first insult. First to 3 exchange wins takes the duel.",
+    )
 }
 
 fn tool_register_as_challenger() -> Tool {
-    Tool {
-        name: "register_as_challenger".to_string(),
-        description: Some(
-            "Register yourself as the Challenger. The Challenger throws insults first.".to_string(),
-        ),
-        input_schema: empty_input_schema(),
-        annotations: None,
-        execution: None,
-        icons: vec![],
-        meta: None,
-        output_schema: None,
-        title: None,
-    }
+    create_tool(
+        "register_as_challenger",
+        "Register yourself as the Challenger. The Challenger throws insults first.",
+    )
 }
 
 fn tool_register_as_defender() -> Tool {
-    Tool {
-        name: "register_as_defender".to_string(),
-        description: Some(
-            "Register yourself as the Defender. The Defender responds to insults with comebacks."
-                .to_string(),
-        ),
-        input_schema: empty_input_schema(),
-        annotations: None,
-        execution: None,
-        icons: vec![],
-        meta: None,
-        output_schema: None,
-        title: None,
-    }
+    create_tool(
+        "register_as_defender",
+        "Register yourself as the Defender. The Defender responds to insults with comebacks.",
+    )
 }
 
 fn tool_get_duel_state() -> Tool {
-    Tool {
-        name: "get_duel_state".to_string(),
-        description: Some("Get the current state of the duel. Shows whose turn it is, scores, and any pending insult.".to_string()),
-        input_schema: empty_input_schema(),
-        annotations: None,
-        execution: None,
-        icons: vec![],
-        meta: None,
-        output_schema: None,
-        title: None,
-    }
+    create_tool(
+        "get_duel_state",
+        "Get the current state of the duel. Shows whose turn it is, scores, and any pending insult.",
+    )
 }
 
 fn tool_list_insults() -> Tool {
-    Tool {
-        name: "list_insults".to_string(),
-        description: Some("List all available insults you can use. In classic mode, you must use one of these exact insults.".to_string()),
-        input_schema: empty_input_schema(),
-        annotations: None,
-        execution: None,
-        icons: vec![],
-        meta: None,
-        output_schema: None,
-        title: None,
-    }
+    create_tool(
+        "list_insults",
+        "List all available insults you can use. In classic mode, you must use one of these exact insults.",
+    )
 }
 
 fn tool_throw_insult() -> Tool {
-    Tool {
-        name: "throw_insult".to_string(),
-        description: Some("Throw an insult at your opponent! You must be the current attacker and use a valid insult from the classic list.".to_string()),
-        input_schema: string_param_schema("insult", "The insult to throw at your opponent"),
-        annotations: None,
-        execution: None,
-        icons: vec![],
-        meta: None,
-        output_schema: None,
-        title: None,
-    }
+    create_tool_with_input(
+        "throw_insult",
+        "Throw an insult at your opponent! You must be the current attacker and use a valid insult from the classic list.",
+        string_param_schema("insult", "The insult to throw at your opponent"),
+    )
 }
 
 fn tool_respond() -> Tool {
-    Tool {
-        name: "respond".to_string(),
-        description: Some("Respond to an insult with a witty comeback! If your comeback matches the correct response, you parry and become the attacker.".to_string()),
-        input_schema: string_param_schema("comeback", "Your witty comeback to parry the insult"),
-        annotations: None,
-        execution: None,
-        icons: vec![],
-        meta: None,
-        output_schema: None,
-        title: None,
-    }
+    create_tool_with_input(
+        "respond",
+        "Respond to an insult with a witty comeback! If your comeback matches the correct response, you parry and become the attacker.",
+        string_param_schema("comeback", "Your witty comeback to parry the insult"),
+    )
 }
 
 fn tool_get_hint() -> Tool {
-    Tool {
-        name: "get_hint".to_string(),
-        description: Some("Get a hint for the current pending insult. Returns the first few characters of the correct comeback.".to_string()),
-        input_schema: empty_input_schema(),
-        annotations: None,
-        execution: None,
-        icons: vec![],
-        meta: None,
-        output_schema: None,
-        title: None,
-    }
+    create_tool(
+        "get_hint",
+        "Get a hint for the current pending insult. Returns the first few characters of the correct comeback.",
+    )
 }
 
 impl InsultServer {
@@ -636,6 +609,16 @@ impl InsultServer {
     }
 }
 
+fn get_string_arg(params: &CallToolRequestParams, key: &str) -> String {
+    params
+        .arguments
+        .as_ref()
+        .and_then(|args| args.get(key))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string()
+}
+
 #[async_trait]
 impl ServerHandler for InsultServer {
     async fn handle_list_tools_request(
@@ -674,21 +657,11 @@ impl ServerHandler for InsultServer {
             "get_duel_state" => self.handle_get_duel_state(session_id).await,
             "list_insults" => self.handle_list_insults().await,
             "throw_insult" => {
-                let args = params.arguments.unwrap_or_default();
-                let insult = args
-                    .get("insult")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
+                let insult = get_string_arg(&params, "insult");
                 self.handle_throw_insult(insult).await
             }
             "respond" => {
-                let args = params.arguments.unwrap_or_default();
-                let comeback = args
-                    .get("comeback")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
+                let comeback = get_string_arg(&params, "comeback");
                 self.handle_respond(comeback).await
             }
             "get_hint" => self.handle_get_hint().await,
