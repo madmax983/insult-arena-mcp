@@ -30,6 +30,7 @@ impl Default for Audience {
 }
 
 impl Audience {
+    /// Creates a new audience with initial hype of 50.
     #[must_use]
     pub const fn new() -> Self {
         Self {
