@@ -128,7 +128,7 @@ pub struct Duel {
 impl Duel {
     /// Creates a new duel. Challenger attacks first.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             state: DuelState::AwaitingInsult {
                 attacker: Duelist::Challenger,

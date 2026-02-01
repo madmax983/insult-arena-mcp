@@ -11,90 +11,94 @@ pub struct InsultPair {
     pub comeback: &'static str,
 }
 
+const CLASSIC_INSULTS: &[InsultPair] = &[
+    InsultPair {
+        insult: "You fight like a dairy farmer!",
+        comeback: "How appropriate. You fight like a cow!",
+    },
+    InsultPair {
+        insult: "This is the END for you, you gutter-crawling cur!",
+        comeback: "And I've got a little TIP for you, get the POINT?",
+    },
+    InsultPair {
+        insult: "I've spoken with apes more polite than you!",
+        comeback: "I'm glad to hear you attended your family reunion!",
+    },
+    InsultPair {
+        insult: "Soon you'll be wearing my sword like a shish kebab!",
+        comeback: "First you'd better stop waving it like a feather duster.",
+    },
+    InsultPair {
+        insult: "People fall at my feet when they see me coming!",
+        comeback: "Even BEFORE they smell your breath?",
+    },
+    InsultPair {
+        insult: "I'm not going to take your insolence sitting down!",
+        comeback: "Your hemorrhoids are flaring up again eh?",
+    },
+    InsultPair {
+        insult: "I once owned a dog that was smarter than you.",
+        comeback: "He must have taught you everything you know.",
+    },
+    InsultPair {
+        insult: "Nobody's ever drawn blood from me and nobody ever will!",
+        comeback: "You run THAT fast?",
+    },
+    InsultPair {
+        insult: "Have you stopped wearing diapers yet?",
+        comeback: "Why? Did you want to borrow one?",
+    },
+    InsultPair {
+        insult: "There are no words for how disgusting you are.",
+        comeback: "Yes, there are. You just never learned them.",
+    },
+    InsultPair {
+        insult: "You make me want to puke.",
+        comeback: "You make me think somebody already did.",
+    },
+    InsultPair {
+        insult: "My handkerchief will wipe up your blood!",
+        comeback: "So you got that job as a janitor, after all.",
+    },
+    InsultPair {
+        insult: "I got this scar on my face during a mighty struggle!",
+        comeback: "I hope now you've learned to stop picking your nose.",
+    },
+    InsultPair {
+        insult: "I've heard you are a contemptible sneak.",
+        comeback: "Too bad no one's ever heard of YOU at all.",
+    },
+    InsultPair {
+        insult: "You're no match for my brains, you poor fool.",
+        comeback: "I'd be in real trouble if you ever used them.",
+    },
+    InsultPair {
+        insult: "You have the manners of a beggar.",
+        comeback: "I wanted to make sure you'd feel comfortable with me.",
+    },
+];
+
 /// Bank of classic insults for sword fighting.
+///
+/// Stores insults in static memory to avoid heap allocation.
 #[derive(Debug, Clone)]
 pub struct InsultBank {
-    pairs: Vec<InsultPair>,
+    pairs: &'static [InsultPair],
 }
 
 impl InsultBank {
     /// Creates a new insult bank with all classic Monkey Island insults.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
-            pairs: vec![
-                InsultPair {
-                    insult: "You fight like a dairy farmer!",
-                    comeback: "How appropriate. You fight like a cow!",
-                },
-                InsultPair {
-                    insult: "This is the END for you, you gutter-crawling cur!",
-                    comeback: "And I've got a little TIP for you, get the POINT?",
-                },
-                InsultPair {
-                    insult: "I've spoken with apes more polite than you!",
-                    comeback: "I'm glad to hear you attended your family reunion!",
-                },
-                InsultPair {
-                    insult: "Soon you'll be wearing my sword like a shish kebab!",
-                    comeback: "First you'd better stop waving it like a feather duster.",
-                },
-                InsultPair {
-                    insult: "People fall at my feet when they see me coming!",
-                    comeback: "Even BEFORE they smell your breath?",
-                },
-                InsultPair {
-                    insult: "I'm not going to take your insolence sitting down!",
-                    comeback: "Your hemorrhoids are flaring up again eh?",
-                },
-                InsultPair {
-                    insult: "I once owned a dog that was smarter than you.",
-                    comeback: "He must have taught you everything you know.",
-                },
-                InsultPair {
-                    insult: "Nobody's ever drawn blood from me and nobody ever will!",
-                    comeback: "You run THAT fast?",
-                },
-                InsultPair {
-                    insult: "Have you stopped wearing diapers yet?",
-                    comeback: "Why? Did you want to borrow one?",
-                },
-                InsultPair {
-                    insult: "There are no words for how disgusting you are.",
-                    comeback: "Yes, there are. You just never learned them.",
-                },
-                InsultPair {
-                    insult: "You make me want to puke.",
-                    comeback: "You make me think somebody already did.",
-                },
-                InsultPair {
-                    insult: "My handkerchief will wipe up your blood!",
-                    comeback: "So you got that job as a janitor, after all.",
-                },
-                InsultPair {
-                    insult: "I got this scar on my face during a mighty struggle!",
-                    comeback: "I hope now you've learned to stop picking your nose.",
-                },
-                InsultPair {
-                    insult: "I've heard you are a contemptible sneak.",
-                    comeback: "Too bad no one's ever heard of YOU at all.",
-                },
-                InsultPair {
-                    insult: "You're no match for my brains, you poor fool.",
-                    comeback: "I'd be in real trouble if you ever used them.",
-                },
-                InsultPair {
-                    insult: "You have the manners of a beggar.",
-                    comeback: "I wanted to make sure you'd feel comfortable with me.",
-                },
-            ],
+            pairs: CLASSIC_INSULTS,
         }
     }
 
     /// Returns all insult pairs.
     #[must_use]
-    pub fn all_pairs(&self) -> &[InsultPair] {
-        &self.pairs
+    pub const fn all_pairs(&self) -> &[InsultPair] {
+        self.pairs
     }
 
     /// Gets a random insult for an attacker to use.
