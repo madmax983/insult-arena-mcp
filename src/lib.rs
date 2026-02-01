@@ -32,6 +32,7 @@
 //! ```
 
 mod duel;
+pub mod experimental;
 mod insults;
 mod server;
 

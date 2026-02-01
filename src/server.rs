@@ -345,6 +345,41 @@ fn tool_get_hint() -> Tool {
     }
 }
 
+fn tool_taunt() -> Tool {
+    let mut props = HashMap::new();
+
+    let mut msg_schema = serde_json::Map::new();
+    msg_schema.insert("type".to_string(), json!("string"));
+    msg_schema.insert(
+        "description".to_string(),
+        json!("The message to taunt your opponent with."),
+    );
+    props.insert("message".to_string(), msg_schema);
+
+    let mut drunk_schema = serde_json::Map::new();
+    drunk_schema.insert("type".to_string(), json!("boolean"));
+    drunk_schema.insert(
+        "description".to_string(),
+        json!("Whether to drink grog before taunting (slurs speech)."),
+    );
+    props.insert("drunk".to_string(), drunk_schema);
+
+    Tool {
+        name: "taunt".to_string(),
+        description: Some(
+            "Send a taunt or banter to your opponent. Optionally drink grog to slur your speech!"
+                .to_string(),
+        ),
+        input_schema: ToolInputSchema::new(vec!["message".to_string()], Some(props), None),
+        annotations: None,
+        execution: None,
+        icons: vec![],
+        meta: None,
+        output_schema: None,
+        title: None,
+    }
+}
+
 impl InsultServer {
     async fn handle_start_duel(&self) -> String {
         info!("⚔️  NEW DUEL STARTED!");
@@ -634,6 +669,49 @@ impl InsultServer {
         })
         .to_string()
     }
+
+    async fn handle_taunt(&self, message: String, drunk: bool) -> String {
+        // Process message with grog if requested
+        let final_message = if drunk {
+            crate::experimental::grog::mix(&message)
+        } else {
+            message
+        };
+
+        info!("📢 TAUNT: \"{}\" (Drunk: {})", final_message, drunk);
+
+        // Broadcast the taunt
+        let runtime_guard = self.runtime.read().await;
+        if let Some(runtime) = runtime_guard.as_ref() {
+            let sessions = runtime.sessions().await;
+
+            let mut params = serde_json::Map::new();
+            params.insert("type".to_string(), json!("taunt"));
+            params.insert("message".to_string(), json!(final_message));
+            params.insert("drunk".to_string(), json!(drunk));
+
+            let notification = CustomNotification {
+                method: "notifications/taunt".to_string(),
+                params: Some(params),
+            };
+
+            for session_id in sessions {
+                if let Err(e) = runtime
+                    .notify_custom(&session_id, notification.clone())
+                    .await
+                {
+                    warn!("   ✗ Failed to send taunt to {}: {}", session_id, e);
+                }
+            }
+        }
+
+        json!({
+            "success": true,
+            "message": format!("You taunted: \"{}\"", final_message),
+            "drunk": drunk
+        })
+        .to_string()
+    }
 }
 
 #[async_trait]
@@ -653,6 +731,7 @@ impl ServerHandler for InsultServer {
                 tool_throw_insult(),
                 tool_respond(),
                 tool_get_hint(),
+                tool_taunt(),
             ],
             next_cursor: None,
             meta: None,
@@ -692,6 +771,19 @@ impl ServerHandler for InsultServer {
                 self.handle_respond(comeback).await
             }
             "get_hint" => self.handle_get_hint().await,
+            "taunt" => {
+                let args = params.arguments.unwrap_or_default();
+                let message = args
+                    .get("message")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let drunk = args
+                    .get("drunk")
+                    .and_then(serde_json::Value::as_bool)
+                    .unwrap_or(false);
+                self.handle_taunt(message, drunk).await
+            }
             _ => {
                 return Err(CallToolError::unknown_tool(&params.name));
             }
@@ -796,5 +888,17 @@ mod tests {
             "Should parry successfully"
         );
         assert!(respond_response.contains("Defender"), "Defender should win");
+    }
+
+    #[tokio::test]
+    async fn taunt_works() {
+        let server = InsultServer::new();
+        let response = server.handle_taunt("You smell!".to_string(), false).await;
+        assert!(response.contains("You taunted"));
+        assert!(response.contains("You smell!"));
+
+        let response_drunk = server.handle_taunt("testing".to_string(), true).await;
+        assert!(response_drunk.contains("drunk"));
+        // Drunk output is random but should not crash
     }
 }
