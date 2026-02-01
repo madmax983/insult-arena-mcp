@@ -481,4 +481,18 @@ mod tests {
             "Defender should win with correct comeback"
         );
     }
+
+    #[test]
+    fn custom_wins_needed_works() {
+        let mut duel = Duel::with_wins_needed(1);
+        duel.throw_insult("You fight like a dairy farmer!".to_string())
+            .unwrap();
+        // Respond incorrectly -> Challenger wins exchange -> Challenger wins duel (score 1)
+        duel.respond("wrong answer".to_string()).unwrap();
+
+        assert!(duel.is_finished());
+        let result = duel.result().unwrap();
+        assert_eq!(result.winner, Duelist::Challenger);
+        assert_eq!(result.challenger_score, 1);
+    }
 }

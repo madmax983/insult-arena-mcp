@@ -797,4 +797,78 @@ mod tests {
         );
         assert!(respond_response.contains("Defender"), "Defender should win");
     }
+
+    #[tokio::test]
+    async fn throw_insult_without_duel_returns_error() {
+        let server = InsultServer::new();
+        let response = server.handle_throw_insult("foo".to_string()).await;
+        assert!(response.contains("No duel in progress"));
+    }
+
+    #[tokio::test]
+    async fn respond_without_duel_returns_error() {
+        let server = InsultServer::new();
+        let response = server.handle_respond("bar".to_string()).await;
+        assert!(response.contains("No duel in progress"));
+    }
+
+    #[tokio::test]
+    async fn state_mismatch_errors_are_reported() {
+        let server = InsultServer::new();
+        server.handle_start_duel().await;
+
+        // 1. Throw insult -> OK
+        server
+            .handle_throw_insult("You fight like a dairy farmer!".to_string())
+            .await;
+
+        // 2. Throw insult AGAIN -> Error (Waiting for comeback)
+        let response = server
+            .handle_throw_insult("You fight like a dairy farmer!".to_string())
+            .await;
+        assert!(
+            response.contains("Waiting for a comeback"),
+            "Should error when throwing insult while awaiting comeback"
+        );
+
+        // 3. Respond -> OK (Parried, Defender becomes attacker)
+        server
+            .handle_respond("How appropriate. You fight like a cow!".to_string())
+            .await;
+
+        // 4. Respond AGAIN -> Error (Waiting for insult)
+        let response = server.handle_respond("Too late".to_string()).await;
+        assert!(
+            response.contains("Waiting for an insult"),
+            "Should error when responding while awaiting insult"
+        );
+    }
+
+    #[tokio::test]
+    async fn actions_after_duel_finished_return_error() {
+        let server = InsultServer::new();
+        server.handle_start_duel().await;
+
+        // Win the duel (Challenger wins 3 times)
+        for _ in 0..3 {
+            server
+                .handle_throw_insult("You fight like a dairy farmer!".to_string())
+                .await;
+            server.handle_respond("wrong".to_string()).await;
+        }
+
+        // Duel should be finished
+        let state = server.handle_get_duel_state(None).await;
+        assert!(state.contains("finished"));
+
+        // Throw insult -> Error
+        let response = server
+            .handle_throw_insult("You fight like a dairy farmer!".to_string())
+            .await;
+        assert!(response.contains("duel is over"));
+
+        // Respond -> Error
+        let response = server.handle_respond("wrong".to_string()).await;
+        assert!(response.contains("duel is over"));
+    }
 }
