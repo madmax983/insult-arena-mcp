@@ -19,6 +19,8 @@ use tracing::{info, warn};
 
 use crate::duel::{Duel, DuelState, Duelist, InsultError};
 
+const MAX_INPUT_LENGTH: usize = 1024;
+
 /// Tracks which session is playing which role.
 #[derive(Debug, Default)]
 struct DuelSessions {
@@ -490,6 +492,14 @@ impl InsultServer {
     }
 
     async fn handle_throw_insult(&self, insult: String) -> String {
+        if insult.len() > MAX_INPUT_LENGTH {
+            warn!(
+                "⚠️  Rejected insult: Input too long ({} chars)",
+                insult.len()
+            );
+            return DuelResponse::error("Input too long").to_json();
+        }
+
         let mut duel_guard = self.duel.lock().await;
         let Some(duel) = duel_guard.as_mut() else {
             return DuelResponse::error("No duel in progress. Call start_duel first!").to_json();
@@ -522,6 +532,14 @@ impl InsultServer {
     }
 
     async fn handle_respond(&self, comeback: String) -> String {
+        if comeback.len() > MAX_INPUT_LENGTH {
+            warn!(
+                "⚠️  Rejected comeback: Input too long ({} chars)",
+                comeback.len()
+            );
+            return DuelResponse::error("Input too long").to_json();
+        }
+
         let mut duel_guard = self.duel.lock().await;
         let Some(duel) = duel_guard.as_mut() else {
             return DuelResponse::error("No duel in progress. Call start_duel first!").to_json();
@@ -870,5 +888,25 @@ mod tests {
         // Respond -> Error
         let response = server.handle_respond("wrong".to_string()).await;
         assert!(response.contains("duel is over"));
+    }
+
+    #[tokio::test]
+    async fn rejects_excessive_input_length() {
+        let server = InsultServer::new();
+        server.handle_start_duel().await;
+
+        let long_string = "a".repeat(5000);
+        let response = server.handle_throw_insult(long_string.clone()).await;
+
+        assert!(
+            response.contains("Input too long"),
+            "Should reject long input, got: {response}"
+        );
+
+        let response = server.handle_respond(long_string).await;
+        assert!(
+            response.contains("Input too long"),
+            "Should reject long comeback, got: {response}"
+        );
     }
 }
