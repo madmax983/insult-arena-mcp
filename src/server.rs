@@ -671,6 +671,10 @@ impl InsultServer {
     }
 
     async fn handle_taunt(&self, message: String, drunk: bool) -> String {
+        if message.trim().is_empty() {
+            return DuelResponse::error("Taunt message cannot be empty or whitespace only.").to_json();
+        }
+
         // Process message with grog if requested
         let final_message = if drunk {
             crate::experimental::grog::mix(&message)
@@ -894,11 +898,26 @@ mod tests {
     async fn taunt_works() {
         let server = InsultServer::new();
         let response = server.handle_taunt("You smell!".to_string(), false).await;
-        assert!(response.contains("You taunted"));
-        assert!(response.contains("You smell!"));
+        let json: serde_json::Value = serde_json::from_str(&response).unwrap();
+        assert_eq!(json["success"], true);
+        assert!(json["message"].as_str().unwrap().contains("You smell!"));
+        assert_eq!(json["drunk"], false);
 
         let response_drunk = server.handle_taunt("testing".to_string(), true).await;
-        assert!(response_drunk.contains("drunk"));
+        let json_drunk: serde_json::Value = serde_json::from_str(&response_drunk).unwrap();
+        assert_eq!(json_drunk["success"], true);
+        assert_eq!(json_drunk["drunk"], true);
         // Drunk output is random but should not crash
+    }
+
+    #[tokio::test]
+    async fn taunt_rejects_empty_message() {
+        let server = InsultServer::new();
+
+        let response = server.handle_taunt("".to_string(), false).await;
+        assert!(response.contains("cannot be empty"));
+
+        let response_ws = server.handle_taunt("   ".to_string(), false).await;
+        assert!(response_ws.contains("cannot be empty"));
     }
 }
