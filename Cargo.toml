@@ -43,3 +43,6 @@ nursery = { level = "warn", priority = -1 }
 unwrap_used = "warn"
 expect_used = "warn"
 significant_drop_tightening = "allow"  # False positive for async mutex guards
+
+[features]
+nova = []
