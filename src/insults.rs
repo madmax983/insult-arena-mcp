@@ -78,6 +78,15 @@ const CLASSIC_INSULTS: &[InsultPair] = &[
     },
 ];
 
+/// Helper to normalize strings for forgiving matching.
+/// Removes non-alphanumeric characters and converts to lowercase.
+fn normalize(s: &str) -> String {
+    s.chars()
+        .filter(|c| c.is_alphanumeric())
+        .collect::<String>()
+        .to_lowercase()
+}
+
 /// Bank of classic insults for sword fighting.
 ///
 /// Stores insults in static memory to avoid heap allocation.
@@ -118,23 +127,25 @@ impl InsultBank {
 
     /// Checks if a comeback is correct for a given insult.
     /// Returns the matching pair if found.
-    /// Trims whitespace from both insult and comeback before comparing.
+    /// Normalizes both insult and comeback (lowercase, alphanumeric only) before comparing.
     #[must_use]
     pub fn check_comeback(&self, insult: &str, comeback: &str) -> Option<&InsultPair> {
-        let insult_trimmed = insult.trim();
-        let comeback_trimmed = comeback.trim();
+        let insult_norm = normalize(insult);
+        let comeback_norm = normalize(comeback);
+
         self.pairs.iter().find(|pair| {
-            pair.insult.eq_ignore_ascii_case(insult_trimmed)
-                && pair.comeback.eq_ignore_ascii_case(comeback_trimmed)
+            normalize(pair.insult) == insult_norm && normalize(pair.comeback) == comeback_norm
         })
     }
 
     /// Finds the correct comeback for an insult.
     #[must_use]
     pub fn find_comeback(&self, insult: &str) -> Option<&str> {
+        let insult_norm = normalize(insult);
+
         self.pairs
             .iter()
-            .find(|pair| pair.insult.eq_ignore_ascii_case(insult))
+            .find(|pair| normalize(pair.insult) == insult_norm)
             .map(|pair| pair.comeback)
     }
 
@@ -226,22 +237,22 @@ mod tests {
     }
 
     #[test]
-    fn punctuation_matters_for_comebacks() {
+    fn punctuation_is_ignored() {
         let bank = InsultBank::new();
 
-        // Without period should fail
+        // Without period should SUCCEED now
         let result = bank.check_comeback(
             "You have the manners of a beggar.",
             "I wanted to make sure you'd feel comfortable with me",
         );
-        assert!(result.is_none(), "Missing period should not match");
+        assert!(result.is_some(), "Missing period should match");
 
-        // Trailing space is now trimmed and should succeed
+        // Trailing space should succeed
         let result = bank.check_comeback(
             "You have the manners of a beggar.",
             "I wanted to make sure you'd feel comfortable with me. ",
         );
-        assert!(result.is_some(), "Trailing whitespace should be trimmed");
+        assert!(result.is_some(), "Trailing whitespace should be ignored");
 
         // Wrong comeback for insult should fail
         let result = bank.check_comeback(
@@ -249,5 +260,37 @@ mod tests {
             "How appropriate. You fight like a cow!",
         );
         assert!(result.is_none(), "Wrong comeback should not match");
+    }
+
+    #[test]
+    fn check_comeback_forgiving() {
+        let bank = InsultBank::new();
+
+        // Missing punctuation
+        let result = bank.check_comeback(
+            "You have the manners of a beggar.",
+            "I wanted to make sure youd feel comfortable with me",
+        );
+        assert!(
+            result.is_some(),
+            "Should match even with missing punctuation"
+        );
+
+        // Extra punctuation
+        let result = bank.check_comeback(
+            "You have the manners of a beggar.",
+            "I wanted to make sure you'd feel comfortable with me!!!",
+        );
+        assert!(result.is_some(), "Should match even with extra punctuation");
+
+        // Mixed case and punctuation
+        let result = bank.check_comeback(
+            "You have the manners of a beggar.",
+            "i WANTED to make sure youd feel COMFORTABLE with me...",
+        );
+        assert!(
+            result.is_some(),
+            "Should match regardless of case and punctuation"
+        );
     }
 }
