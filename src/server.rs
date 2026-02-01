@@ -1,4 +1,16 @@
 //! MCP server implementation with tool handlers and turn notifications.
+//!
+//! # Server Architecture
+//!
+//! The `InsultServer` manages the state of a single duel and handles
+//! interactions from multiple clients (sessions).
+//!
+//! ## State Management
+//!
+//! - **Duel State**: Wrapped in `Arc<Mutex<Option<Duel>>>` to allow shared access across async tasks.
+//!   The duel is `None` until `start_duel` is called.
+//! - **Session Management**: Tracks which session ID is acting as Challenger or Defender.
+//! - **Notifications**: Uses `HyperRuntime` to broadcast turn notifications to all connected clients.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -29,6 +41,8 @@ struct DuelSessions {
 }
 
 /// MCP server for insult sword fighting with turn notifications.
+///
+/// Handles tool execution and state management for the duel.
 #[derive(Clone)]
 pub struct InsultServer {
     duel: Arc<Mutex<Option<Duel>>>,
@@ -37,7 +51,10 @@ pub struct InsultServer {
 }
 
 impl InsultServer {
-    /// Creates a new insult server.
+    /// Creates a new insult server instance.
+    ///
+    /// The server starts with no active duel (`None`).
+    /// Call `start_duel` (via tool) to initialize a new game.
     #[must_use]
     pub fn new() -> Self {
         Self {

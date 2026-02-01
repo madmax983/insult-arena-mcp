@@ -1,4 +1,26 @@
 //! Duel state machine for insult sword fighting.
+//!
+//! # Hero's Journey (Example Duel)
+//!
+//! ```
+//! use insult_arena_mcp::{Duel, Duelist, ExchangeResult};
+//!
+//! // 1. Start a new duel (Challenger vs Defender)
+//! let mut duel = Duel::new();
+//!
+//! // 2. Challenger throws the first insult
+//! duel.throw_insult("You fight like a dairy farmer!".to_string()).unwrap();
+//!
+//! // 3. Defender parries with the correct comeback
+//! let exchange = duel.respond("How appropriate. You fight like a cow!".to_string()).unwrap();
+//!
+//! // 4. Defender won the exchange and is now the attacker!
+//! assert!(exchange.result.is_parried());
+//! assert_eq!(exchange.winner, Duelist::Defender);
+//!
+//! // 5. Defender throws the next insult
+//! duel.throw_insult("You have the manners of a beggar.".to_string()).unwrap();
+//! ```
 
 use serde::{Deserialize, Serialize};
 
@@ -185,7 +207,27 @@ impl Duel {
     ///
     /// # Errors
     ///
-    /// Returns an error if it's not time to throw an insult.
+    /// Returns an error if:
+    /// - It's not the insult phase (waiting for comeback)
+    /// - The insult is not in the `InsultBank`
+    /// - The duel is already finished
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::{Duel, InsultError};
+    /// let mut duel = Duel::new();
+    ///
+    /// // Valid insult
+    /// assert!(duel.throw_insult("You fight like a dairy farmer!".to_string()).is_ok());
+    ///
+    /// // Invalid insult (requires a fresh duel or reset state)
+    /// let mut duel2 = Duel::new();
+    /// assert!(matches!(
+    ///     duel2.throw_insult("Your mother was a hamster!".to_string()),
+    ///     Err(InsultError::UnknownInsult(_))
+    /// ));
+    /// ```
     pub fn throw_insult(&mut self, insult: String) -> Result<(), InsultError> {
         let DuelState::AwaitingInsult { attacker } = self.state else {
             return match self.state {
@@ -209,7 +251,26 @@ impl Duel {
     ///
     /// # Errors
     ///
-    /// Returns an error if it's not time to respond.
+    /// Returns an error if:
+    /// - It's not the comeback phase (waiting for insult)
+    /// - The duel is already finished
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::{Duel, ExchangeResult};
+    /// let mut duel = Duel::new();
+    /// duel.throw_insult("You fight like a dairy farmer!".to_string()).unwrap();
+    ///
+    /// // Correct response
+    /// let exchange = duel.respond("How appropriate. You fight like a cow!".to_string()).unwrap();
+    /// assert!(exchange.result.is_parried());
+    ///
+    /// // Failed response
+    /// duel.throw_insult("You have the manners of a beggar.".to_string()).unwrap();
+    /// let exchange = duel.respond("I'm rubber you're glue".to_string()).unwrap();
+    /// assert!(!exchange.result.is_parried());
+    /// ```
     pub fn respond(&mut self, comeback: String) -> Result<Exchange, InsultError> {
         let attacker = match self.state {
             DuelState::AwaitingComeback { attacker } => attacker,
