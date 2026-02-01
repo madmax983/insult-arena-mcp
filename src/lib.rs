@@ -38,3 +38,6 @@ mod server;
 pub use duel::{Duel, DuelResult, DuelState, Duelist, Exchange, ExchangeResult, InsultError};
 pub use insults::{InsultBank, InsultPair};
 pub use server::InsultServer;
+
+#[cfg(feature = "nova")]
+pub mod experimental;
