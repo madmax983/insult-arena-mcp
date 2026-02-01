@@ -90,6 +90,22 @@ fn normalize(s: &str) -> String {
 /// Bank of classic insults for sword fighting.
 ///
 /// Stores insults in static memory to avoid heap allocation.
+///
+/// # Examples
+///
+/// ```
+/// use insult_arena_mcp::InsultBank;
+///
+/// let bank = InsultBank::new();
+///
+/// // Find the correct response
+/// let insult = "You fight like a dairy farmer!";
+/// let comeback = bank.find_comeback(insult).unwrap();
+/// assert_eq!(comeback, "How appropriate. You fight like a cow!");
+///
+/// // Check if a user's response is correct (case-insensitive)
+/// assert!(bank.check_comeback(insult, "how appropriate. you fight like a cow!").is_some());
+/// ```
 #[derive(Debug, Clone)]
 pub struct InsultBank {
     pairs: &'static [InsultPair],
@@ -128,6 +144,27 @@ impl InsultBank {
     /// Checks if a comeback is correct for a given insult.
     /// Returns the matching pair if found.
     /// Normalizes both insult and comeback (lowercase, alphanumeric only) before comparing.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::InsultBank;
+    /// let bank = InsultBank::new();
+    ///
+    /// // Exact match
+    /// let pair = bank.check_comeback(
+    ///     "You fight like a dairy farmer!",
+    ///     "How appropriate. You fight like a cow!"
+    /// );
+    /// assert!(pair.is_some());
+    ///
+    /// // Case insensitive and punctuation ignored
+    /// let pair = bank.check_comeback(
+    ///     "YOU FIGHT LIKE A DAIRY FARMER!",
+    ///     "how appropriate you fight like a cow"
+    /// );
+    /// assert!(pair.is_some());
+    /// ```
     #[must_use]
     pub fn check_comeback(&self, insult: &str, comeback: &str) -> Option<&InsultPair> {
         let insult_norm = normalize(insult);
@@ -139,6 +176,16 @@ impl InsultBank {
     }
 
     /// Finds the correct comeback for an insult.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::InsultBank;
+    /// let bank = InsultBank::new();
+    ///
+    /// let comeback = bank.find_comeback("You fight like a dairy farmer!");
+    /// assert_eq!(comeback, Some("How appropriate. You fight like a cow!"));
+    /// ```
     #[must_use]
     pub fn find_comeback(&self, insult: &str) -> Option<&str> {
         let insult_norm = normalize(insult);
@@ -150,6 +197,17 @@ impl InsultBank {
     }
 
     /// Finds insults that match a partial string (for learning mode).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::InsultBank;
+    /// let bank = InsultBank::new();
+    ///
+    /// let results = bank.search_insults("dairy");
+    /// assert_eq!(results.len(), 1);
+    /// assert!(results[0].insult.contains("dairy farmer"));
+    /// ```
     #[must_use]
     pub fn search_insults(&self, query: &str) -> Vec<&InsultPair> {
         let query_lower = query.to_lowercase();
