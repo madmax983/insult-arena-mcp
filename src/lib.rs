@@ -32,7 +32,7 @@
 //! ```
 
 mod duel;
-pub mod experimental;
+pub(crate) mod experimental;
 mod insults;
 mod server;
 
