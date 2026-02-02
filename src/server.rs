@@ -467,21 +467,165 @@ impl ServerHandler for InsultServer {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
+#[allow(clippy::panic)]
 mod tests {
     use super::*;
+
+    /// Helper to parse JSON responses for verification.
+    fn parse_response(json: &str) -> DuelResponse {
+        serde_json::from_str(json).unwrap_or_else(|_| panic!("Failed to parse JSON response: {json}"))
+    }
 
     #[tokio::test]
     async fn start_duel_creates_new_game() {
         let server = InsultServer::new();
-        let response = server.handle_start_duel().await;
-        assert!(response.contains("En garde"));
-        assert!(response.contains("success"));
+        let response_json = server.handle_start_duel().await;
+        let response = parse_response(&response_json);
+
+        assert!(response.success);
+        assert!(response.message.contains("En garde"));
+        assert!(response.state.is_some());
+        assert_eq!(response.state.unwrap().phase, "awaiting_insult");
     }
 
     #[tokio::test]
     async fn get_state_without_duel_returns_error() {
         let server = InsultServer::new();
-        let response = server.handle_get_duel_state(None).await;
-        assert!(response.contains("No duel in progress"));
+        let response_json = server.handle_get_duel_state(None).await;
+        let response = parse_response(&response_json);
+
+        assert!(!response.success);
+        assert!(response.message.contains("No duel in progress"));
+    }
+
+    #[tokio::test]
+    async fn registration_flow() {
+        let server = InsultServer::new();
+        server.handle_start_duel().await;
+
+        // 1. First Challenger Registration - Success
+        let response_json = server
+            .handle_register_as_challenger(Some("session1".to_string()))
+            .await;
+        let response = parse_response(&response_json);
+        assert!(response.success);
+        assert_eq!(response.your_role, Some("Challenger".to_string()));
+
+        // 2. Second Challenger Registration - Failure
+        let response_json = server
+            .handle_register_as_challenger(Some("session2".to_string()))
+            .await;
+        let response = parse_response(&response_json);
+        assert!(!response.success);
+        assert!(response.message.contains("already taken"));
+
+        // 3. Defender Registration - Success
+        let response_json = server
+            .handle_register_as_defender(Some("session2".to_string()))
+            .await;
+        let response = parse_response(&response_json);
+        assert!(response.success);
+        assert_eq!(response.your_role, Some("Defender".to_string()));
+    }
+
+    #[tokio::test]
+    async fn full_game_simulation() {
+        let server = InsultServer::new();
+        server.handle_start_duel().await;
+
+        // 1. Challenger throws insult
+        let insult = "You fight like a dairy farmer!";
+        let response_json = server.handle_throw_insult(insult.to_string()).await;
+        let response = parse_response(&response_json);
+
+        assert!(response.success);
+        assert!(response.message.contains(insult));
+
+        let state = response.state.unwrap();
+        assert_eq!(state.phase, "awaiting_comeback");
+        assert_eq!(state.pending_insult, Some(insult.to_string()));
+
+        // 2. Defender responds
+        let comeback = "How appropriate. You fight like a cow!";
+        let response_json = server.handle_respond(comeback.to_string()).await;
+        let response = parse_response(&response_json);
+
+        assert!(response.success);
+        assert!(response.message.contains("TOUCHÉ"));
+
+        let state = response.state.unwrap();
+        assert_eq!(state.phase, "awaiting_insult");
+        assert_eq!(state.defender_score, 1);
+
+        // 3. Defender attacks (since they won)
+        let insult2 = "You have the manners of a beggar.";
+        let response_json = server.handle_throw_insult(insult2.to_string()).await;
+        let response = parse_response(&response_json);
+        assert!(response.success);
+
+        // 4. Challenger responds
+        let comeback2 = "I wanted to make sure you'd feel comfortable with me.";
+        let response_json = server.handle_respond(comeback2.to_string()).await;
+        let response = parse_response(&response_json);
+
+        assert!(response.success);
+        assert!(response.message.contains("TOUCHÉ"));
+        let state = response.state.unwrap();
+        // Challenger parried Defender's insult, so Challenger wins point
+        assert_eq!(state.challenger_score, 1);
+    }
+
+    #[tokio::test]
+    async fn error_cases() {
+        let server = InsultServer::new();
+        // Don't start duel yet
+
+        // 1. Action before start
+        let response_json = server.handle_throw_insult("foo".to_string()).await;
+        let response = parse_response(&response_json);
+        assert!(!response.success);
+        assert!(response.message.contains("No duel in progress"));
+
+        server.handle_start_duel().await;
+
+        // 2. Unknown insult
+        let response_json = server
+            .handle_throw_insult("Your mother was a hamster!".to_string())
+            .await;
+        let response = parse_response(&response_json);
+        assert!(!response.success);
+        assert!(response.message.contains("Unknown insult"));
+
+        // 3. Respond out of turn (expecting insult)
+        let response_json = server.handle_respond("comeback".to_string()).await;
+        let response = parse_response(&response_json);
+        assert!(!response.success);
+        assert!(response.message.contains("Waiting for an insult"));
+    }
+
+    #[tokio::test]
+    async fn input_validation() {
+        let server = InsultServer::new();
+        server.handle_start_duel().await;
+
+        // Empty insult
+        let response_json = server.handle_throw_insult(String::new()).await;
+        let response = parse_response(&response_json);
+        assert!(!response.success);
+        assert!(response.message.contains("Unknown insult"));
+
+        // Throw valid insult
+        server
+            .handle_throw_insult("You fight like a dairy farmer!".to_string())
+            .await;
+
+        // Empty comeback
+        let response_json = server.handle_respond(String::new()).await;
+        let response = parse_response(&response_json);
+
+        // It should be success (valid move), but the move result is "failed to parry"
+        assert!(response.success);
+        assert!(response.message.contains("You failed to parry"));
     }
 }
