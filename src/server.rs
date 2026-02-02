@@ -474,7 +474,8 @@ mod tests {
 
     /// Helper to parse JSON responses for verification.
     fn parse_response(json: &str) -> DuelResponse {
-        serde_json::from_str(json).unwrap_or_else(|_| panic!("Failed to parse JSON response: {json}"))
+        serde_json::from_str(json)
+            .unwrap_or_else(|_| panic!("Failed to parse JSON response: {json}"))
     }
 
     #[tokio::test]
