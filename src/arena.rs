@@ -4,6 +4,7 @@ use crate::duel::{Duel, DuelState, Duelist, ExchangeResult, InsultError};
 use serde::{Deserialize, Serialize};
 
 pub const MAX_INPUT_LENGTH: usize = 1024;
+pub const MAX_SESSION_ID_LENGTH: usize = 128;
 
 /// Tracks which session is playing which role.
 #[derive(Debug, Default)]
@@ -149,6 +150,10 @@ impl Arena {
         &mut self,
         session_id: String,
     ) -> Result<(String, Option<DuelStateView>), String> {
+        if session_id.len() > MAX_SESSION_ID_LENGTH {
+            return Err("Session ID too long".to_string());
+        }
+
         if self.sessions.challenger.is_some() {
             return Err("Challenger role is already taken!".to_string());
         }
@@ -170,6 +175,10 @@ impl Arena {
         &mut self,
         session_id: String,
     ) -> Result<(String, Option<DuelStateView>), String> {
+        if session_id.len() > MAX_SESSION_ID_LENGTH {
+            return Err("Session ID too long".to_string());
+        }
+
         if self.sessions.defender.is_some() {
             return Err("Defender role is already taken!".to_string());
         }

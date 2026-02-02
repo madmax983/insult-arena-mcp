@@ -26,7 +26,7 @@ use serde_json::json;
 use tokio::sync::{Mutex, RwLock};
 use tracing::{info, warn};
 
-use crate::arena::{Arena, DuelResponse, DuelStateView};
+use crate::arena::{Arena, DuelResponse, DuelStateView, MAX_INPUT_LENGTH};
 
 /// MCP server for insult sword fighting with turn notifications.
 ///
@@ -341,6 +341,10 @@ impl InsultServer {
     }
 
     async fn handle_throw_insult(&self, insult: String) -> String {
+        if insult.len() > MAX_INPUT_LENGTH {
+            return DuelResponse::error("Input too long").to_json();
+        }
+
         let mut arena = self.arena.lock().await;
 
         match arena.throw_insult(&insult) {
@@ -359,6 +363,10 @@ impl InsultServer {
     }
 
     async fn handle_respond(&self, comeback: String) -> String {
+        if comeback.len() > MAX_INPUT_LENGTH {
+            return DuelResponse::error("Input too long").to_json();
+        }
+
         let mut arena = self.arena.lock().await;
 
         info!("💬 COMEBACK ATTEMPT: {:?}", comeback);
@@ -483,5 +491,31 @@ mod tests {
         let server = InsultServer::new();
         let response = server.handle_get_duel_state(None).await;
         assert!(response.contains("No duel in progress"));
+    }
+
+    #[tokio::test]
+    async fn rejects_excessive_session_id_length() {
+        let server = InsultServer::new();
+        // Start a duel first
+        server.handle_start_duel().await;
+
+        // Create a 2000-char session ID
+        let long_session = "a".repeat(2000);
+
+        let response = server
+            .handle_register_as_challenger(Some(long_session))
+            .await;
+
+        // Current behavior (VULNERABLE): Returns success
+        // Desired behavior (SECURE): Returns error "Session ID too long"
+
+        // This assertion will FAIL until we implement the fix.
+        // We assert that it fails the "success" check if we were testing for correctness,
+        // but here we want to assert that it DOES contain the error.
+        // Since it currently does NOT, this test will fail.
+        assert!(
+            response.contains("Session ID too long"),
+            "Should reject long session ID, got: {response}",
+        );
     }
 }
