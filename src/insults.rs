@@ -78,13 +78,25 @@ const CLASSIC_INSULTS: &[InsultPair] = &[
     },
 ];
 
-/// Helper to normalize strings for forgiving matching.
-/// Removes non-alphanumeric characters and converts to lowercase.
-fn normalize(s: &str) -> String {
-    s.chars()
+/// Helper to check if two strings match after normalization.
+///
+/// Normalization involves:
+/// 1. Ignoring non-alphanumeric characters.
+/// 2. Case-insensitivity.
+///
+/// This implementation avoids heap allocations.
+fn normalized_eq(a: &str, b: &str) -> bool {
+    let a_iter = a
+        .chars()
         .filter(|c| c.is_alphanumeric())
-        .collect::<String>()
-        .to_lowercase()
+        .flat_map(char::to_lowercase);
+
+    let b_iter = b
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase);
+
+    a_iter.eq(b_iter)
 }
 
 /// Bank of classic insults for sword fighting.
@@ -167,11 +179,8 @@ impl InsultBank {
     /// ```
     #[must_use]
     pub fn check_comeback(&self, insult: &str, comeback: &str) -> Option<&InsultPair> {
-        let insult_norm = normalize(insult);
-        let comeback_norm = normalize(comeback);
-
         self.pairs.iter().find(|pair| {
-            normalize(pair.insult) == insult_norm && normalize(pair.comeback) == comeback_norm
+            normalized_eq(pair.insult, insult) && normalized_eq(pair.comeback, comeback)
         })
     }
 
@@ -188,11 +197,9 @@ impl InsultBank {
     /// ```
     #[must_use]
     pub fn find_comeback(&self, insult: &str) -> Option<&str> {
-        let insult_norm = normalize(insult);
-
         self.pairs
             .iter()
-            .find(|pair| normalize(pair.insult) == insult_norm)
+            .find(|pair| normalized_eq(pair.insult, insult))
             .map(|pair| pair.comeback)
     }
 
@@ -350,5 +357,44 @@ mod tests {
             result.is_some(),
             "Should match regardless of case and punctuation"
         );
+    }
+
+    #[test]
+    fn check_comeback_regression_complex_inputs() {
+        let bank = InsultBank::new();
+
+        // 1. Unicode casing regression check (if applicable, English insults are ASCII but good to be safe)
+        // Note: 'İ' lowercases to 'i' + dot in some locales, but here we just want to ensure consistency.
+        // Given we deal with English insults, we test standard variation.
+
+        let result = bank.check_comeback(
+            "You FIGHT like a dairy FARMER!",
+            "how appropriate. you fight like a cow!",
+        );
+        assert!(result.is_some(), "Standard mixed case match failed");
+
+        // 2. Heavy punctuation
+        let result = bank.check_comeback(
+            "You fight like a dairy farmer!?!",
+            "How... appropriate... You fight like a cow!!!",
+        );
+        assert!(result.is_some(), "Heavy punctuation match failed");
+
+        // 3. No punctuation
+        let result = bank.check_comeback(
+            "you fight like a dairy farmer",
+            "how appropriate you fight like a cow",
+        );
+        assert!(result.is_some(), "No punctuation match failed");
+
+        // 4. Embedded non-alphanumeric that splits words?
+        // "dairy-farmer" vs "dairy farmer".
+        // Old normalize: "dairy-farmer" -> "dairyfarmer". "dairy farmer" -> "dairyfarmer".
+        // New normalized_eq should handle this too.
+        let result = bank.check_comeback(
+            "You fight like a dairy-farmer!",
+            "How appropriate. You fight like a cow!",
+        );
+        assert!(result.is_some(), "Hyphenated word match failed");
     }
 }
