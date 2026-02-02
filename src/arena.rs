@@ -136,7 +136,7 @@ impl Arena {
         self.sessions = DuelSessions::default();
 
         (
-            "En garde! A new duel begins. Challenger throws the first insult!".to_string(),
+            "⚔️ En garde! A new duel begins! 🏴‍☠️\nChallenger throws the first insult!".to_string(),
             view,
         )
     }
@@ -157,7 +157,7 @@ impl Arena {
         let state = self.duel.as_ref().map(duel_state_view);
 
         Ok((
-            "You are now the Challenger! Throw the first insult when ready.".to_string(),
+            "💀 You are now the Challenger! Throw the first insult when ready!".to_string(),
             state,
         ))
     }
@@ -178,7 +178,7 @@ impl Arena {
         let state = self.duel.as_ref().map(duel_state_view);
 
         Ok((
-            "You are now the Defender! Wait for an insult, then respond with a comeback."
+            "🛡️ You are now the Defender! Wait for an insult, then respond with a comeback!"
                 .to_string(),
             state,
         ))
@@ -247,7 +247,7 @@ impl Arena {
             Ok(()) => {
                 let view = duel_state_view(duel);
                 Ok((
-                    format!("You hurl the insult: \"{insult}\" - awaiting comeback!"),
+                    format!("🗣️ You hurl the insult: \"{insult}\"\n⏳ Awaiting comeback..."),
                     view,
                 ))
             }
@@ -278,10 +278,13 @@ impl Arena {
 
                 let message = if exchange.result.is_parried() {
                     if is_finished {
-                        format!("TOUCHÉ! Perfect parry! {} wins the duel!", exchange.winner)
+                        format!(
+                            "🏆 TOUCHÉ! Perfect parry! 🎆\n{} wins the duel!",
+                            exchange.winner
+                        )
                     } else {
                         format!(
-                            "TOUCHÉ! Perfect parry! {} wins the exchange and attacks next!",
+                            "✨ TOUCHÉ! Perfect parry! 🤺\n{} wins the exchange and attacks next!",
                             exchange.winner
                         )
                     }
@@ -295,12 +298,12 @@ impl Arena {
 
                     if is_finished {
                         format!(
-                            "You failed to parry! {} wins the duel!\n\nExpected comeback: \"{}\"",
+                            "💀 You failed to parry! ⚰️\n{} wins the duel!\n\n📖 Expected comeback: \"{}\"",
                             exchange.winner, expected
                         )
                     } else {
                         format!(
-                            "You failed to parry! {} wins the exchange and attacks again!\n\nExpected comeback: \"{}\"",
+                            "❌ You failed to parry! 😵\n{} wins the exchange and attacks again!\n\n📖 Expected comeback: \"{}\"",
                             exchange.winner, expected
                         )
                     }
@@ -325,13 +328,12 @@ impl Arena {
             return Err("No pending insult to hint about.".to_string());
         };
 
-        let Some(comeback) = duel.insult_bank().find_comeback(insult) else {
-            return Err("Could not find comeback for this insult.".to_string());
-        };
+        let hint = duel
+            .insult_bank()
+            .get_hint_masked(insult)
+            .ok_or_else(|| "Could not find comeback for this insult.".to_string())?;
 
-        // Give first 20 characters as hint
-        let hint: String = comeback.chars().take(20).collect();
-        Ok((format!("{hint}..."), insult.to_string()))
+        Ok((hint, insult.to_string()))
     }
 }
 
@@ -378,7 +380,7 @@ mod tests {
         let (msg, view) = arena
             .throw_insult("You fight like a dairy farmer!")
             .unwrap();
-        assert!(msg.contains("awaiting comeback"));
+        assert!(msg.contains("Awaiting comeback"));
         assert_eq!(view.phase, "awaiting_comeback");
 
         // Correct comeback
@@ -430,7 +432,7 @@ mod tests {
             .throw_insult("You have the manners of a beggar.")
             .unwrap();
         assert!(
-            msg.contains("awaiting comeback"),
+            msg.contains("Awaiting comeback"),
             "Should be waiting for comeback"
         );
         assert_eq!(view.phase, "awaiting_comeback");

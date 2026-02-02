@@ -216,6 +216,43 @@ impl InsultBank {
             .filter(|pair| pair.insult.to_lowercase().contains(&query_lower))
             .collect()
     }
+
+    /// Returns a masked hint for the correct comeback to an insult.
+    /// Masks all but the first letter of each word.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::InsultBank;
+    /// let bank = InsultBank::new();
+    ///
+    /// let hint = bank.get_hint_masked("You fight like a dairy farmer!");
+    /// assert!(hint.unwrap().starts_with("H__ a__________"));
+    /// ```
+    #[must_use]
+    pub fn get_hint_masked(&self, insult: &str) -> Option<String> {
+        let comeback = self.find_comeback(insult)?;
+        Some(
+            comeback
+                .split_whitespace()
+                .map(|word| {
+                    let mut chars = word.chars();
+                    chars.next().map_or_else(String::new, |first| {
+                        let mut masked = first.to_string();
+                        for c in chars {
+                            if c.is_alphabetic() {
+                                masked.push('_');
+                            } else {
+                                masked.push(c);
+                            }
+                        }
+                        masked
+                    })
+                })
+                .collect::<Vec<_>>()
+                .join(" "),
+        )
+    }
 }
 
 impl Default for InsultBank {
@@ -225,6 +262,7 @@ impl Default for InsultBank {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
@@ -350,5 +388,32 @@ mod tests {
             result.is_some(),
             "Should match regardless of case and punctuation"
         );
+    }
+
+    #[test]
+    fn get_hint_masked_masks_correctly() {
+        let bank = InsultBank::new();
+        // Comeback: "How appropriate. You fight like a cow!"
+        let hint = bank
+            .get_hint_masked("You fight like a dairy farmer!")
+            .unwrap();
+
+        // Expected: "H__ a__________. Y__ f____ l___ a c__!"
+        let expected_parts = ["H__", "a__________.", "Y__", "f____", "l___", "a", "c__!"];
+        for part in expected_parts {
+            assert!(hint.contains(part), "Hint missing part: {part}");
+        }
+
+        // Ensure no full words are leaked (except short ones like "a")
+        assert!(!hint.contains("How"));
+        assert!(!hint.contains("fight"));
+        assert!(!hint.contains("cow"));
+    }
+
+    #[test]
+    fn get_hint_masked_returns_none_for_unknown_insult() {
+        let bank = InsultBank::new();
+        let hint = bank.get_hint_masked("You fight like a turnip!");
+        assert!(hint.is_none());
     }
 }
