@@ -285,37 +285,9 @@ impl Duel {
 
         let defender = attacker.opponent();
 
-        // Check if the comeback is correct
-        let is_correct = self
-            .insult_bank
-            .check_comeback(&insult, &comeback)
-            .is_some();
+        let (result, winner) = self.evaluate_exchange(insult, comeback, attacker, defender);
 
-        let (result, winner) = if is_correct {
-            // Successful parry! Defender wins exchange and becomes attacker.
-            (ExchangeResult::Parried { insult, comeback }, defender)
-        } else {
-            // Failed comeback. Attacker wins exchange.
-            let correct = self
-                .insult_bank
-                .find_comeback(&insult)
-                .unwrap_or("???")
-                .to_string();
-            (
-                ExchangeResult::Failed {
-                    insult,
-                    attempt: comeback,
-                    correct,
-                },
-                attacker,
-            )
-        };
-
-        // Update scores
-        match winner {
-            Duelist::Challenger => self.challenger_score += 1,
-            Duelist::Defender => self.defender_score += 1,
-        }
+        self.update_score(winner);
 
         let exchange = Exchange {
             attacker,
@@ -324,19 +296,7 @@ impl Duel {
         };
         self.exchanges.push(exchange.clone());
 
-        // Check for victory
-        if self.challenger_score >= self.wins_needed {
-            self.state = DuelState::Finished {
-                winner: Duelist::Challenger,
-            };
-        } else if self.defender_score >= self.wins_needed {
-            self.state = DuelState::Finished {
-                winner: Duelist::Defender,
-            };
-        } else {
-            // Winner of exchange becomes the attacker
-            self.state = DuelState::AwaitingInsult { attacker: winner };
-        }
+        self.update_duel_state(winner);
 
         Ok(exchange)
     }
@@ -359,6 +319,58 @@ impl Duel {
     #[must_use]
     pub const fn is_finished(&self) -> bool {
         matches!(self.state, DuelState::Finished { .. })
+    }
+
+    fn evaluate_exchange(
+        &self,
+        insult: String,
+        comeback: String,
+        attacker: Duelist,
+        defender: Duelist,
+    ) -> (ExchangeResult, Duelist) {
+        let is_correct = self
+            .insult_bank
+            .check_comeback(&insult, &comeback)
+            .is_some();
+
+        if is_correct {
+            (ExchangeResult::Parried { insult, comeback }, defender)
+        } else {
+            let correct = self
+                .insult_bank
+                .find_comeback(&insult)
+                .unwrap_or("???")
+                .to_string();
+            (
+                ExchangeResult::Failed {
+                    insult,
+                    attempt: comeback,
+                    correct,
+                },
+                attacker,
+            )
+        }
+    }
+
+    const fn update_score(&mut self, winner: Duelist) {
+        match winner {
+            Duelist::Challenger => self.challenger_score += 1,
+            Duelist::Defender => self.defender_score += 1,
+        }
+    }
+
+    const fn update_duel_state(&mut self, winner: Duelist) {
+        if self.challenger_score >= self.wins_needed {
+            self.state = DuelState::Finished {
+                winner: Duelist::Challenger,
+            };
+        } else if self.defender_score >= self.wins_needed {
+            self.state = DuelState::Finished {
+                winner: Duelist::Defender,
+            };
+        } else {
+            self.state = DuelState::AwaitingInsult { attacker: winner };
+        }
     }
 }
 
