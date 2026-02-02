@@ -242,7 +242,7 @@ mod tests {
         // Event 0: Player Action
         match &events[0] {
             DojoEvent::PlayerAction { description, .. } => {
-                assert!(description.contains("You threw"))
+                assert!(description.contains("You threw"));
             }
             _ => panic!("Expected PlayerAction"),
         }
