@@ -135,6 +135,7 @@ impl Arena {
         // Clear session registrations for new duel
         self.sessions = DuelSessions::default();
 
+        // Ludwig's Note: Emojis added for "Juice" and immediate visual feedback.
         (
             "⚔️ En garde! A new duel begins! 🏴‍☠️\nChallenger throws the first insult!".to_string(),
             view,
