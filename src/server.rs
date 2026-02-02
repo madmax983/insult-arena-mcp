@@ -58,6 +58,12 @@ impl InsultServer {
     }
 
     /// Broadcasts a turn notification to all connected sessions.
+    ///
+    /// Sends a JSON-RPC notification with method `notifications/turn`.
+    /// The payload contains:
+    /// - `type`: "turn_notification"
+    /// - `state`: The current `DuelStateView`
+    /// - `message`: A human-readable message indicating whose turn it is.
     async fn broadcast_turn_notification(&self, state: &DuelStateView) {
         let runtime_guard: tokio::sync::RwLockReadGuard<'_, Option<Arc<HyperRuntime>>> =
             self.runtime.read().await;
