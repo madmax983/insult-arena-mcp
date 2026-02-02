@@ -10,7 +10,6 @@
 //! - **Arena**: Encapsulates game logic and state in `Arc<Mutex<Arena>>`.
 //! - **Notifications**: Uses `HyperRuntime` to broadcast turn notifications to all connected clients.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -20,13 +19,64 @@ use rust_mcp_sdk::mcp_server::hyper_runtime::HyperRuntime;
 use rust_mcp_sdk::schema::schema_utils::CallToolError;
 use rust_mcp_sdk::schema::{
     CallToolRequestParams, CallToolResult, CustomNotification, ListToolsResult,
-    PaginatedRequestParams, RpcError, TextContent, Tool, ToolInputSchema,
+    PaginatedRequestParams, RpcError, TextContent,
 };
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::sync::{Mutex, RwLock};
 use tracing::{info, warn};
 
-use crate::arena::{Arena, DuelResponse, DuelStateView};
+use crate::arena::{Arena, DuelStateView};
+
+/// Response from the arena/server.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DuelResponse {
+    /// Whether the action succeeded.
+    pub success: bool,
+    /// Human-readable message about what happened.
+    pub message: String,
+    /// Current state of the duel.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub state: Option<DuelStateView>,
+    /// Your role in this duel (if registered).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub your_role: Option<String>,
+}
+
+impl DuelResponse {
+    pub fn success(message: impl Into<String>, state: DuelStateView) -> Self {
+        Self {
+            success: true,
+            message: message.into(),
+            state: Some(state),
+            your_role: None,
+        }
+    }
+
+    pub fn success_with_role(message: impl Into<String>, state: DuelStateView, role: &str) -> Self {
+        Self {
+            success: true,
+            message: message.into(),
+            state: Some(state),
+            your_role: Some(role.to_string()),
+        }
+    }
+
+    pub fn error(message: impl Into<String>) -> Self {
+        Self {
+            success: false,
+            message: message.into(),
+            state: None,
+            your_role: None,
+        }
+    }
+
+    #[must_use]
+    pub fn to_json(&self) -> String {
+        serde_json::to_string_pretty(self)
+            .unwrap_or_else(|_| "Error serializing response".to_string())
+    }
+}
 
 /// MCP server for insult sword fighting with turn notifications.
 ///
@@ -117,139 +167,11 @@ impl Default for InsultServer {
     }
 }
 
-// Helper to create empty input schema
-fn empty_input_schema() -> ToolInputSchema {
-    ToolInputSchema::new(vec![], None, None)
-}
-
-// Helper to create input schema with a string parameter
-fn string_param_schema(name: &str, description: &str) -> ToolInputSchema {
-    let mut props = HashMap::new();
-    let mut prop_map = serde_json::Map::new();
-    prop_map.insert("type".to_string(), json!("string"));
-    prop_map.insert("description".to_string(), json!(description));
-    props.insert(name.to_string(), prop_map);
-
-    ToolInputSchema::new(vec![name.to_string()], Some(props), None)
-}
-
-// Tool definitions
-fn tool_start_duel() -> Tool {
-    Tool {
-        name: "start_duel".to_string(),
-        description: Some("Start a new insult sword fighting duel! The Challenger throws the first insult. First to 3 exchange wins takes the duel.".to_string()),
-        input_schema: empty_input_schema(),
-        annotations: None,
-        execution: None,
-        icons: vec![],
-        meta: None,
-        output_schema: None,
-        title: None,
-    }
-}
-
-fn tool_register_as_challenger() -> Tool {
-    Tool {
-        name: "register_as_challenger".to_string(),
-        description: Some(
-            "Register yourself as the Challenger. The Challenger throws insults first.".to_string(),
-        ),
-        input_schema: empty_input_schema(),
-        annotations: None,
-        execution: None,
-        icons: vec![],
-        meta: None,
-        output_schema: None,
-        title: None,
-    }
-}
-
-fn tool_register_as_defender() -> Tool {
-    Tool {
-        name: "register_as_defender".to_string(),
-        description: Some(
-            "Register yourself as the Defender. The Defender responds to insults with comebacks."
-                .to_string(),
-        ),
-        input_schema: empty_input_schema(),
-        annotations: None,
-        execution: None,
-        icons: vec![],
-        meta: None,
-        output_schema: None,
-        title: None,
-    }
-}
-
-fn tool_get_duel_state() -> Tool {
-    Tool {
-        name: "get_duel_state".to_string(),
-        description: Some("Get the current state of the duel. Shows whose turn it is, scores, and any pending insult.".to_string()),
-        input_schema: empty_input_schema(),
-        annotations: None,
-        execution: None,
-        icons: vec![],
-        meta: None,
-        output_schema: None,
-        title: None,
-    }
-}
-
-fn tool_list_insults() -> Tool {
-    Tool {
-        name: "list_insults".to_string(),
-        description: Some("List all available insults you can use. In classic mode, you must use one of these exact insults.".to_string()),
-        input_schema: empty_input_schema(),
-        annotations: None,
-        execution: None,
-        icons: vec![],
-        meta: None,
-        output_schema: None,
-        title: None,
-    }
-}
-
-fn tool_throw_insult() -> Tool {
-    Tool {
-        name: "throw_insult".to_string(),
-        description: Some("Throw an insult at your opponent! You must be the current attacker and use a valid insult from the classic list.".to_string()),
-        input_schema: string_param_schema("insult", "The insult to throw at your opponent"),
-        annotations: None,
-        execution: None,
-        icons: vec![],
-        meta: None,
-        output_schema: None,
-        title: None,
-    }
-}
-
-fn tool_respond() -> Tool {
-    Tool {
-        name: "respond".to_string(),
-        description: Some("Respond to an insult with a witty comeback! If your comeback matches the correct response, you parry and become the attacker.".to_string()),
-        input_schema: string_param_schema("comeback", "Your witty comeback to parry the insult"),
-        annotations: None,
-        execution: None,
-        icons: vec![],
-        meta: None,
-        output_schema: None,
-        title: None,
-    }
-}
-
-fn tool_get_hint() -> Tool {
-    Tool {
-        name: "get_hint".to_string(),
-        description: Some("Get a hint for the current pending insult. Returns the first few characters of the correct comeback.".to_string()),
-        input_schema: empty_input_schema(),
-        annotations: None,
-        execution: None,
-        icons: vec![],
-        meta: None,
-        output_schema: None,
-        title: None,
-    }
-}
+mod tools;
+use tools::{
+    tool_get_duel_state, tool_get_hint, tool_list_insults, tool_register_as_challenger,
+    tool_register_as_defender, tool_respond, tool_start_duel, tool_throw_insult,
+};
 
 impl InsultServer {
     async fn handle_start_duel(&self) -> String {
