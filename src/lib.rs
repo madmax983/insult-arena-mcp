@@ -31,10 +31,12 @@
 //! // Server implements MCP's ServerHandler trait
 //! ```
 
+pub mod arena;
 mod duel;
 mod insults;
 mod server;
 
+pub use arena::{Arena, DuelResponse, DuelStateView};
 pub use duel::{Duel, DuelResult, DuelState, Duelist, Exchange, ExchangeResult, InsultError};
 pub use insults::{InsultBank, InsultPair};
 pub use server::InsultServer;
