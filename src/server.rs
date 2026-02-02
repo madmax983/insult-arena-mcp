@@ -61,7 +61,7 @@ impl InsultServer {
     ///
     /// Sends a JSON-RPC notification with method `notifications/turn`.
     /// The payload contains:
-    /// - `type`: "turn_notification"
+    /// - `type`: "`turn_notification`"
     /// - `state`: The current `DuelStateView`
     /// - `message`: A human-readable message indicating whose turn it is.
     async fn broadcast_turn_notification(&self, state: &DuelStateView) {
