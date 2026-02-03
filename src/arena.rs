@@ -86,7 +86,7 @@ impl Arena {
         self.sessions = DuelSessions::default();
 
         (
-            "En garde! A new duel begins. Challenger throws the first insult!".to_string(),
+            "⚔️ En garde! A new duel begins. Challenger, throw the first insult! 🏴‍☠️".to_string(),
             view,
         )
     }
@@ -107,7 +107,7 @@ impl Arena {
         let state = self.duel.as_ref().map(duel_state_view);
 
         Ok((
-            "You are now the Challenger! Throw the first insult when ready.".to_string(),
+            "🏴‍☠️ You are the CHALLENGER! Sharpen your tongue and throw the first insult!".to_string(),
             state,
         ))
     }
@@ -128,7 +128,7 @@ impl Arena {
         let state = self.duel.as_ref().map(duel_state_view);
 
         Ok((
-            "You are now the Defender! Wait for an insult, then respond with a comeback."
+            "🛡️ You are the DEFENDER! Brace yourself for insults and retort with a comeback!"
                 .to_string(),
             state,
         ))
@@ -197,7 +197,7 @@ impl Arena {
             Ok(()) => {
                 let view = duel_state_view(duel);
                 Ok((
-                    format!("You hurl the insult: \"{insult}\" - awaiting comeback!"),
+                    format!("🗣️ You bellow: \"{insult}\" ... awaiting comeback!"),
                     view,
                 ))
             }
@@ -228,10 +228,10 @@ impl Arena {
 
                 let message = if exchange.result.is_parried() {
                     if is_finished {
-                        format!("TOUCHÉ! Perfect parry! {} wins the duel!", exchange.winner)
+                        format!("🏆 VICTORY! {} has won the duel!", exchange.winner)
                     } else {
                         format!(
-                            "TOUCHÉ! Perfect parry! {} wins the exchange and attacks next!",
+                            "⚔️ TOUCHÉ! A sharp wit! {} wins the exchange and attacks next!",
                             exchange.winner
                         )
                     }
@@ -245,12 +245,12 @@ impl Arena {
 
                     if is_finished {
                         format!(
-                            "You failed to parry! {} wins the duel!\n\nExpected comeback: \"{}\"",
+                            "💥 OOF! That didn't land! {} wins the duel!\n\nExpected comeback: \"{}\"",
                             exchange.winner, expected
                         )
                     } else {
                         format!(
-                            "You failed to parry! {} wins the exchange and attacks again!\n\nExpected comeback: \"{}\"",
+                            "💥 OOF! That didn't land! {} wins the exchange and attacks again!\n\nExpected comeback: \"{}\"",
                             exchange.winner, expected
                         )
                     }
@@ -279,9 +279,9 @@ impl Arena {
             return Err("Could not find comeback for this insult.".to_string());
         };
 
-        // Give first 20 characters as hint
-        let hint: String = comeback.chars().take(20).collect();
-        Ok((format!("{hint}..."), insult.to_string()))
+        // Give a masked hint (Hangman style)
+        let hint = crate::InsultBank::get_hint_masked(comeback);
+        Ok((hint, insult.to_string()))
     }
 }
 
@@ -344,10 +344,10 @@ mod tests {
         let mut arena = Arena::new();
 
         let (msg, _) = arena.register_challenger("session1".to_string()).unwrap();
-        assert!(msg.contains("Challenger"));
+        assert!(msg.contains("CHALLENGER"));
 
         let (msg, _) = arena.register_defender("session2".to_string()).unwrap();
-        assert!(msg.contains("Defender"));
+        assert!(msg.contains("DEFENDER"));
 
         // Can't register twice
         let result = arena.register_challenger("session3".to_string());
