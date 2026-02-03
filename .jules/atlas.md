@@ -8,3 +8,7 @@
 **Blueprint:**
 1. **Module Extraction:** Refactored `src/server.rs` into `src/server/mod.rs` and extracted tool definitions into `src/server/tools.rs`. This separates "What the API can do" (tools) from "How it handles requests" (handlers).
 2. **Relocation:** Moved `DuelResponse` to `src/server/mod.rs`. Now the Domain (`Arena`) returns pure results/views, and the Server wraps them in the API response format.
+
+**[Standardizing Arena Logic]**
+**Tangle:** `Arena` methods returned `Result<(String, View), String>`, mixing game logic with presentation strings and making error handling fragile (Stringly Typed).
+**Blueprint:** Introduced `ArenaError` (using `thiserror`) and `ArenaOutcome` enums in `src/arena.rs`. `Arena` now returns structured data, and `Display` implementations handle the text generation, strictly separating logic from presentation.

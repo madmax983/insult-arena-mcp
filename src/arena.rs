@@ -5,6 +5,104 @@ use serde::{Deserialize, Serialize};
 
 pub const MAX_INPUT_LENGTH: usize = 1024;
 
+/// Errors that can occur in the Arena.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum ArenaError {
+    #[error("No duel in progress. Call start_duel first!")]
+    NoDuel,
+    #[error("Input too long (max {0} chars)")]
+    InputTooLong(usize),
+    #[error("{0} role is already taken!")]
+    RoleTaken(String),
+    #[error("It is not your turn! Waiting for {0}.")]
+    NotYourTurn(String),
+    #[error("Unknown insult: \"{0}\". Use list_insults to see valid options.")]
+    UnknownInsult(String),
+    #[error("No pending insult to hint about.")]
+    NoPendingInsult,
+    #[error("Could not find comeback for this insult.")]
+    ComebackNotFound,
+    #[error(transparent)]
+    DuelError(#[from] InsultError),
+}
+
+/// The outcome of an action in the Arena.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ArenaOutcome {
+    DuelStarted,
+    RoleRegistered {
+        role: Duelist,
+    },
+    InsultThrown {
+        insult: String,
+    },
+    ExchangeProcessed {
+        exchange: crate::duel::Exchange,
+        is_finished: bool,
+    },
+}
+
+impl std::fmt::Display for ArenaOutcome {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DuelStarted => write!(
+                f,
+                "⚔️ En garde! A new duel begins. Challenger, throw the first insult! 🏴‍☠️"
+            ),
+            Self::RoleRegistered { role } => match role {
+                Duelist::Challenger => write!(
+                    f,
+                    "🏴‍☠️ You are the CHALLENGER! Sharpen your tongue and throw the first insult!"
+                ),
+                Duelist::Defender => write!(
+                    f,
+                    "🛡️ You are the DEFENDER! Brace yourself for insults and retort with a comeback!"
+                ),
+            },
+            Self::InsultThrown { insult } => {
+                write!(f, "🗣️ You bellow: \"{insult}\" ... awaiting comeback!")
+            }
+            Self::ExchangeProcessed {
+                exchange,
+                is_finished,
+            } => {
+                if exchange.result.is_parried() {
+                    if *is_finished {
+                        write!(f, "🏆 VICTORY! {} has won the duel!", exchange.winner)
+                    } else {
+                        write!(
+                            f,
+                            "⚔️ TOUCHÉ! A sharp wit! {} wins the exchange and attacks next!",
+                            exchange.winner
+                        )
+                    }
+                } else {
+                    let expected =
+                        if let ExchangeResult::Failed { ref correct, .. } = exchange.result {
+                            correct.as_str()
+                        } else {
+                            ""
+                        };
+
+                    if *is_finished {
+                        write!(
+                            f,
+                            "💥 OOF! That didn't land! {} wins the duel!\n\nExpected comeback: \"{}\"",
+                            exchange.winner, expected
+                        )
+                    } else {
+                        write!(
+                            f,
+                            "💥 OOF! That didn't land! {} wins the exchange and attacks again!\n\nExpected comeback: \"{}\"",
+                            exchange.winner, expected
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Tracks which session is playing which role.
 #[derive(Debug, Default)]
 struct DuelSessions {
@@ -77,7 +175,7 @@ impl Arena {
         }
     }
 
-    pub fn start_duel(&mut self) -> (String, DuelStateView) {
+    pub fn start_duel(&mut self) -> (ArenaOutcome, DuelStateView) {
         let duel = Duel::new();
         let view = duel_state_view(&duel);
         self.duel = Some(duel);
@@ -85,10 +183,7 @@ impl Arena {
         // Clear session registrations for new duel
         self.sessions = DuelSessions::default();
 
-        (
-            "⚔️ En garde! A new duel begins. Challenger, throw the first insult! 🏴‍☠️".to_string(),
-            view,
-        )
+        (ArenaOutcome::DuelStarted, view)
     }
 
     /// Register a session as the challenger.
@@ -98,17 +193,18 @@ impl Arena {
     pub fn register_challenger(
         &mut self,
         session_id: String,
-    ) -> Result<(String, Option<DuelStateView>), String> {
+    ) -> Result<(ArenaOutcome, Option<DuelStateView>), ArenaError> {
         if self.sessions.challenger.is_some() {
-            return Err("Challenger role is already taken!".to_string());
+            return Err(ArenaError::RoleTaken("Challenger".to_string()));
         }
 
         self.sessions.challenger = Some(session_id);
         let state = self.duel.as_ref().map(duel_state_view);
 
         Ok((
-            "🏴‍☠️ You are the CHALLENGER! Sharpen your tongue and throw the first insult!"
-                .to_string(),
+            ArenaOutcome::RoleRegistered {
+                role: Duelist::Challenger,
+            },
             state,
         ))
     }
@@ -120,17 +216,18 @@ impl Arena {
     pub fn register_defender(
         &mut self,
         session_id: String,
-    ) -> Result<(String, Option<DuelStateView>), String> {
+    ) -> Result<(ArenaOutcome, Option<DuelStateView>), ArenaError> {
         if self.sessions.defender.is_some() {
-            return Err("Defender role is already taken!".to_string());
+            return Err(ArenaError::RoleTaken("Defender".to_string()));
         }
 
         self.sessions.defender = Some(session_id);
         let state = self.duel.as_ref().map(duel_state_view);
 
         Ok((
-            "🛡️ You are the DEFENDER! Brace yourself for insults and retort with a comeback!"
-                .to_string(),
+            ArenaOutcome::RoleRegistered {
+                role: Duelist::Defender,
+            },
             state,
         ))
     }
@@ -153,9 +250,9 @@ impl Arena {
     pub fn get_duel_state(
         &self,
         session_id: Option<&str>,
-    ) -> Result<(DuelStateView, Option<String>), String> {
+    ) -> Result<(DuelStateView, Option<String>), ArenaError> {
         let Some(duel) = self.duel.as_ref() else {
-            return Err("No duel in progress. Call start_duel first!".to_string());
+            return Err(ArenaError::NoDuel);
         };
 
         let view = duel_state_view(duel);
@@ -168,9 +265,9 @@ impl Arena {
     ///
     /// # Errors
     /// Returns error if no duel is in progress.
-    pub fn list_insults(&self) -> Result<Vec<&str>, String> {
+    pub fn list_insults(&self) -> Result<Vec<&str>, ArenaError> {
         let Some(duel) = self.duel.as_ref() else {
-            return Err("No duel in progress. Call start_duel first!".to_string());
+            return Err(ArenaError::NoDuel);
         };
 
         Ok(duel
@@ -189,13 +286,13 @@ impl Arena {
         &mut self,
         session_id: &str,
         insult: &str,
-    ) -> Result<(String, DuelStateView), String> {
+    ) -> Result<(ArenaOutcome, DuelStateView), ArenaError> {
         if insult.len() > MAX_INPUT_LENGTH {
-            return Err("Input too long".to_string());
+            return Err(ArenaError::InputTooLong(MAX_INPUT_LENGTH));
         }
 
         let Some(duel) = self.duel.as_mut() else {
-            return Err("No duel in progress. Call start_duel first!".to_string());
+            return Err(ArenaError::NoDuel);
         };
 
         // Validate turn/role
@@ -206,7 +303,7 @@ impl Arena {
             };
 
             if expected_session.is_some_and(|expected| expected != session_id) {
-                return Err(format!("It is not your turn! Waiting for {attacker}."));
+                return Err(ArenaError::NotYourTurn(attacker.to_string()));
             }
         }
 
@@ -214,14 +311,14 @@ impl Arena {
             Ok(()) => {
                 let view = duel_state_view(duel);
                 Ok((
-                    format!("🗣️ You bellow: \"{insult}\" ... awaiting comeback!"),
+                    ArenaOutcome::InsultThrown {
+                        insult: insult.to_string(),
+                    },
                     view,
                 ))
             }
-            Err(InsultError::UnknownInsult(insult)) => Err(format!(
-                "Unknown insult: \"{insult}\". Use list_insults to see valid options."
-            )),
-            Err(e) => Err(e.to_string()),
+            Err(InsultError::UnknownInsult(insult)) => Err(ArenaError::UnknownInsult(insult)),
+            Err(e) => Err(ArenaError::from(e)),
         }
     }
 
@@ -233,13 +330,13 @@ impl Arena {
         &mut self,
         session_id: &str,
         comeback: &str,
-    ) -> Result<(String, DuelStateView), String> {
+    ) -> Result<(ArenaOutcome, DuelStateView), ArenaError> {
         if comeback.len() > MAX_INPUT_LENGTH {
-            return Err("Input too long".to_string());
+            return Err(ArenaError::InputTooLong(MAX_INPUT_LENGTH));
         }
 
         let Some(duel) = self.duel.as_mut() else {
-            return Err("No duel in progress. Call start_duel first!".to_string());
+            return Err(ArenaError::NoDuel);
         };
 
         // Validate turn/role
@@ -251,7 +348,7 @@ impl Arena {
             };
 
             if expected_session.is_some_and(|expected| expected != session_id) {
-                return Err(format!("It is not your turn! Waiting for {defender}."));
+                return Err(ArenaError::NotYourTurn(defender.to_string()));
             }
         }
 
@@ -259,40 +356,13 @@ impl Arena {
             Ok(exchange) => {
                 let view = duel_state_view(duel);
                 let is_finished = duel.is_finished();
-
-                let message = if exchange.result.is_parried() {
-                    if is_finished {
-                        format!("🏆 VICTORY! {} has won the duel!", exchange.winner)
-                    } else {
-                        format!(
-                            "⚔️ TOUCHÉ! A sharp wit! {} wins the exchange and attacks next!",
-                            exchange.winner
-                        )
-                    }
-                } else {
-                    let expected =
-                        if let ExchangeResult::Failed { ref correct, .. } = exchange.result {
-                            correct.clone()
-                        } else {
-                            String::new()
-                        };
-
-                    if is_finished {
-                        format!(
-                            "💥 OOF! That didn't land! {} wins the duel!\n\nExpected comeback: \"{}\"",
-                            exchange.winner, expected
-                        )
-                    } else {
-                        format!(
-                            "💥 OOF! That didn't land! {} wins the exchange and attacks again!\n\nExpected comeback: \"{}\"",
-                            exchange.winner, expected
-                        )
-                    }
+                let outcome = ArenaOutcome::ExchangeProcessed {
+                    exchange,
+                    is_finished,
                 };
-
-                Ok((message, view))
+                Ok((outcome, view))
             }
-            Err(e) => Err(e.to_string()),
+            Err(e) => Err(ArenaError::from(e)),
         }
     }
 
@@ -300,17 +370,17 @@ impl Arena {
     ///
     /// # Errors
     /// Returns error if no duel is in progress or no insult is pending.
-    pub fn get_hint(&self) -> Result<(String, String), String> {
+    pub fn get_hint(&self) -> Result<(String, String), ArenaError> {
         let Some(duel) = self.duel.as_ref() else {
-            return Err("No duel in progress. Call start_duel first!".to_string());
+            return Err(ArenaError::NoDuel);
         };
 
         let Some(insult) = duel.pending_insult() else {
-            return Err("No pending insult to hint about.".to_string());
+            return Err(ArenaError::NoPendingInsult);
         };
 
         let Some(comeback) = duel.insult_bank().find_comeback(insult) else {
-            return Err("Could not find comeback for this insult.".to_string());
+            return Err(ArenaError::ComebackNotFound);
         };
 
         // Give a masked hint (Hangman style)
@@ -333,8 +403,9 @@ mod tests {
     #[test]
     fn start_duel_creates_new_game() {
         let mut arena = Arena::new();
-        let (msg, view) = arena.start_duel();
-        assert!(msg.contains("En garde"));
+        let (outcome, view) = arena.start_duel();
+        assert!(matches!(outcome, ArenaOutcome::DuelStarted));
+        assert!(outcome.to_string().contains("En garde"));
         assert_eq!(view.phase, "awaiting_insult");
     }
 
@@ -342,7 +413,7 @@ mod tests {
     fn get_state_without_duel_returns_error() {
         let arena = Arena::new();
         let result = arena.get_duel_state(None);
-        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), ArenaError::NoDuel);
     }
 
     #[test]
@@ -359,17 +430,19 @@ mod tests {
         arena.start_duel();
 
         // Throw insult
-        let (msg, view) = arena
+        let (outcome, view) = arena
             .throw_insult("p1", "You fight like a dairy farmer!")
             .unwrap();
-        assert!(msg.contains("awaiting comeback"));
+        assert!(matches!(outcome, ArenaOutcome::InsultThrown { .. }));
+        assert!(outcome.to_string().contains("awaiting comeback"));
         assert_eq!(view.phase, "awaiting_comeback");
 
         // Correct comeback
-        let (msg, view) = arena
+        let (outcome, view) = arena
             .respond("p2", "How appropriate. You fight like a cow!")
             .unwrap();
-        assert!(msg.contains("TOUCHÉ"));
+        assert!(matches!(outcome, ArenaOutcome::ExchangeProcessed { .. }));
+        assert!(outcome.to_string().contains("TOUCHÉ"));
         assert_eq!(view.phase, "awaiting_insult"); // Defender attacks next
     }
 
@@ -377,15 +450,27 @@ mod tests {
     fn register_roles() {
         let mut arena = Arena::new();
 
-        let (msg, _) = arena.register_challenger("session1".to_string()).unwrap();
-        assert!(msg.contains("CHALLENGER"));
+        let (outcome, _) = arena.register_challenger("session1".to_string()).unwrap();
+        assert!(matches!(
+            outcome,
+            ArenaOutcome::RoleRegistered {
+                role: Duelist::Challenger
+            }
+        ));
+        assert!(outcome.to_string().contains("CHALLENGER"));
 
-        let (msg, _) = arena.register_defender("session2".to_string()).unwrap();
-        assert!(msg.contains("DEFENDER"));
+        let (outcome, _) = arena.register_defender("session2".to_string()).unwrap();
+        assert!(matches!(
+            outcome,
+            ArenaOutcome::RoleRegistered {
+                role: Duelist::Defender
+            }
+        ));
+        assert!(outcome.to_string().contains("DEFENDER"));
 
         // Can't register twice
         let result = arena.register_challenger("session3".to_string());
-        assert!(result.is_err());
+        assert!(matches!(result, Err(ArenaError::RoleTaken(_))));
     }
 
     #[test]
@@ -396,12 +481,10 @@ mod tests {
         let long_string = "a".repeat(5000);
         let result = arena.throw_insult("p1", &long_string);
 
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Input too long");
+        assert!(matches!(result, Err(ArenaError::InputTooLong(_))));
 
         let result = arena.respond("p1", &long_string);
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Input too long");
+        assert!(matches!(result, Err(ArenaError::InputTooLong(_))));
     }
 
     #[test]
@@ -410,23 +493,26 @@ mod tests {
         arena.start_duel();
 
         // Throw "beggar manners" insult
-        let (msg, view) = arena
+        let (outcome, view) = arena
             .throw_insult("p1", "You have the manners of a beggar.")
             .unwrap();
         assert!(
-            msg.contains("awaiting comeback"),
+            outcome.to_string().contains("awaiting comeback"),
             "Should be waiting for comeback"
         );
         assert_eq!(view.phase, "awaiting_comeback");
 
         // Respond with correct comeback
-        let (msg, view) = arena
+        let (outcome, view) = arena
             .respond(
                 "p2",
                 "I wanted to make sure you'd feel comfortable with me.",
             )
             .unwrap();
-        assert!(msg.contains("TOUCHÉ"), "Should parry successfully");
+        assert!(
+            outcome.to_string().contains("TOUCHÉ"),
+            "Should parry successfully"
+        );
         assert_eq!(view.phase, "awaiting_insult"); // Defender attacks next
     }
 
@@ -434,16 +520,14 @@ mod tests {
     fn throw_insult_without_duel_returns_error() {
         let mut arena = Arena::new();
         let result = arena.throw_insult("p1", "foo");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("No duel in progress"));
+        assert_eq!(result.unwrap_err(), ArenaError::NoDuel);
     }
 
     #[test]
     fn respond_without_duel_returns_error() {
         let mut arena = Arena::new();
         let result = arena.respond("p1", "bar");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("No duel in progress"));
+        assert_eq!(result.unwrap_err(), ArenaError::NoDuel);
     }
 
     #[test]
@@ -458,11 +542,10 @@ mod tests {
 
         // 2. Throw insult AGAIN -> Error (Waiting for comeback)
         let result = arena.throw_insult("p1", "You fight like a dairy farmer!");
-        assert!(result.is_err());
-        assert!(
-            result.unwrap_err().contains("Waiting for a comeback"),
-            "Should error when throwing insult while awaiting comeback"
-        );
+        assert!(matches!(
+            result,
+            Err(ArenaError::DuelError(InsultError::WaitingForComeback))
+        ));
 
         // 3. Respond -> OK (Parried, Defender becomes attacker)
         arena
@@ -471,11 +554,10 @@ mod tests {
 
         // 4. Respond AGAIN -> Error (Waiting for insult)
         let result = arena.respond("p2", "Too late");
-        assert!(result.is_err());
-        assert!(
-            result.unwrap_err().contains("Waiting for an insult"),
-            "Should error when responding while awaiting insult"
-        );
+        assert!(matches!(
+            result,
+            Err(ArenaError::DuelError(InsultError::WaitingForInsult))
+        ));
     }
 
     #[test]
@@ -497,13 +579,17 @@ mod tests {
 
         // Throw insult -> Error
         let result = arena.throw_insult("p1", "You fight like a dairy farmer!");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("duel is over"));
+        assert!(matches!(
+            result,
+            Err(ArenaError::DuelError(InsultError::DuelOver))
+        ));
 
         // Respond -> Error
         let result = arena.respond("p2", "wrong");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("duel is over"));
+        assert!(matches!(
+            result,
+            Err(ArenaError::DuelError(InsultError::DuelOver))
+        ));
     }
 
     #[test]
@@ -517,49 +603,44 @@ mod tests {
 
         // 1. Intruder cannot throw insult
         let result = arena.throw_insult("eve", "You fight like a dairy farmer!");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("not your turn"));
+        assert!(matches!(result, Err(ArenaError::NotYourTurn(_))));
 
         // 2. Defender cannot throw insult (it's Challenger's turn)
         let result = arena.throw_insult("bob", "You fight like a dairy farmer!");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("not your turn"));
+        assert!(matches!(result, Err(ArenaError::NotYourTurn(_))));
 
         // 3. Challenger CAN throw insult
-        let (msg, view) = arena
+        let (outcome, view) = arena
             .throw_insult("alice", "You fight like a dairy farmer!")
             .unwrap();
-        assert!(msg.contains("awaiting comeback"));
+        assert!(outcome.to_string().contains("awaiting comeback"));
         assert_eq!(view.phase, "awaiting_comeback");
 
         // 4. Intruder cannot respond
         let result = arena.respond("eve", "How appropriate. You fight like a cow!");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("not your turn"));
+        assert!(matches!(result, Err(ArenaError::NotYourTurn(_))));
 
         // 5. Challenger cannot respond (it's Defender's turn)
         let result = arena.respond("alice", "How appropriate. You fight like a cow!");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("not your turn"));
+        assert!(matches!(result, Err(ArenaError::NotYourTurn(_))));
 
         // 6. Defender CAN respond
-        let (msg, view) = arena
+        let (outcome, view) = arena
             .respond("bob", "How appropriate. You fight like a cow!")
             .unwrap();
-        assert!(msg.contains("TOUCHÉ"));
+        assert!(outcome.to_string().contains("TOUCHÉ"));
         assert_eq!(view.phase, "awaiting_insult");
 
         // Now Defender is attacker.
 
         // 7. Challenger cannot throw insult (now Defender's turn)
         let result = arena.throw_insult("alice", "You fight like a dairy farmer!");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("not your turn"));
+        assert!(matches!(result, Err(ArenaError::NotYourTurn(_))));
 
         // 8. Defender CAN throw insult
-        let (msg, _) = arena
+        let (outcome, _) = arena
             .throw_insult("bob", "You fight like a dairy farmer!")
             .unwrap();
-        assert!(msg.contains("awaiting comeback"));
+        assert!(outcome.to_string().contains("awaiting comeback"));
     }
 }
