@@ -4,6 +4,7 @@ use crate::duel::{Duel, DuelState, Duelist, ExchangeResult, InsultError};
 use serde::{Deserialize, Serialize};
 
 pub const MAX_INPUT_LENGTH: usize = 1024;
+pub const MAX_SESSION_ID_LENGTH: usize = 128;
 
 /// Tracks which session is playing which role.
 #[derive(Debug, Default)]
@@ -99,6 +100,10 @@ impl Arena {
         &mut self,
         session_id: String,
     ) -> Result<(String, Option<DuelStateView>), String> {
+        if session_id.len() > MAX_SESSION_ID_LENGTH {
+            return Err("Session ID too long".to_string());
+        }
+
         if self.sessions.challenger.is_some() {
             return Err("Challenger role is already taken!".to_string());
         }
@@ -120,6 +125,10 @@ impl Arena {
         &mut self,
         session_id: String,
     ) -> Result<(String, Option<DuelStateView>), String> {
+        if session_id.len() > MAX_SESSION_ID_LENGTH {
+            return Err("Session ID too long".to_string());
+        }
+
         if self.sessions.defender.is_some() {
             return Err("Defender role is already taken!".to_string());
         }
@@ -467,5 +476,14 @@ mod tests {
         let result = arena.respond("wrong");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("duel is over"));
+    }
+
+    #[test]
+    fn rejects_excessive_session_id_length() {
+        let mut arena = Arena::new();
+        let long_id = "a".repeat(10000);
+        let result = arena.register_challenger(long_id);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Session ID too long");
     }
 }

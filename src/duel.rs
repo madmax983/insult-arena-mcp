@@ -313,8 +313,12 @@ impl Duel {
 
         // Update scores
         match winner {
-            Duelist::Challenger => self.challenger_score += 1,
-            Duelist::Defender => self.defender_score += 1,
+            Duelist::Challenger => {
+                self.challenger_score = self.challenger_score.saturating_add(1);
+            }
+            Duelist::Defender => {
+                self.defender_score = self.defender_score.saturating_add(1);
+            }
         }
 
         let exchange = Exchange {
