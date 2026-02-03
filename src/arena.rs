@@ -107,7 +107,8 @@ impl Arena {
         let state = self.duel.as_ref().map(duel_state_view);
 
         Ok((
-            "🏴‍☠️ You are the CHALLENGER! Sharpen your tongue and throw the first insult!".to_string(),
+            "🏴‍☠️ You are the CHALLENGER! Sharpen your tongue and throw the first insult!"
+                .to_string(),
             state,
         ))
     }
