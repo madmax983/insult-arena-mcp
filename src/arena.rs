@@ -1,9 +1,10 @@
 //! Arena module: Encapsulates the game state and logic.
 
-use crate::duel::{Duel, DuelState, Duelist, ExchangeResult, InsultError};
+use crate::duel::{Duel, DuelState, Duelist, Exchange, ExchangeResult, InsultError};
 use serde::{Deserialize, Serialize};
 
 pub const MAX_INPUT_LENGTH: usize = 1024;
+const HINT_LENGTH: usize = 20;
 
 /// Tracks which session is playing which role.
 #[derive(Debug, Default)]
@@ -91,6 +92,32 @@ impl Arena {
         )
     }
 
+    fn assign_role(
+        &mut self,
+        session_id: String,
+        role: Duelist,
+    ) -> Result<(String, Option<DuelStateView>), String> {
+        let (current_holder, message) = match role {
+            Duelist::Challenger => (
+                &mut self.sessions.challenger,
+                "You are now the Challenger! Throw the first insult when ready.",
+            ),
+            Duelist::Defender => (
+                &mut self.sessions.defender,
+                "You are now the Defender! Wait for an insult, then respond with a comeback.",
+            ),
+        };
+
+        if current_holder.is_some() {
+            return Err(format!("{role} role is already taken!"));
+        }
+
+        *current_holder = Some(session_id);
+        let state = self.duel.as_ref().map(duel_state_view);
+
+        Ok((message.to_string(), state))
+    }
+
     /// Register a session as the challenger.
     ///
     /// # Errors
@@ -99,17 +126,7 @@ impl Arena {
         &mut self,
         session_id: String,
     ) -> Result<(String, Option<DuelStateView>), String> {
-        if self.sessions.challenger.is_some() {
-            return Err("Challenger role is already taken!".to_string());
-        }
-
-        self.sessions.challenger = Some(session_id);
-        let state = self.duel.as_ref().map(duel_state_view);
-
-        Ok((
-            "You are now the Challenger! Throw the first insult when ready.".to_string(),
-            state,
-        ))
+        self.assign_role(session_id, Duelist::Challenger)
     }
 
     /// Register a session as the defender.
@@ -120,18 +137,7 @@ impl Arena {
         &mut self,
         session_id: String,
     ) -> Result<(String, Option<DuelStateView>), String> {
-        if self.sessions.defender.is_some() {
-            return Err("Defender role is already taken!".to_string());
-        }
-
-        self.sessions.defender = Some(session_id);
-        let state = self.duel.as_ref().map(duel_state_view);
-
-        Ok((
-            "You are now the Defender! Wait for an insult, then respond with a comeback."
-                .to_string(),
-            state,
-        ))
+        self.assign_role(session_id, Duelist::Defender)
     }
 
     #[must_use]
@@ -208,6 +214,37 @@ impl Arena {
         }
     }
 
+    fn format_exchange_message(exchange: &Exchange, is_finished: bool) -> String {
+        if exchange.result.is_parried() {
+            if is_finished {
+                format!("TOUCHÉ! Perfect parry! {} wins the duel!", exchange.winner)
+            } else {
+                format!(
+                    "TOUCHÉ! Perfect parry! {} wins the exchange and attacks next!",
+                    exchange.winner
+                )
+            }
+        } else {
+            let expected = if let ExchangeResult::Failed { ref correct, .. } = exchange.result {
+                correct.clone()
+            } else {
+                String::new()
+            };
+
+            if is_finished {
+                format!(
+                    "You failed to parry! {} wins the duel!\n\nExpected comeback: \"{}\"",
+                    exchange.winner, expected
+                )
+            } else {
+                format!(
+                    "You failed to parry! {} wins the exchange and attacks again!\n\nExpected comeback: \"{}\"",
+                    exchange.winner, expected
+                )
+            }
+        }
+    }
+
     /// Respond to an insult with a comeback.
     ///
     /// # Errors
@@ -225,36 +262,7 @@ impl Arena {
             Ok(exchange) => {
                 let view = duel_state_view(duel);
                 let is_finished = duel.is_finished();
-
-                let message = if exchange.result.is_parried() {
-                    if is_finished {
-                        format!("TOUCHÉ! Perfect parry! {} wins the duel!", exchange.winner)
-                    } else {
-                        format!(
-                            "TOUCHÉ! Perfect parry! {} wins the exchange and attacks next!",
-                            exchange.winner
-                        )
-                    }
-                } else {
-                    let expected =
-                        if let ExchangeResult::Failed { ref correct, .. } = exchange.result {
-                            correct.clone()
-                        } else {
-                            String::new()
-                        };
-
-                    if is_finished {
-                        format!(
-                            "You failed to parry! {} wins the duel!\n\nExpected comeback: \"{}\"",
-                            exchange.winner, expected
-                        )
-                    } else {
-                        format!(
-                            "You failed to parry! {} wins the exchange and attacks again!\n\nExpected comeback: \"{}\"",
-                            exchange.winner, expected
-                        )
-                    }
-                };
+                let message = Self::format_exchange_message(&exchange, is_finished);
 
                 Ok((message, view))
             }
@@ -279,8 +287,8 @@ impl Arena {
             return Err("Could not find comeback for this insult.".to_string());
         };
 
-        // Give first 20 characters as hint
-        let hint: String = comeback.chars().take(20).collect();
+        // Give first HINT_LENGTH characters as hint
+        let hint: String = comeback.chars().take(HINT_LENGTH).collect();
         Ok((format!("{hint}..."), insult.to_string()))
     }
 }
