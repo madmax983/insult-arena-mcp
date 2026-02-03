@@ -99,6 +99,40 @@ fn normalized_eq(a: &str, b: &str) -> bool {
     a_iter.eq(b_iter)
 }
 
+/// Helper to check if a haystack contains a needle, ignoring case.
+///
+/// This implementation avoids heap allocations by using iterators.
+fn contains_ignore_case(haystack: &str, needle: &str) -> bool {
+    if needle.is_empty() {
+        return true;
+    }
+
+    let mut haystack_iter = haystack.chars().flat_map(char::to_lowercase);
+
+    loop {
+        let mut check_iter = haystack_iter.clone();
+        let needle_iter = needle.chars().flat_map(char::to_lowercase);
+
+        let mut matched = true;
+        for n in needle_iter {
+            if check_iter.next() != Some(n) {
+                matched = false;
+                break;
+            }
+        }
+
+        if matched {
+            return true;
+        }
+
+        if haystack_iter.next().is_none() {
+            break;
+        }
+    }
+
+    false
+}
+
 /// Bank of classic insults for sword fighting.
 ///
 /// Stores insults in static memory to avoid heap allocation.
@@ -217,10 +251,9 @@ impl InsultBank {
     /// ```
     #[must_use]
     pub fn search_insults(&self, query: &str) -> Vec<&InsultPair> {
-        let query_lower = query.to_lowercase();
         self.pairs
             .iter()
-            .filter(|pair| pair.insult.to_lowercase().contains(&query_lower))
+            .filter(|pair| contains_ignore_case(pair.insult, query))
             .collect()
     }
 }
@@ -396,5 +429,30 @@ mod tests {
             "How appropriate. You fight like a cow!",
         );
         assert!(result.is_some(), "Hyphenated word match failed");
+    }
+
+    #[test]
+    fn test_contains_ignore_case() {
+        // Exact match
+        assert!(contains_ignore_case("Hello World", "Hello"));
+        assert!(contains_ignore_case("Hello World", "World"));
+        assert!(contains_ignore_case("Hello World", "Hello World"));
+
+        // Case insensitive
+        assert!(contains_ignore_case("Hello World", "hello"));
+        assert!(contains_ignore_case("Hello World", "WORLD"));
+        assert!(contains_ignore_case("HeLLo", "hell"));
+
+        // Empty needle
+        assert!(contains_ignore_case("Anything", ""));
+        assert!(contains_ignore_case("", ""));
+
+        // No match
+        assert!(!contains_ignore_case("Hello World", "Goodbye"));
+        assert!(!contains_ignore_case("Short", "LongerString"));
+
+        // Special characters (should be preserved)
+        assert!(contains_ignore_case("Hello!", "!"));
+        assert!(contains_ignore_case("A+B=C", "+b="));
     }
 }
