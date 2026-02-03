@@ -27,7 +27,7 @@ impl Parrot {
     #[must_use]
     pub fn hint(&self, insult: &str) -> Option<String> {
         let comeback = self.bank.find_comeback(insult)?;
-        Some(Self::mask_comeback(comeback))
+        Some(InsultBank::get_hint_masked(comeback))
     }
 
     /// SQUAWK! Returns a random pirate sound.
@@ -41,26 +41,6 @@ impl Parrot {
         ];
         // simple random choice
         squawks.choose(&mut rand::thread_rng()).unwrap_or(&"Bawk!")
-    }
-
-    fn mask_comeback(text: &str) -> String {
-        text.split_whitespace()
-            .map(|word| {
-                let mut chars = word.chars();
-                chars.next().map_or_else(String::new, |first| {
-                    let mut masked = first.to_string();
-                    for c in chars {
-                        if c.is_alphabetic() {
-                            masked.push('_');
-                        } else {
-                            masked.push(c);
-                        }
-                    }
-                    masked
-                })
-            })
-            .collect::<Vec<_>>()
-            .join(" ")
     }
 }
 

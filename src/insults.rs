@@ -256,6 +256,37 @@ impl InsultBank {
             .filter(|pair| contains_ignore_case(pair.insult, query))
             .collect()
     }
+
+    /// Returns a masked version of the string where only the first letter of each word is visible.
+    /// Used for hints.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::InsultBank;
+    /// let hint = InsultBank::get_hint_masked("How appropriate. You fight like a cow!");
+    /// assert_eq!(hint, "H__ a__________. Y__ f____ l___ a c__!");
+    /// ```
+    #[must_use]
+    pub fn get_hint_masked(text: &str) -> String {
+        text.split_whitespace()
+            .map(|word| {
+                let mut chars = word.chars();
+                chars.next().map_or_else(String::new, |first| {
+                    let mut masked = first.to_string();
+                    for c in chars {
+                        if c.is_alphabetic() {
+                            masked.push('_');
+                        } else {
+                            masked.push(c);
+                        }
+                    }
+                    masked
+                })
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
 }
 
 impl Default for InsultBank {
