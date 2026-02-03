@@ -12,3 +12,8 @@
 **Concept:** A hint system for players stuck on comebacks. It uses a "Parrot" character that masks the answer (e.g. "H__ a__________. Y__ f____ l___ a c__!") to help without solving it entirely.
 **Fate:** Merged
 **Lesson:** Additive features that help the user (like hints) reduce frustration and can be implemented purely with existing data (`InsultBank`) without modifying core game logic.
+
+## [The Reporter]
+**Concept:** A post-match analysis tool that generates a narrative chronicle ("The Ballad") and calculates match statistics (parry rate, round count).
+**Fate:** Merged
+**Lesson:** Transforming transient game state (Exchanges) into permanent artifacts (Stories/Stats) adds depth and sharability to the game without touching the core engine.
