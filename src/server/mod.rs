@@ -262,10 +262,10 @@ impl InsultServer {
         }
     }
 
-    async fn handle_throw_insult(&self, insult: String) -> String {
+    async fn handle_throw_insult(&self, session_id: String, insult: String) -> String {
         let mut arena = self.arena.lock().await;
 
-        match arena.throw_insult(&insult) {
+        match arena.throw_insult(&session_id, &insult) {
             Ok((msg, view)) => {
                 info!("🗣️  INSULT: \"{}\"", insult);
                 drop(arena); // Release lock before broadcast
@@ -280,12 +280,12 @@ impl InsultServer {
         }
     }
 
-    async fn handle_respond(&self, comeback: String) -> String {
+    async fn handle_respond(&self, session_id: String, comeback: String) -> String {
         let mut arena = self.arena.lock().await;
 
         info!("💬 COMEBACK ATTEMPT: {:?}", comeback);
 
-        match arena.respond(&comeback) {
+        match arena.respond(&session_id, &comeback) {
             Ok((msg, view)) => {
                 info!("   Result: {}", msg);
                 let is_finished = view.phase == "finished";
@@ -347,13 +347,22 @@ impl ServerHandler for InsultServer {
         runtime: Arc<dyn McpServer>,
     ) -> Result<CallToolResult, CallToolError> {
         // Get session ID for role tracking
-        let session_id = runtime.session_id();
+        let session_id_opt = runtime.session_id();
+        let session_id_str = session_id_opt
+            .clone()
+            .unwrap_or_else(|| "unknown".to_string());
 
         let result = match params.name.as_str() {
             "start_duel" => self.handle_start_duel().await,
-            "register_as_challenger" => self.handle_register_as_challenger(session_id).await,
-            "register_as_defender" => self.handle_register_as_defender(session_id).await,
-            "get_duel_state" => self.handle_get_duel_state(session_id).await,
+            "register_as_challenger" => {
+                self.handle_register_as_challenger(session_id_opt.clone())
+                    .await
+            }
+            "register_as_defender" => {
+                self.handle_register_as_defender(session_id_opt.clone())
+                    .await
+            }
+            "get_duel_state" => self.handle_get_duel_state(session_id_opt).await,
             "list_insults" => self.handle_list_insults().await,
             "throw_insult" => {
                 let args = params.arguments.unwrap_or_default();
@@ -362,7 +371,7 @@ impl ServerHandler for InsultServer {
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string();
-                self.handle_throw_insult(insult).await
+                self.handle_throw_insult(session_id_str, insult).await
             }
             "respond" => {
                 let args = params.arguments.unwrap_or_default();
@@ -371,7 +380,7 @@ impl ServerHandler for InsultServer {
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string();
-                self.handle_respond(comeback).await
+                self.handle_respond(session_id_str, comeback).await
             }
             "get_hint" => self.handle_get_hint().await,
             _ => {
