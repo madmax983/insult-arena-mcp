@@ -17,3 +17,8 @@
 **Concept:** A post-match analysis tool that generates a narrative chronicle ("The Ballad") and calculates match statistics (parry rate, round count).
 **Fate:** Merged
 **Lesson:** Transforming transient game state (Exchanges) into permanent artifacts (Stories/Stats) adds depth and sharability to the game without touching the core engine.
+
+## [The Trophy Case]
+**Concept:** An achievement system that analyzes duel history to award badges like "Untouchable" (perfect win) and "Comeback Kid" (winning from match point deficit).
+**Fate:** Merged
+**Lesson:** Replaying the game state (score history) allows for rich meta-analysis without needing to store extra state during the game loop. Pure functions over history are powerful.
