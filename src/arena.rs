@@ -1,11 +1,33 @@
-//! Arena module: Encapsulates the game state and logic.
+//! The Arena: Where duels are fought and legends are made.
+//!
+//! The `Arena` acts as the "Dungeon Master" or Game Server. It wraps the core
+//! `Duel` logic with session management, turn enforcement, and input validation.
+//!
+//! While `Duel` is a pure state machine, `Arena` adds the messy reality of
+//! multi-user networking: identifying who is who (`DuelSessions`) and ensuring
+//! players can only act when it's their turn.
+//!
+//! # The Story
+//!
+//! 1. A new `Arena` is created.
+//! 2. `start_duel()` opens the gates.
+//! 3. Two brave souls `register_challenger()` and `register_defender()`.
+//! 4. They trade barbs via `throw_insult()` and `respond()`.
+//! 5. The `Arena` enforces the rules, updates the state, and declares a winner.
 
 use crate::duel::{Duel, DuelState, Duelist, ExchangeResult, InsultError};
 use serde::{Deserialize, Serialize};
 
+/// Maximum length for any user input (insult or comeback) to prevent Denial of Service (`DoS`).
+///
+/// We strictly limit input size before processing to avoid memory exhaustion or
+/// excessive CPU usage during string normalization.
 pub const MAX_INPUT_LENGTH: usize = 1024;
 
 /// Tracks which session is playing which role.
+///
+/// This struct ensures that "Session A" cannot move on behalf of "Session B".
+/// It is the bouncer of the Arena.
 #[derive(Debug, Default)]
 struct DuelSessions {
     challenger: Option<String>,
@@ -63,6 +85,40 @@ pub fn duel_state_view(duel: &Duel) -> DuelStateView {
 }
 
 /// The Arena encapsulates the game state (Duel) and session management.
+///
+/// It coordinates the `Duel` (game logic) with `DuelSessions` (player identity).
+///
+/// # Hero's Journey (Example Usage)
+///
+/// ```
+/// use insult_arena_mcp::{Arena, DuelStateView};
+///
+/// // 1. The Arena opens its gates
+/// let mut arena = Arena::new();
+/// let (msg, view) = arena.start_duel();
+/// assert_eq!(view.phase, "awaiting_insult");
+///
+/// // 2. Brave souls enter the ring (Session Registration)
+/// let (msg, _) = arena.register_challenger("captain_smirk".to_string()).unwrap();
+/// let (msg, _) = arena.register_defender("guybrush_wannabe".to_string()).unwrap();
+///
+/// // 3. The Challenger strikes! (Throw Insult)
+/// let (msg, view) = arena.throw_insult(
+///     "captain_smirk",
+///     "You fight like a dairy farmer!"
+/// ).unwrap();
+/// assert!(msg.contains("awaiting comeback"));
+///
+/// // 4. The Defender parries! (Respond)
+/// let (msg, view) = arena.respond(
+///     "guybrush_wannabe",
+///     "How appropriate. You fight like a cow!"
+/// ).unwrap();
+///
+/// // 5. A hit! The Defender wins the exchange and takes the offensive.
+/// assert!(msg.contains("TOUCHÉ"));
+/// assert_eq!(view.phase, "awaiting_insult"); // Now it's the Defender's turn to insult
+/// ```
 pub struct Arena {
     duel: Option<Duel>,
     sessions: DuelSessions,
@@ -93,8 +149,24 @@ impl Arena {
 
     /// Register a session as the challenger.
     ///
+    /// The challenger always attacks first in the new duel.
+    ///
     /// # Errors
     /// Returns error if the role is already taken.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::Arena;
+    /// let mut arena = Arena::new();
+    /// arena.start_duel();
+    ///
+    /// // First registration succeeds
+    /// assert!(arena.register_challenger("session_1".to_string()).is_ok());
+    ///
+    /// // Second attempt fails (role taken)
+    /// assert!(arena.register_challenger("session_2".to_string()).is_err());
+    /// ```
     pub fn register_challenger(
         &mut self,
         session_id: String,
@@ -115,8 +187,20 @@ impl Arena {
 
     /// Register a session as the defender.
     ///
+    /// The defender awaits the first insult.
+    ///
     /// # Errors
     /// Returns error if the role is already taken.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::Arena;
+    /// let mut arena = Arena::new();
+    /// arena.start_duel();
+    ///
+    /// assert!(arena.register_defender("session_2".to_string()).is_ok());
+    /// ```
     pub fn register_defender(
         &mut self,
         session_id: String,
@@ -166,8 +250,22 @@ impl Arena {
 
     /// List all available insults.
     ///
+    /// Useful for the challenger to pick an insult or for the user to see what's available.
+    ///
     /// # Errors
     /// Returns error if no duel is in progress.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::Arena;
+    /// let mut arena = Arena::new();
+    /// arena.start_duel();
+    ///
+    /// let insults = arena.list_insults().unwrap();
+    /// assert!(insults.len() > 0);
+    /// assert!(insults.contains(&"You fight like a dairy farmer!"));
+    /// ```
     pub fn list_insults(&self) -> Result<Vec<&str>, String> {
         let Some(duel) = self.duel.as_ref() else {
             return Err("No duel in progress. Call start_duel first!".to_string());
@@ -183,8 +281,35 @@ impl Arena {
 
     /// Throw an insult.
     ///
+    /// Validates that:
+    /// - It is the correct user's turn.
+    /// - The insult exists in the `InsultBank`.
+    /// - The game state expects an insult.
+    ///
     /// # Errors
     /// Returns error if input is too long, no duel is in progress, or the insult is invalid/unexpected.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::Arena;
+    /// let mut arena = Arena::new();
+    /// arena.start_duel();
+    /// arena.register_challenger("p1".to_string()).unwrap();
+    ///
+    /// // Successful insult
+    /// let result = arena.throw_insult("p1", "You fight like a dairy farmer!");
+    /// assert!(result.is_ok());
+    ///
+    /// // Wrong turn (defender trying to insult)
+    /// arena.register_defender("p2".to_string()).unwrap();
+    /// let result = arena.throw_insult("p2", "You fight like a dairy farmer!");
+    /// assert!(result.is_err());
+    ///
+    /// // Unknown insult
+    /// let result = arena.throw_insult("p1", "You are ugly!");
+    /// assert!(result.is_err());
+    /// ```
     pub fn throw_insult(
         &mut self,
         session_id: &str,
@@ -227,8 +352,29 @@ impl Arena {
 
     /// Respond to an insult with a comeback.
     ///
+    /// The response is matched fuzzily (case-insensitive, punctuation ignored) against
+    /// the correct comeback for the pending insult.
+    ///
     /// # Errors
     /// Returns error if input is too long, no duel is in progress, or it's not the comeback phase.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::Arena;
+    /// let mut arena = Arena::new();
+    /// arena.start_duel();
+    /// arena.register_challenger("p1".to_string()).unwrap();
+    /// arena.register_defender("p2".to_string()).unwrap();
+    ///
+    /// arena.throw_insult("p1", "You fight like a dairy farmer!").unwrap();
+    ///
+    /// // Successful parry (Defender wins exchange)
+    /// let (msg, _) = arena.respond("p2", "How appropriate. You fight like a cow!").unwrap();
+    /// assert!(msg.contains("TOUCHÉ"));
+    ///
+    /// // Note: Defender is now the attacker for the next turn.
+    /// ```
     pub fn respond(
         &mut self,
         session_id: &str,
@@ -298,8 +444,24 @@ impl Arena {
 
     /// Get a hint for the current pending insult.
     ///
+    /// Returns a "Hangman-style" masked string (e.g., "H__ a__________...") and the original insult.
+    ///
     /// # Errors
     /// Returns error if no duel is in progress or no insult is pending.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::Arena;
+    /// let mut arena = Arena::new();
+    /// arena.start_duel();
+    /// arena.register_challenger("p1".to_string()).unwrap();
+    /// arena.throw_insult("p1", "You fight like a dairy farmer!").unwrap();
+    ///
+    /// let (hint, insult) = arena.get_hint().unwrap();
+    /// assert_eq!(insult, "You fight like a dairy farmer!");
+    /// assert!(hint.starts_with("H")); // "How appropriate..."
+    /// ```
     pub fn get_hint(&self) -> Result<(String, String), String> {
         let Some(duel) = self.duel.as_ref() else {
             return Err("No duel in progress. Call start_duel first!".to_string());
