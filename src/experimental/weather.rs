@@ -56,7 +56,9 @@ impl WeatherSystem {
     pub const fn description(&self) -> &'static str {
         match self.current {
             WeatherCondition::Clear => "The stars are out. A perfect night for a duel.",
-            WeatherCondition::Fog => "A thick pea-soup fog rolls in. You can barely see your hand in front of your face.",
+            WeatherCondition::Fog => {
+                "A thick pea-soup fog rolls in. You can barely see your hand in front of your face."
+            }
             WeatherCondition::Storm => "Thunder crashes overhead! Rain lashes the deck!",
             WeatherCondition::Heatwave => "The air is stiflingly hot. Sweat drips from your brow.",
         }
@@ -96,7 +98,10 @@ mod tests {
     fn weather_initializes_clear() {
         let weather = WeatherSystem::new();
         assert_eq!(weather.current, WeatherCondition::Clear);
-        assert_eq!(weather.description(), "The stars are out. A perfect night for a duel.");
+        assert_eq!(
+            weather.description(),
+            "The stars are out. A perfect night for a duel."
+        );
     }
 
     #[test]
