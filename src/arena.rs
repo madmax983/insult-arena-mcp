@@ -65,39 +65,46 @@ impl std::fmt::Display for ArenaOutcome {
             Self::ExchangeProcessed {
                 exchange,
                 is_finished,
-            } => {
-                if exchange.result.is_parried() {
-                    if *is_finished {
-                        write!(f, "🏆 VICTORY! {} has won the duel!", exchange.winner)
-                    } else {
-                        write!(
-                            f,
-                            "⚔️ TOUCHÉ! A sharp wit! {} wins the exchange and attacks next!",
-                            exchange.winner
-                        )
-                    }
-                } else {
-                    let expected =
-                        if let ExchangeResult::Failed { ref correct, .. } = exchange.result {
-                            correct.as_str()
-                        } else {
-                            ""
-                        };
+            } => Self::fmt_exchange_processed(f, exchange, *is_finished),
+        }
+    }
+}
 
-                    if *is_finished {
-                        write!(
-                            f,
-                            "💥 OOF! That didn't land! {} wins the duel!\n\nExpected comeback: \"{}\"",
-                            exchange.winner, expected
-                        )
-                    } else {
-                        write!(
-                            f,
-                            "💥 OOF! That didn't land! {} wins the exchange and attacks again!\n\nExpected comeback: \"{}\"",
-                            exchange.winner, expected
-                        )
-                    }
-                }
+impl ArenaOutcome {
+    fn fmt_exchange_processed(
+        f: &mut std::fmt::Formatter<'_>,
+        exchange: &crate::duel::Exchange,
+        is_finished: bool,
+    ) -> std::fmt::Result {
+        if exchange.result.is_parried() {
+            if is_finished {
+                write!(f, "🏆 VICTORY! {} has won the duel!", exchange.winner)
+            } else {
+                write!(
+                    f,
+                    "⚔️ TOUCHÉ! A sharp wit! {} wins the exchange and attacks next!",
+                    exchange.winner
+                )
+            }
+        } else {
+            let expected = if let ExchangeResult::Failed { ref correct, .. } = exchange.result {
+                correct.as_str()
+            } else {
+                ""
+            };
+
+            if is_finished {
+                write!(
+                    f,
+                    "💥 OOF! That didn't land! {} wins the duel!\n\nExpected comeback: \"{}\"",
+                    exchange.winner, expected
+                )
+            } else {
+                write!(
+                    f,
+                    "💥 OOF! That didn't land! {} wins the exchange and attacks again!\n\nExpected comeback: \"{}\"",
+                    exchange.winner, expected
+                )
             }
         }
     }
@@ -291,21 +298,18 @@ impl Arena {
             return Err(ArenaError::InputTooLong(MAX_INPUT_LENGTH));
         }
 
-        let Some(duel) = self.duel.as_mut() else {
-            return Err(ArenaError::NoDuel);
-        };
+        let state = self
+            .duel
+            .as_ref()
+            .map(Duel::state)
+            .ok_or(ArenaError::NoDuel)?;
 
         // Validate turn/role
-        if let DuelState::AwaitingInsult { attacker } = duel.state() {
-            let expected_session = match attacker {
-                Duelist::Challenger => self.sessions.challenger.as_ref(),
-                Duelist::Defender => self.sessions.defender.as_ref(),
-            };
-
-            if expected_session.is_some_and(|expected| expected != session_id) {
-                return Err(ArenaError::NotYourTurn(attacker.to_string()));
-            }
+        if let DuelState::AwaitingInsult { attacker } = state {
+            self.validate_session_for_role(attacker, session_id)?;
         }
+
+        let duel = self.duel.as_mut().ok_or(ArenaError::NoDuel)?;
 
         match duel.throw_insult(insult.to_string()) {
             Ok(()) => {
@@ -335,22 +339,18 @@ impl Arena {
             return Err(ArenaError::InputTooLong(MAX_INPUT_LENGTH));
         }
 
-        let Some(duel) = self.duel.as_mut() else {
-            return Err(ArenaError::NoDuel);
-        };
+        let state = self
+            .duel
+            .as_ref()
+            .map(Duel::state)
+            .ok_or(ArenaError::NoDuel)?;
 
         // Validate turn/role
-        if let DuelState::AwaitingComeback { attacker } = duel.state() {
-            let defender = attacker.opponent();
-            let expected_session = match defender {
-                Duelist::Challenger => self.sessions.challenger.as_ref(),
-                Duelist::Defender => self.sessions.defender.as_ref(),
-            };
-
-            if expected_session.is_some_and(|expected| expected != session_id) {
-                return Err(ArenaError::NotYourTurn(defender.to_string()));
-            }
+        if let DuelState::AwaitingComeback { attacker } = state {
+            self.validate_session_for_role(attacker.opponent(), session_id)?;
         }
+
+        let duel = self.duel.as_mut().ok_or(ArenaError::NoDuel)?;
 
         match duel.respond(comeback.to_string()) {
             Ok(exchange) => {
@@ -364,6 +364,18 @@ impl Arena {
             }
             Err(e) => Err(ArenaError::from(e)),
         }
+    }
+
+    fn validate_session_for_role(&self, role: Duelist, session_id: &str) -> Result<(), ArenaError> {
+        let expected_session = match role {
+            Duelist::Challenger => self.sessions.challenger.as_ref(),
+            Duelist::Defender => self.sessions.defender.as_ref(),
+        };
+
+        if expected_session.is_some_and(|expected| expected != session_id) {
+            return Err(ArenaError::NotYourTurn(role.to_string()));
+        }
+        Ok(())
     }
 
     /// Get a hint for the current pending insult.
