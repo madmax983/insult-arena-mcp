@@ -269,23 +269,33 @@ impl InsultBank {
     /// ```
     #[must_use]
     pub fn get_hint_masked(text: &str) -> String {
-        text.split_whitespace()
-            .map(|word| {
-                let mut chars = word.chars();
-                chars.next().map_or_else(String::new, |first| {
-                    let mut masked = first.to_string();
-                    for c in chars {
-                        if c.is_alphabetic() {
-                            masked.push('_');
-                        } else {
-                            masked.push(c);
-                        }
-                    }
-                    masked
-                })
-            })
-            .collect::<Vec<_>>()
-            .join(" ")
+        let mut result = String::with_capacity(text.len());
+        let mut words = text.split_whitespace();
+
+        if let Some(first_word) = words.next() {
+            Self::mask_word_into(&mut result, first_word);
+
+            for word in words {
+                result.push(' ');
+                Self::mask_word_into(&mut result, word);
+            }
+        }
+
+        result
+    }
+
+    fn mask_word_into(output: &mut String, word: &str) {
+        let mut chars = word.chars();
+        if let Some(first) = chars.next() {
+            output.push(first);
+            for c in chars {
+                if c.is_alphabetic() {
+                    output.push('_');
+                } else {
+                    output.push(c);
+                }
+            }
+        }
     }
 }
 
