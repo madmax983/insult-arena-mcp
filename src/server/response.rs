@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::arena::DuelStateView;
+use serde::{Deserialize, Serialize};
 
 /// Response from the arena/server.
 #[derive(Debug, Clone, Serialize, Deserialize)]
