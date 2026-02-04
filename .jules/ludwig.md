@@ -7,3 +7,7 @@
 ## 2025-10-27 - Hint System
 **Friction:** Hints were just the first 20 characters of the comeback. This felt arbitrary and sometimes gave away too much or too little ("I am rubber you are..."). It felt "debuggy".
 **Flow:** Changed to a "Hangman-style" mask (first letter of each word visible). This feels more like a puzzle and gives consistent, fair guidance that rewards knowing the general shape of the comeback.
+
+## 2025-10-28 - Feedback Loop
+**Friction:** Players were losing track of the score and didn't feel the tension of "Match Point". The feedback was too dry ("OOF!").
+**Flow:** Added "Juice" to the feedback loop: explicit score display and a "🔥 MATCH POINT! 🔥" announcement. This creates a "Climax" moment in the gameplay loop.
