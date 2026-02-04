@@ -81,6 +81,36 @@ impl DuelResponse {
 /// MCP server for insult sword fighting with turn notifications.
 ///
 /// Handles tool execution and state management for the duel.
+///
+/// # Turn Notifications
+///
+/// The server implements an autonomous flow where clients are notified when it is
+/// their turn to act. This allows two LLM instances to play against each other
+/// without human intervention.
+///
+/// ## Flow
+///
+/// 1. **Client A** calls a tool (e.g., `throw_insult`).
+/// 2. **Arena** processes the action and updates state (e.g., waiting for comeback).
+/// 3. **Server** broadcasts `notifications/turn` to all connected clients.
+/// 4. **Client B** receives the notification, sees it is their turn, and calls `respond`.
+///
+/// ## Sequence Diagram
+///
+/// ```text
+/// Challenger             Server              Defender
+///     |                    |                    |
+///     |--- throw_insult -->|                    |
+///     |                    |-- Update State     |
+///     |                    |                    |
+///     |<-- Turn Notification (Defender's Turn) -|
+///     |                    |                    |
+///     |                    |<---- respond ------|
+///     |-- Update State     |                    |
+///     |                    |                    |
+///     |- Turn Notification (Challenger's Turn)->|
+///     |                    |                    |
+/// ```
 #[derive(Clone)]
 pub struct InsultServer {
     arena: Arc<Mutex<Arena>>,
