@@ -360,6 +360,17 @@ impl ServerHandler for InsultServer {
             .clone()
             .unwrap_or_else(|| "unknown".to_string());
 
+        // Hardening: Validate session ID length
+        if session_id_str.len() > crate::arena::MAX_SESSION_ID_LENGTH {
+            return Err(CallToolError::invalid_arguments(
+                &params.name,
+                Some(format!(
+                    "Session ID too long (max {} chars)",
+                    crate::arena::MAX_SESSION_ID_LENGTH
+                )),
+            ));
+        }
+
         let result = match params.name.as_str() {
             "start_duel" => self.handle_start_duel().await,
             "register_as_challenger" => {
@@ -374,21 +385,39 @@ impl ServerHandler for InsultServer {
             "list_insults" => self.handle_list_insults().await,
             "throw_insult" => {
                 let args = params.arguments.unwrap_or_default();
-                let insult = args
-                    .get("insult")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
-                self.handle_throw_insult(session_id_str, insult).await
+                let insult_str = args.get("insult").and_then(|v| v.as_str()).unwrap_or("");
+
+                // Hardening: Validate input length before allocation
+                if insult_str.len() > crate::arena::MAX_INPUT_LENGTH {
+                    return Err(CallToolError::invalid_arguments(
+                        &params.name,
+                        Some(format!(
+                            "Insult too long (max {} chars)",
+                            crate::arena::MAX_INPUT_LENGTH
+                        )),
+                    ));
+                }
+
+                self.handle_throw_insult(session_id_str, insult_str.to_string())
+                    .await
             }
             "respond" => {
                 let args = params.arguments.unwrap_or_default();
-                let comeback = args
-                    .get("comeback")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
-                self.handle_respond(session_id_str, comeback).await
+                let comeback_str = args.get("comeback").and_then(|v| v.as_str()).unwrap_or("");
+
+                // Hardening: Validate input length before allocation
+                if comeback_str.len() > crate::arena::MAX_INPUT_LENGTH {
+                    return Err(CallToolError::invalid_arguments(
+                        &params.name,
+                        Some(format!(
+                            "Comeback too long (max {} chars)",
+                            crate::arena::MAX_INPUT_LENGTH
+                        )),
+                    ));
+                }
+
+                self.handle_respond(session_id_str, comeback_str.to_string())
+                    .await
             }
             "get_hint" => self.handle_get_hint().await,
             _ => {
