@@ -22,3 +22,8 @@
 **Concept:** An achievement system that analyzes completed duels to award badges like "Untouchable" (perfect game) and "Comeback Kid" (winning after trailing).
 **Fate:** Merged
 **Lesson:** Gamification layers can be built by replaying the history of the game state (via `exchanges`) to derive narrative arcs (e.g. "comeback") that aren't explicitly stored in the final score.
+
+## [The Weather]
+**Concept:** A dynamic environment system that adds flavor text and modifiers (e.g. Storms amplify crowd hype, Fog masks hints).
+**Fate:** Merged
+**Lesson:** Environmental variables provide a flexible "modifier layer" that can hook into multiple existing systems (Audience, Parrot) to create emergent complexity without changing the core loop.
