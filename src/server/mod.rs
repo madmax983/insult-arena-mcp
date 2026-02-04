@@ -180,13 +180,13 @@ impl InsultServer {
         info!("   Challenger attacks first...");
 
         let mut arena = self.arena.lock().await;
-        let (msg, view) = arena.start_duel();
+        let (outcome, view) = arena.start_duel();
 
         // Broadcast initial state
         drop(arena);
         self.broadcast_turn_notification(&view).await;
 
-        DuelResponse::success(msg, view).to_json()
+        DuelResponse::success(outcome.to_string(), view).to_json()
     }
 
     async fn handle_register_as_challenger(&self, session_id: Option<String>) -> String {
@@ -194,20 +194,24 @@ impl InsultServer {
         let session = session_id.unwrap_or_else(|| "unknown".to_string());
 
         match arena.register_challenger(session.clone()) {
-            Ok((msg, state)) => {
+            Ok((outcome, state)) => {
                 info!("🎭 Session {} registered as Challenger", session);
-                if let Some(state) = state {
-                    DuelResponse::success_with_role(msg, state, "Challenger").to_json()
-                } else {
-                    json!({
-                       "success": true,
-                       "message": msg,
-                       "your_role": "Challenger"
-                    })
-                    .to_string()
-                }
+                state.map_or_else(
+                    || {
+                        json!({
+                           "success": true,
+                           "message": outcome.to_string(),
+                           "your_role": "Challenger"
+                        })
+                        .to_string()
+                    },
+                    |state| {
+                        DuelResponse::success_with_role(outcome.to_string(), state, "Challenger")
+                            .to_json()
+                    },
+                )
             }
-            Err(e) => DuelResponse::error(e).to_json(),
+            Err(e) => DuelResponse::error(e.to_string()).to_json(),
         }
     }
 
@@ -216,20 +220,24 @@ impl InsultServer {
         let session = session_id.unwrap_or_else(|| "unknown".to_string());
 
         match arena.register_defender(session.clone()) {
-            Ok((msg, state)) => {
+            Ok((outcome, state)) => {
                 info!("🎭 Session {} registered as Defender", session);
-                if let Some(state) = state {
-                    DuelResponse::success_with_role(msg, state, "Defender").to_json()
-                } else {
-                    json!({
-                       "success": true,
-                       "message": msg,
-                       "your_role": "Defender"
-                    })
-                    .to_string()
-                }
+                state.map_or_else(
+                    || {
+                        json!({
+                           "success": true,
+                           "message": outcome.to_string(),
+                           "your_role": "Defender"
+                        })
+                        .to_string()
+                    },
+                    |state| {
+                        DuelResponse::success_with_role(outcome.to_string(), state, "Defender")
+                            .to_json()
+                    },
+                )
             }
-            Err(e) => DuelResponse::error(e).to_json(),
+            Err(e) => DuelResponse::error(e.to_string()).to_json(),
         }
     }
 
@@ -245,7 +253,7 @@ impl InsultServer {
                     DuelResponse::success("Current duel state:", view).to_json()
                 }
             }
-            Err(e) => DuelResponse::error(e).to_json(),
+            Err(e) => DuelResponse::error(e.to_string()).to_json(),
         }
     }
 
@@ -258,7 +266,7 @@ impl InsultServer {
                 "insults": insults
             })
             .to_string(),
-            Err(e) => DuelResponse::error(e).to_json(),
+            Err(e) => DuelResponse::error(e.to_string()).to_json(),
         }
     }
 
@@ -266,16 +274,16 @@ impl InsultServer {
         let mut arena = self.arena.lock().await;
 
         match arena.throw_insult(&session_id, &insult) {
-            Ok((msg, view)) => {
+            Ok((outcome, view)) => {
                 info!("🗣️  INSULT: \"{}\"", insult);
                 drop(arena); // Release lock before broadcast
                 self.broadcast_turn_notification(&view).await;
 
-                DuelResponse::success(msg, view).to_json()
+                DuelResponse::success(outcome.to_string(), view).to_json()
             }
             Err(e) => {
                 warn!("❌ Insult error: \"{}\"", e);
-                DuelResponse::error(e).to_json()
+                DuelResponse::error(e.to_string()).to_json()
             }
         }
     }
@@ -286,8 +294,8 @@ impl InsultServer {
         info!("💬 COMEBACK ATTEMPT: {:?}", comeback);
 
         match arena.respond(&session_id, &comeback) {
-            Ok((msg, view)) => {
-                info!("   Result: {}", msg);
+            Ok((outcome, view)) => {
+                info!("   Result: {}", outcome);
                 let is_finished = view.phase == "finished";
 
                 // Broadcast turn notification (unless duel is over)
@@ -296,9 +304,9 @@ impl InsultServer {
                     self.broadcast_turn_notification(&view).await;
                 }
 
-                DuelResponse::success(msg, view).to_json()
+                DuelResponse::success(outcome.to_string(), view).to_json()
             }
-            Err(e) => DuelResponse::error(e).to_json(),
+            Err(e) => DuelResponse::error(e.to_string()).to_json(),
         }
     }
 
@@ -313,7 +321,7 @@ impl InsultServer {
                 "insult": insult
             })
             .to_string(),
-            Err(e) => DuelResponse::error(e).to_json(),
+            Err(e) => DuelResponse::error(e.to_string()).to_json(),
         }
     }
 }

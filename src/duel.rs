@@ -85,7 +85,7 @@ impl ExchangeResult {
 }
 
 /// A single exchange in the duel (insult + response).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Exchange {
     /// Who threw the insult.
     pub attacker: Duelist,
