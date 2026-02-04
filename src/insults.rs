@@ -487,3 +487,44 @@ mod tests {
         assert!(contains_ignore_case("A+B=C", "+b="));
     }
 }
+
+#[cfg(test)]
+mod sentry_tests {
+    use super::*;
+
+    #[test]
+    fn test_get_hint_masked_edge_cases() {
+        let cases = vec![
+            ("", ""),
+            ("Hello", "H____"),
+            ("Don't", "D__'_"),
+            ("a", "a"),
+            ("!!!", "!!!"),
+            ("Hello World", "H____ W____"),
+            ("   Spaces   ", "S_____"),
+        ];
+
+        for (input, expected) in cases {
+            assert_eq!(
+                InsultBank::get_hint_masked(input),
+                expected,
+                "Failed for input: '{input}'"
+            );
+        }
+    }
+
+    #[test]
+    fn test_normalized_eq_edge_cases() {
+        assert!(normalized_eq("", ""), "Empty strings should match");
+        assert!(
+            normalized_eq("!!!", "???"),
+            "Only symbols should match empty logic (both become empty)"
+        );
+        assert!(normalized_eq("a", "A"), "Case insensitive");
+        assert!(normalized_eq("foo-bar", "foobar"), "Symbols ignored");
+        assert!(
+            !normalized_eq("abc", "def"),
+            "Different text should not match"
+        );
+    }
+}
