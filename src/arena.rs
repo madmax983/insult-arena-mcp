@@ -39,6 +39,9 @@ pub enum ArenaOutcome {
     ExchangeProcessed {
         exchange: crate::duel::Exchange,
         is_finished: bool,
+        challenger_score: u8,
+        defender_score: u8,
+        wins_needed: u8,
     },
 }
 
@@ -65,15 +68,32 @@ impl std::fmt::Display for ArenaOutcome {
             Self::ExchangeProcessed {
                 exchange,
                 is_finished,
+                challenger_score,
+                defender_score,
+                wins_needed,
             } => {
+                let score_display = format!("(Score: {challenger_score}-{defender_score})");
+                // GAME FEEL: Added Match Point notification to heighten tension near end-game (Ludwig)
+                let match_point_text = if !is_finished
+                    && (*challenger_score == wins_needed - 1 || *defender_score == wins_needed - 1)
+                {
+                    "\n\n🔥 MATCH POINT! 🔥 Next point wins!"
+                } else {
+                    ""
+                };
+
                 if exchange.result.is_parried() {
                     if *is_finished {
-                        write!(f, "🏆 VICTORY! {} has won the duel!", exchange.winner)
+                        write!(
+                            f,
+                            "🏆 VICTORY! {} has won the duel! {}",
+                            exchange.winner, score_display
+                        )
                     } else {
                         write!(
                             f,
-                            "⚔️ TOUCHÉ! A sharp wit! {} wins the exchange and attacks next!",
-                            exchange.winner
+                            "⚔️ TOUCHÉ! A sharp wit! {} wins the exchange and attacks next! {}{}",
+                            exchange.winner, score_display, match_point_text
                         )
                     }
                 } else {
@@ -87,14 +107,14 @@ impl std::fmt::Display for ArenaOutcome {
                     if *is_finished {
                         write!(
                             f,
-                            "💥 OOF! That didn't land! {} wins the duel!\n\nExpected comeback: \"{}\"",
-                            exchange.winner, expected
+                            "💥 OOF! That didn't land! {} wins the duel! {}\n\nExpected comeback: \"{}\"",
+                            exchange.winner, score_display, expected
                         )
                     } else {
                         write!(
                             f,
-                            "💥 OOF! That didn't land! {} wins the exchange and attacks again!\n\nExpected comeback: \"{}\"",
-                            exchange.winner, expected
+                            "💥 OOF! That didn't land! {} wins the exchange and attacks again! {}{}\n\nExpected comeback: \"{}\"",
+                            exchange.winner, score_display, match_point_text, expected
                         )
                     }
                 }
@@ -359,6 +379,9 @@ impl Arena {
                 let outcome = ArenaOutcome::ExchangeProcessed {
                     exchange,
                     is_finished,
+                    challenger_score: view.challenger_score,
+                    defender_score: view.defender_score,
+                    wins_needed: view.wins_needed,
                 };
                 Ok((outcome, view))
             }
@@ -642,5 +665,57 @@ mod tests {
             .throw_insult("bob", "You fight like a dairy farmer!")
             .unwrap();
         assert!(outcome.to_string().contains("awaiting comeback"));
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod extra_tests {
+    use super::*;
+
+    #[test]
+    fn match_point_is_announced() {
+        let mut arena = Arena::new();
+        arena.start_duel();
+
+        // 1. Challenger wins 1st point (1-0)
+        arena
+            .throw_insult("p1", "You fight like a dairy farmer!")
+            .unwrap();
+        arena.respond("p2", "wrong").unwrap();
+
+        // 2. Challenger wins 2nd point (2-0) -> MATCH POINT
+        arena
+            .throw_insult("p1", "You fight like a dairy farmer!")
+            .unwrap();
+        let (outcome, _) = arena.respond("p2", "wrong").unwrap();
+
+        let text = outcome.to_string();
+        assert!(
+            text.contains("MATCH POINT"),
+            "Output should announce Match Point: {text}"
+        );
+        assert!(
+            text.contains("(Score: 2-0)"),
+            "Output should show score: {text}"
+        );
+
+        // 3. Defender wins 3rd point (2-1) -> Still MATCH POINT for Challenger
+        arena
+            .throw_insult("p1", "You fight like a dairy farmer!")
+            .unwrap();
+        let (outcome, _) = arena
+            .respond("p2", "How appropriate. You fight like a cow!")
+            .unwrap();
+
+        let text = outcome.to_string();
+        assert!(
+            text.contains("MATCH POINT"),
+            "Output should announce Match Point (2-1): {text}"
+        );
+        assert!(
+            text.contains("(Score: 2-1)"),
+            "Output should show score: {text}"
+        );
     }
 }
