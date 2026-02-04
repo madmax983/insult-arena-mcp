@@ -17,3 +17,8 @@
 **Concept:** A post-match analysis tool that generates a narrative chronicle ("The Ballad") and calculates match statistics (parry rate, round count).
 **Fate:** Merged
 **Lesson:** Transforming transient game state (Exchanges) into permanent artifacts (Stories/Stats) adds depth and sharability to the game without touching the core engine.
+
+## [The Trophy Room]
+**Concept:** An achievement system that analyzes completed duels to award badges like "Untouchable" (perfect game) and "Comeback Kid" (winning after trailing).
+**Fate:** Merged
+**Lesson:** Gamification layers can be built by replaying the history of the game state (via `exchanges`) to derive narrative arcs (e.g. "comeback") that aren't explicitly stored in the final score.
