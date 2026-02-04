@@ -4,6 +4,7 @@ use crate::duel::{Duel, DuelState, Duelist, ExchangeResult, InsultError};
 use serde::{Deserialize, Serialize};
 
 pub const MAX_INPUT_LENGTH: usize = 1024;
+pub const MAX_SESSION_ID_LENGTH: usize = 128;
 
 /// Errors that can occur in the Arena.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -12,6 +13,8 @@ pub enum ArenaError {
     NoDuel,
     #[error("Input too long (max {0} chars)")]
     InputTooLong(usize),
+    #[error("Session ID too long (max {0} chars)")]
+    SessionIdTooLong(usize),
     #[error("{0} role is already taken!")]
     RoleTaken(String),
     #[error("It is not your turn! Waiting for {0}.")]
@@ -214,6 +217,10 @@ impl Arena {
         &mut self,
         session_id: String,
     ) -> Result<(ArenaOutcome, Option<DuelStateView>), ArenaError> {
+        if session_id.len() > MAX_SESSION_ID_LENGTH {
+            return Err(ArenaError::SessionIdTooLong(MAX_SESSION_ID_LENGTH));
+        }
+
         if self.sessions.challenger.is_some() {
             return Err(ArenaError::RoleTaken("Challenger".to_string()));
         }
@@ -237,6 +244,10 @@ impl Arena {
         &mut self,
         session_id: String,
     ) -> Result<(ArenaOutcome, Option<DuelStateView>), ArenaError> {
+        if session_id.len() > MAX_SESSION_ID_LENGTH {
+            return Err(ArenaError::SessionIdTooLong(MAX_SESSION_ID_LENGTH));
+        }
+
         if self.sessions.defender.is_some() {
             return Err(ArenaError::RoleTaken("Defender".to_string()));
         }
@@ -508,6 +519,18 @@ mod tests {
 
         let result = arena.respond("p1", &long_string);
         assert!(matches!(result, Err(ArenaError::InputTooLong(_))));
+    }
+
+    #[test]
+    fn rejects_excessive_session_id_length() {
+        let mut arena = Arena::new();
+        let long_id = "s".repeat(200);
+
+        let result = arena.register_challenger(long_id.clone());
+        assert!(matches!(result, Err(ArenaError::SessionIdTooLong(_))));
+
+        let result = arena.register_defender(long_id);
+        assert!(matches!(result, Err(ArenaError::SessionIdTooLong(_))));
     }
 
     #[test]
