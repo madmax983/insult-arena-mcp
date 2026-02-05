@@ -76,11 +76,41 @@ impl std::fmt::Display for ArenaOutcome {
                 wins_needed,
             } => {
                 let score_display = format!("(Score: {challenger_score}-{defender_score})");
-                // GAME FEEL: Added Match Point notification to heighten tension near end-game (Ludwig)
+
+                // GAME FEEL: Calculate context for "Juicy" feedback
+                let (winner_score, loser_score) = match exchange.winner {
+                    crate::duel::Duelist::Challenger => (*challenger_score, *defender_score),
+                    crate::duel::Duelist::Defender => (*defender_score, *challenger_score),
+                };
+
+                // Rally: Was the winner trailing by 2 or more before this point?
+                // We subtract 1 from their current score to get previous score.
+                let prev_winner_score = winner_score.saturating_sub(1);
+                let rally_text = if !is_finished && (loser_score as i32 - prev_winner_score as i32) >= 2
+                {
+                    "\n\n🔥 RALLY! Is this a comeback?! 🔥"
+                } else {
+                    ""
+                };
+
+                // Match Point: Heighten tension near end-game
                 let match_point_text = if !is_finished
                     && (*challenger_score == wins_needed - 1 || *defender_score == wins_needed - 1)
                 {
-                    "\n\n🔥 MATCH POINT! 🔥 Next point wins!"
+                    "\n\n⚡ MATCH POINT! ⚡ Next point wins!"
+                } else {
+                    ""
+                };
+
+                // Victory Flavour
+                let victory_flavour = if *is_finished {
+                    if loser_score == 0 {
+                        "\n👑 FLAWLESS VICTORY! 👑"
+                    } else if loser_score == winner_score - 1 {
+                        "\n🤏 CLUTCH WIN! Down to the wire!"
+                    } else {
+                        ""
+                    }
                 } else {
                     ""
                 };
@@ -89,14 +119,14 @@ impl std::fmt::Display for ArenaOutcome {
                     if *is_finished {
                         write!(
                             f,
-                            "🏆 VICTORY! {} has won the duel! {}",
-                            exchange.winner, score_display
+                            "🏆 VICTORY! {} has won the duel! {}{}",
+                            exchange.winner, score_display, victory_flavour
                         )
                     } else {
                         write!(
                             f,
-                            "⚔️ TOUCHÉ! A sharp wit! {} wins the exchange and attacks next! {}{}",
-                            exchange.winner, score_display, match_point_text
+                            "⚔️ TOUCHÉ! A sharp wit! {} wins the exchange and attacks next! {}{}{}",
+                            exchange.winner, score_display, match_point_text, rally_text
                         )
                     }
                 } else {
@@ -110,14 +140,14 @@ impl std::fmt::Display for ArenaOutcome {
                     if *is_finished {
                         write!(
                             f,
-                            "💥 OOF! That didn't land! {} wins the duel! {}\n\nExpected comeback: \"{}\"",
-                            exchange.winner, score_display, expected
+                            "💥 OOF! That didn't land! {} wins the duel! {}{}\n\nExpected comeback: \"{}\"",
+                            exchange.winner, score_display, victory_flavour, expected
                         )
                     } else {
                         write!(
                             f,
-                            "💥 OOF! That didn't land! {} wins the exchange and attacks again! {}{}\n\nExpected comeback: \"{}\"",
-                            exchange.winner, score_display, match_point_text, expected
+                            "💥 OOF! That didn't land! {} wins the exchange and attacks again! {}{}{}\n\nExpected comeback: \"{}\"",
+                            exchange.winner, score_display, match_point_text, rally_text, expected
                         )
                     }
                 }
@@ -739,6 +769,102 @@ mod extra_tests {
         assert!(
             text.contains("(Score: 2-1)"),
             "Output should show score: {text}"
+        );
+    }
+
+    #[test]
+    fn test_flawless_victory_feedback() {
+        let mut arena = Arena::new();
+        arena.start_duel();
+
+        // 1. Challenger wins 1st (1-0)
+        arena
+            .throw_insult("p1", "You fight like a dairy farmer!")
+            .unwrap();
+        arena.respond("p2", "wrong").unwrap();
+
+        // 2. Challenger wins 2nd (2-0)
+        arena
+            .throw_insult("p1", "You fight like a dairy farmer!")
+            .unwrap();
+        arena.respond("p2", "wrong").unwrap();
+
+        // 3. Challenger wins 3rd (3-0)
+        arena
+            .throw_insult("p1", "You fight like a dairy farmer!")
+            .unwrap();
+        let (outcome, _) = arena.respond("p2", "wrong").unwrap();
+
+        let text = outcome.to_string();
+        assert!(
+            text.contains("FLAWLESS VICTORY"),
+            "Output should be flawless: {text}"
+        );
+    }
+
+    #[test]
+    fn test_clutch_victory_feedback() {
+        let mut arena = Arena::new();
+        arena.start_duel();
+
+        let insult1 = "You fight like a dairy farmer!";
+        let comeback1 = "How appropriate. You fight like a cow!";
+        let insult2 = "You have the manners of a beggar.";
+        let comeback2 = "I wanted to make sure you'd feel comfortable with me.";
+
+        // C: 1-0
+        arena.throw_insult("p1", insult1).unwrap();
+        arena.respond("p2", "wrong").unwrap();
+
+        // D: 1-1
+        arena.throw_insult("p1", insult1).unwrap();
+        arena.respond("p2", comeback1).unwrap();
+
+        // D: 1-2
+        arena.throw_insult("p2", insult2).unwrap();
+        arena.respond("p1", "wrong").unwrap();
+
+        // C: 2-2
+        arena.throw_insult("p2", insult2).unwrap();
+        arena.respond("p1", comeback2).unwrap();
+
+        // C: 3-2 (Clutch)
+        arena.throw_insult("p1", insult1).unwrap();
+        let (outcome, _) = arena.respond("p2", "wrong").unwrap();
+
+        let text = outcome.to_string();
+        assert!(
+            text.contains("CLUTCH WIN"),
+            "Output should be clutch: {text}"
+        );
+    }
+
+    #[test]
+    fn test_rally_feedback() {
+        let mut arena = Arena::new();
+        arena.start_duel();
+
+        let insult1 = "You fight like a dairy farmer!";
+        let comeback1 = "How appropriate. You fight like a cow!";
+        let insult2 = "You have the manners of a beggar.";
+        let comeback2 = "I wanted to make sure you'd feel comfortable with me.";
+
+        // D: 0-1
+        arena.throw_insult("p1", insult1).unwrap();
+        arena.respond("p2", comeback1).unwrap();
+
+        // D: 0-2
+        arena.throw_insult("p2", insult2).unwrap();
+        arena.respond("p1", "wrong").unwrap();
+
+        // C: 1-2 (Rally! Down by 2)
+        arena.throw_insult("p2", insult2).unwrap();
+        let (outcome, _) = arena.respond("p1", comeback2).unwrap();
+
+        let text = outcome.to_string();
+        assert!(
+            text.contains("RALLY"),
+            "Output should indicate rally: {text}"
         );
     }
 }
