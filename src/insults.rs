@@ -11,6 +11,8 @@ pub struct InsultPair {
     pub comeback: &'static str,
 }
 
+const MAX_SEARCH_QUERY_LENGTH: usize = 128;
+
 const CLASSIC_INSULTS: &[InsultPair] = &[
     InsultPair {
         insult: "You fight like a dairy farmer!",
@@ -259,7 +261,13 @@ impl InsultBank {
     /// ```
     #[must_use]
     pub fn search_insults(&self, query: &str) -> Vec<&InsultPair> {
-        let query_chars: Vec<char> = query.chars().flat_map(char::to_lowercase).collect();
+        // Hardening: Limit query length to prevent DoS via massive allocation.
+        // We take the first MAX_SEARCH_QUERY_LENGTH chars.
+        let query_chars: Vec<char> = query
+            .chars()
+            .take(MAX_SEARCH_QUERY_LENGTH)
+            .flat_map(char::to_lowercase)
+            .collect();
         self.pairs
             .iter()
             .filter(|pair| contains_ignore_case_char_slice(pair.insult, &query_chars))

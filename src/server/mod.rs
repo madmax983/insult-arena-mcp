@@ -177,7 +177,7 @@ impl InsultServer {
 
         match arena.register_challenger(session.clone()) {
             Ok((outcome, state)) => {
-                info!("🎭 Session {} registered as Challenger", session);
+                info!("🎭 Session {:?} registered as Challenger", session);
                 state.map_or_else(
                     || {
                         json!({
@@ -203,7 +203,7 @@ impl InsultServer {
 
         match arena.register_defender(session.clone()) {
             Ok((outcome, state)) => {
-                info!("🎭 Session {} registered as Defender", session);
+                info!("🎭 Session {:?} registered as Defender", session);
                 state.map_or_else(
                     || {
                         json!({
@@ -257,7 +257,7 @@ impl InsultServer {
 
         match arena.throw_insult(&session_id, &insult) {
             Ok((outcome, view)) => {
-                info!("🗣️  INSULT: \"{}\"", insult);
+                info!("🗣️  INSULT: {:?}", insult);
                 drop(arena); // Release lock before broadcast
                 self.broadcast_turn_notification(&view).await;
 
