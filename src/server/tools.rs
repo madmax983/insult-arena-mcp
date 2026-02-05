@@ -185,3 +185,41 @@ pub fn tool_get_hint() -> Tool {
         title: None,
     }
 }
+
+/// Tool: `drink_grog`
+///
+/// Consumes grog to increase intoxication.
+#[cfg(feature = "nova")]
+pub fn tool_drink_grog() -> Tool {
+    Tool {
+        name: "drink_grog".to_string(),
+        description: Some("Take a swig of grog! Increases your intoxication level. Warning: May cause slurred speech and confusion.".to_string()),
+        input_schema: empty_input_schema(),
+        annotations: None,
+        execution: None,
+        icons: vec![],
+        meta: None,
+        output_schema: None,
+        title: None,
+    }
+}
+
+/// Tool: `check_sobriety`
+///
+/// Checks your current intoxication level.
+#[cfg(feature = "nova")]
+pub fn tool_check_sobriety() -> Tool {
+    Tool {
+        name: "check_sobriety".to_string(),
+        description: Some(
+            "Check how drunk you are. Returns your current grog level (0-5).".to_string(),
+        ),
+        input_schema: empty_input_schema(),
+        annotations: None,
+        execution: None,
+        icons: vec![],
+        meta: None,
+        output_schema: None,
+        title: None,
+    }
+}

@@ -27,3 +27,8 @@
 **Concept:** A dynamic environment system that adds flavor text and modifiers (e.g. Storms amplify crowd hype, Fog masks hints).
 **Fate:** Merged
 **Lesson:** Environmental variables provide a flexible "modifier layer" that can hook into multiple existing systems (Audience, Parrot) to create emergent complexity without changing the core loop.
+
+## [The Grog System]
+**Concept:** An intoxication mechanic that allows players to drink grog, increasing a drunkenness level that slurs their speech in the notifications sent to opponents.
+**Fate:** Merged
+**Lesson:** Obfuscation of game state (slurred text) can be implemented at the notification/view layer (`InsultServer`) while keeping the core logic (`Arena`) strict and deterministic. Feature flags (`#[cfg(feature = "nova")]`) are essential for safely introducing experimental mechanics into core systems.
