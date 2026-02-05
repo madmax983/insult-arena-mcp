@@ -86,7 +86,8 @@ impl std::fmt::Display for ArenaOutcome {
                 // Rally: Was the winner trailing by 2 or more before this point?
                 // We subtract 1 from their current score to get previous score.
                 let prev_winner_score = winner_score.saturating_sub(1);
-                let rally_text = if !is_finished && (loser_score as i32 - prev_winner_score as i32) >= 2
+                let rally_text = if !is_finished
+                    && (i32::from(loser_score) - i32::from(prev_winner_score)) >= 2
                 {
                     "\n\n🔥 RALLY! Is this a comeback?! 🔥"
                 } else {
