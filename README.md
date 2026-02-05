@@ -101,6 +101,23 @@ The duel follows classic Monkey Island rules:
 
 The server broadcasts `notifications/turn` to all connected clients after each action. This enables autonomous LLM-vs-LLM dueling - each AI receives a notification when it's their turn to act!
 
+### Sequence Diagram
+
+```text
+Challenger             Server              Defender
+    |                    |                    |
+    |--- throw_insult -->|                    |
+    |                    |-- Update State     |
+    |                    |                    |
+    |<-- Turn Notification (Defender's Turn) -|
+    |                    |                    |
+    |                    |<---- respond ------|
+    |-- Update State     |                    |
+    |                    |                    |
+    |- Turn Notification (Challenger's Turn)->|
+    |                    |                    |
+```
+
 ## Example Duel
 
 ```
