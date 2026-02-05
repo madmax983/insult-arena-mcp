@@ -48,6 +48,63 @@ pub enum ArenaOutcome {
     },
 }
 
+impl ArenaOutcome {
+    fn fmt_exchange_processed(
+        f: &mut std::fmt::Formatter<'_>,
+        exchange: &crate::duel::Exchange,
+        is_finished: bool,
+        challenger_score: u8,
+        defender_score: u8,
+        wins_needed: u8,
+    ) -> std::fmt::Result {
+        let score_display = format!("(Score: {challenger_score}-{defender_score})");
+        // GAME FEEL: Added Match Point notification to heighten tension near end-game (Ludwig)
+        let match_point_text = if !is_finished
+            && (challenger_score == wins_needed - 1 || defender_score == wins_needed - 1)
+        {
+            "\n\n🔥 MATCH POINT! 🔥 Next point wins!"
+        } else {
+            ""
+        };
+
+        if exchange.result.is_parried() {
+            if is_finished {
+                write!(
+                    f,
+                    "🏆 VICTORY! {} has won the duel! {}",
+                    exchange.winner, score_display
+                )
+            } else {
+                write!(
+                    f,
+                    "⚔️ TOUCHÉ! A sharp wit! {} wins the exchange and attacks next! {}{}",
+                    exchange.winner, score_display, match_point_text
+                )
+            }
+        } else {
+            let expected = if let ExchangeResult::Failed { ref correct, .. } = exchange.result {
+                correct.as_str()
+            } else {
+                ""
+            };
+
+            if is_finished {
+                write!(
+                    f,
+                    "💥 OOF! That didn't land! {} wins the duel! {}\n\nExpected comeback: \"{}\"",
+                    exchange.winner, score_display, expected
+                )
+            } else {
+                write!(
+                    f,
+                    "💥 OOF! That didn't land! {} wins the exchange and attacks again! {}{}\n\nExpected comeback: \"{}\"",
+                    exchange.winner, score_display, match_point_text, expected
+                )
+            }
+        }
+    }
+}
+
 impl std::fmt::Display for ArenaOutcome {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -74,54 +131,14 @@ impl std::fmt::Display for ArenaOutcome {
                 challenger_score,
                 defender_score,
                 wins_needed,
-            } => {
-                let score_display = format!("(Score: {challenger_score}-{defender_score})");
-                // GAME FEEL: Added Match Point notification to heighten tension near end-game (Ludwig)
-                let match_point_text = if !is_finished
-                    && (*challenger_score == wins_needed - 1 || *defender_score == wins_needed - 1)
-                {
-                    "\n\n🔥 MATCH POINT! 🔥 Next point wins!"
-                } else {
-                    ""
-                };
-
-                if exchange.result.is_parried() {
-                    if *is_finished {
-                        write!(
-                            f,
-                            "🏆 VICTORY! {} has won the duel! {}",
-                            exchange.winner, score_display
-                        )
-                    } else {
-                        write!(
-                            f,
-                            "⚔️ TOUCHÉ! A sharp wit! {} wins the exchange and attacks next! {}{}",
-                            exchange.winner, score_display, match_point_text
-                        )
-                    }
-                } else {
-                    let expected =
-                        if let ExchangeResult::Failed { ref correct, .. } = exchange.result {
-                            correct.as_str()
-                        } else {
-                            ""
-                        };
-
-                    if *is_finished {
-                        write!(
-                            f,
-                            "💥 OOF! That didn't land! {} wins the duel! {}\n\nExpected comeback: \"{}\"",
-                            exchange.winner, score_display, expected
-                        )
-                    } else {
-                        write!(
-                            f,
-                            "💥 OOF! That didn't land! {} wins the exchange and attacks again! {}{}\n\nExpected comeback: \"{}\"",
-                            exchange.winner, score_display, match_point_text, expected
-                        )
-                    }
-                }
-            }
+            } => Self::fmt_exchange_processed(
+                f,
+                exchange,
+                *is_finished,
+                *challenger_score,
+                *defender_score,
+                *wins_needed,
+            ),
         }
     }
 }
@@ -178,7 +195,7 @@ pub fn duel_state_view(duel: &Duel) -> DuelStateView {
         pending_insult: duel.pending_insult().map(String::from),
         challenger_score,
         defender_score,
-        wins_needed: 3,
+        wins_needed: Duel::DEFAULT_WINS_NEEDED,
         winner,
     }
 }
