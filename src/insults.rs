@@ -101,8 +101,17 @@ fn normalized_eq(a: &str, b: &str) -> bool {
 
 /// Helper to check if a haystack contains a needle, ignoring case.
 ///
-/// This implementation avoids heap allocations by using iterators.
+/// Used only for testing.
+#[cfg(test)]
 fn contains_ignore_case(haystack: &str, needle: &str) -> bool {
+    let needle_chars: Vec<char> = needle.chars().flat_map(char::to_lowercase).collect();
+    contains_ignore_case_char_slice(haystack, &needle_chars)
+}
+
+/// Helper to check if a haystack contains a needle (pre-normalized as char slice).
+///
+/// This avoids re-normalizing the needle for every position in the haystack.
+fn contains_ignore_case_char_slice(haystack: &str, needle: &[char]) -> bool {
     if needle.is_empty() {
         return true;
     }
@@ -111,10 +120,9 @@ fn contains_ignore_case(haystack: &str, needle: &str) -> bool {
 
     loop {
         let mut check_iter = haystack_iter.clone();
-        let needle_iter = needle.chars().flat_map(char::to_lowercase);
 
         let mut matched = true;
-        for n in needle_iter {
+        for &n in needle {
             if check_iter.next() != Some(n) {
                 matched = false;
                 break;
@@ -251,9 +259,10 @@ impl InsultBank {
     /// ```
     #[must_use]
     pub fn search_insults(&self, query: &str) -> Vec<&InsultPair> {
+        let query_chars: Vec<char> = query.chars().flat_map(char::to_lowercase).collect();
         self.pairs
             .iter()
-            .filter(|pair| contains_ignore_case(pair.insult, query))
+            .filter(|pair| contains_ignore_case_char_slice(pair.insult, &query_chars))
             .collect()
     }
 
