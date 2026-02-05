@@ -185,3 +185,23 @@ pub fn tool_get_hint() -> Tool {
         title: None,
     }
 }
+
+/// Tool: `drink_grog`
+///
+/// Drink some grog to increase your courage (and intoxication).
+#[cfg(feature = "nova")]
+pub fn tool_drink_grog() -> Tool {
+    Tool {
+        name: "drink_grog".to_string(),
+        description: Some(
+            "Drink a mug of grog! Warning: May cause slurred speech and hiccups.".to_string(),
+        ),
+        input_schema: empty_input_schema(),
+        annotations: None,
+        execution: None,
+        icons: vec![],
+        meta: None,
+        output_schema: None,
+        title: None,
+    }
+}

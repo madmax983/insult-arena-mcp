@@ -27,6 +27,9 @@ use tracing::{info, warn};
 
 use crate::arena::{Arena, DuelStateView};
 
+#[cfg(feature = "nova")]
+use crate::experimental::grog::GrogSystem;
+
 pub mod response;
 pub use response::DuelResponse;
 
@@ -67,6 +70,8 @@ pub use response::DuelResponse;
 pub struct InsultServer {
     arena: Arc<Mutex<Arena>>,
     runtime: Arc<RwLock<Option<Arc<HyperRuntime>>>>,
+    #[cfg(feature = "nova")]
+    grog: Arc<Mutex<GrogSystem>>,
 }
 
 impl InsultServer {
@@ -79,6 +84,8 @@ impl InsultServer {
         Self {
             arena: Arc::new(Mutex::new(Arena::new())),
             runtime: Arc::new(RwLock::new(None)),
+            #[cfg(feature = "nova")]
+            grog: Arc::new(Mutex::new(GrogSystem::new())),
         }
     }
 
@@ -154,6 +161,9 @@ use tools::{
     tool_get_duel_state, tool_get_hint, tool_list_insults, tool_register_as_challenger,
     tool_register_as_defender, tool_respond, tool_start_duel, tool_throw_insult,
 };
+
+#[cfg(feature = "nova")]
+use tools::tool_drink_grog;
 
 impl InsultServer {
     async fn handle_start_duel(&self) -> String {
@@ -261,7 +271,18 @@ impl InsultServer {
                 drop(arena); // Release lock before broadcast
                 self.broadcast_turn_notification(&view).await;
 
-                DuelResponse::success(outcome.to_string(), view).to_json()
+                let mut message = outcome.to_string();
+
+                #[cfg(feature = "nova")]
+                {
+                    let grog = self.grog.lock().await;
+                    let level = grog.get_level(&session_id);
+                    if level > 0 {
+                        message = grog.slur_text(&message, level);
+                    }
+                }
+
+                DuelResponse::success(message, view).to_json()
             }
             Err(e) => {
                 warn!("❌ Insult error: \"{}\"", e);
@@ -286,7 +307,18 @@ impl InsultServer {
                     self.broadcast_turn_notification(&view).await;
                 }
 
-                DuelResponse::success(outcome.to_string(), view).to_json()
+                let mut message = outcome.to_string();
+
+                #[cfg(feature = "nova")]
+                {
+                    let grog = self.grog.lock().await;
+                    let level = grog.get_level(&session_id);
+                    if level > 0 {
+                        message = grog.slur_text(&message, level);
+                    }
+                }
+
+                DuelResponse::success(message, view).to_json()
             }
             Err(e) => DuelResponse::error(e.to_string()).to_json(),
         }
@@ -306,6 +338,24 @@ impl InsultServer {
             Err(e) => DuelResponse::error(e.to_string()).to_json(),
         }
     }
+
+    #[cfg(feature = "nova")]
+    async fn handle_drink_grog(&self, session_id: String) -> String {
+        let mut grog = self.grog.lock().await;
+        let level = grog.drink_grog(&session_id);
+
+        let msg = format!("You gulp down the grog! (Intoxication level: {level})");
+        let slurred = grog.slur_text(&msg, level);
+
+        info!("🍺 Session {} drank grog. Level: {}", session_id, level);
+
+        json!({
+            "success": true,
+            "message": slurred,
+            "level": level
+        })
+        .to_string()
+    }
 }
 
 #[async_trait]
@@ -315,17 +365,22 @@ impl ServerHandler for InsultServer {
         _params: Option<PaginatedRequestParams>,
         _runtime: Arc<dyn McpServer>,
     ) -> Result<ListToolsResult, RpcError> {
+        let mut tools = vec![
+            tool_start_duel(),
+            tool_register_as_challenger(),
+            tool_register_as_defender(),
+            tool_get_duel_state(),
+            tool_list_insults(),
+            tool_throw_insult(),
+            tool_respond(),
+            tool_get_hint(),
+        ];
+
+        #[cfg(feature = "nova")]
+        tools.push(tool_drink_grog());
+
         Ok(ListToolsResult {
-            tools: vec![
-                tool_start_duel(),
-                tool_register_as_challenger(),
-                tool_register_as_defender(),
-                tool_get_duel_state(),
-                tool_list_insults(),
-                tool_throw_insult(),
-                tool_respond(),
-                tool_get_hint(),
-            ],
+            tools,
             next_cursor: None,
             meta: None,
         })
@@ -402,6 +457,8 @@ impl ServerHandler for InsultServer {
                     .await
             }
             "get_hint" => self.handle_get_hint().await,
+            #[cfg(feature = "nova")]
+            "drink_grog" => self.handle_drink_grog(session_id_str).await,
             _ => {
                 return Err(CallToolError::unknown_tool(&params.name));
             }
