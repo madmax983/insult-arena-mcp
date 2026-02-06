@@ -176,10 +176,7 @@ impl InsultServer {
                 .notify_custom(&session_id, notification.clone())
                 .await
             {
-                warn!(
-                    "   ✗ Failed to send notification to {}: {}",
-                    session_id, e
-                );
+                warn!("   ✗ Failed to send notification to {session_id}: {e}");
             }
         }
     }
@@ -361,7 +358,7 @@ impl InsultServer {
     #[cfg(feature = "nova")]
     async fn handle_cheer(&self, session_id: String, target: String) -> String {
         let mut gallery = self.gallery.lock().await;
-        let message = gallery.cheer(session_id, target);
+        let message = gallery.cheer(&session_id, &target);
         drop(gallery); // Unlock before broadcast
 
         self.broadcast_announcement(&message).await;
@@ -376,7 +373,7 @@ impl InsultServer {
     #[cfg(feature = "nova")]
     async fn handle_boo(&self, session_id: String, target: String) -> String {
         let mut gallery = self.gallery.lock().await;
-        let message = gallery.boo(session_id, target);
+        let message = gallery.boo(&session_id, &target);
         drop(gallery);
 
         self.broadcast_announcement(&message).await;
@@ -391,7 +388,7 @@ impl InsultServer {
     #[cfg(feature = "nova")]
     async fn handle_heckle(&self, session_id: String, heckle: String) -> String {
         let mut gallery = self.gallery.lock().await;
-        let message = gallery.heckle(session_id, heckle);
+        let message = gallery.heckle(&session_id, &heckle);
         drop(gallery);
 
         self.broadcast_announcement(&message).await;
@@ -534,7 +531,8 @@ impl ServerHandler for InsultServer {
                     .get("message")
                     .and_then(|v| v.as_str())
                     .unwrap_or("...");
-                self.handle_heckle(session_id_str, message.to_string()).await
+                self.handle_heckle(session_id_str, message.to_string())
+                    .await
             }
             _ => {
                 return Err(CallToolError::unknown_tool(&params.name));

@@ -56,35 +56,35 @@ impl Gallery {
     }
 
     /// Handles a cheer action.
-    pub fn cheer(&mut self, spectator: String, target: String) -> String {
+    pub fn cheer(&mut self, spectator: &str, target: &str) -> String {
         let action = SpectatorAction::Cheer {
-            spectator: spectator.clone(),
-            target: target.clone(),
+            spectator: spectator.to_string(),
+            target: target.to_string(),
         };
         self.push_action(action);
-        format!("🎉 Spectator {} cheers for {}!", spectator, target)
+        format!("🎉 Spectator {spectator} cheers for {target}!")
     }
 
     /// Handles a boo action.
-    pub fn boo(&mut self, spectator: String, target: String) -> String {
+    pub fn boo(&mut self, spectator: &str, target: &str) -> String {
         let action = SpectatorAction::Boo {
-            spectator: spectator.clone(),
-            target: target.clone(),
+            spectator: spectator.to_string(),
+            target: target.to_string(),
         };
         self.push_action(action);
-        format!("🍅 Spectator {} boos {}!", spectator, target)
+        format!("🍅 Spectator {spectator} boos {target}!")
     }
 
     /// Handles a heckle action.
-    pub fn heckle(&mut self, spectator: String, message: String) -> String {
+    pub fn heckle(&mut self, spectator: &str, message: &str) -> String {
         // Sanitize message?
         // Assume input validation happens before calling this.
         let action = SpectatorAction::Heckle {
-            spectator: spectator.clone(),
-            message: message.clone(),
+            spectator: spectator.to_string(),
+            message: message.to_string(),
         };
         self.push_action(action);
-        format!("📢 Spectator {} shouts: \"{}\"", spectator, message)
+        format!("📢 Spectator {spectator} shouts: \"{message}\"")
     }
 }
 
@@ -101,11 +101,17 @@ fn string_param_schema(name: &str, description: &str) -> ToolInputSchema {
 }
 
 /// Tool: `cheer`
+#[must_use]
 pub fn tool_cheer() -> Tool {
     Tool {
         name: "cheer".to_string(),
-        description: Some("Cheer for a duelist (Challenger or Defender) to boost their morale!".to_string()),
-        input_schema: string_param_schema("target", "Who to cheer for (e.g., 'Challenger', 'Defender')"),
+        description: Some(
+            "Cheer for a duelist (Challenger or Defender) to boost their morale!".to_string(),
+        ),
+        input_schema: string_param_schema(
+            "target",
+            "Who to cheer for (e.g., 'Challenger', 'Defender')",
+        ),
         annotations: None,
         execution: None,
         icons: vec![],
@@ -116,10 +122,13 @@ pub fn tool_cheer() -> Tool {
 }
 
 /// Tool: `boo`
+#[must_use]
 pub fn tool_boo() -> Tool {
     Tool {
         name: "boo".to_string(),
-        description: Some("Boo a duelist to lower their morale! Throw a virtual tomato!".to_string()),
+        description: Some(
+            "Boo a duelist to lower their morale! Throw a virtual tomato!".to_string(),
+        ),
         input_schema: string_param_schema("target", "Who to boo (e.g., 'Challenger', 'Defender')"),
         annotations: None,
         execution: None,
@@ -131,6 +140,7 @@ pub fn tool_boo() -> Tool {
 }
 
 /// Tool: `heckle`
+#[must_use]
 pub fn tool_heckle() -> Tool {
     Tool {
         name: "heckle".to_string(),
@@ -152,7 +162,7 @@ mod tests {
     #[test]
     fn test_cheer() {
         let mut gallery = Gallery::new();
-        let msg = gallery.cheer("User1".into(), "Challenger".into());
+        let msg = gallery.cheer("User1", "Challenger");
         assert_eq!(msg, "🎉 Spectator User1 cheers for Challenger!");
         assert_eq!(gallery.history.len(), 1);
     }
@@ -160,7 +170,7 @@ mod tests {
     #[test]
     fn test_boo() {
         let mut gallery = Gallery::new();
-        let msg = gallery.boo("User2".into(), "Defender".into());
+        let msg = gallery.boo("User2", "Defender");
         assert_eq!(msg, "🍅 Spectator User2 boos Defender!");
         assert_eq!(gallery.history.len(), 1);
     }
@@ -168,7 +178,7 @@ mod tests {
     #[test]
     fn test_heckle() {
         let mut gallery = Gallery::new();
-        let msg = gallery.heckle("User3".into(), "You fight like a cow!".into());
+        let msg = gallery.heckle("User3", "You fight like a cow!");
         assert_eq!(msg, "📢 Spectator User3 shouts: \"You fight like a cow!\"");
         assert_eq!(gallery.history.len(), 1);
     }
