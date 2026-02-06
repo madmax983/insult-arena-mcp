@@ -1,6 +1,6 @@
 //! Arena module: Encapsulates the game state and logic.
 
-use crate::duel::{Duel, DuelState, Duelist, ExchangeResult, InsultError};
+use crate::duel::{Duel, DuelState, Duelist, InsultError};
 use serde::{Deserialize, Serialize};
 
 pub const MAX_INPUT_LENGTH: usize = 1024;
@@ -33,97 +33,9 @@ pub enum ArenaError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArenaOutcome {
     DuelStarted,
-    RoleRegistered {
-        role: Duelist,
-    },
-    InsultThrown {
-        insult: String,
-    },
-    ExchangeProcessed {
-        exchange: crate::duel::Exchange,
-        is_finished: bool,
-        challenger_score: u8,
-        defender_score: u8,
-        wins_needed: u8,
-    },
-}
-
-impl std::fmt::Display for ArenaOutcome {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::DuelStarted => write!(
-                f,
-                "⚔️ En garde! A new duel begins. Challenger, throw the first insult! 🏴‍☠️"
-            ),
-            Self::RoleRegistered { role } => match role {
-                Duelist::Challenger => write!(
-                    f,
-                    "🏴‍☠️ You are the CHALLENGER! Sharpen your tongue and throw the first insult!"
-                ),
-                Duelist::Defender => write!(
-                    f,
-                    "🛡️ You are the DEFENDER! Brace yourself for insults and retort with a comeback!"
-                ),
-            },
-            Self::InsultThrown { insult } => {
-                write!(f, "🗣️ You bellow: \"{insult}\" ... awaiting comeback!")
-            }
-            Self::ExchangeProcessed {
-                exchange,
-                is_finished,
-                challenger_score,
-                defender_score,
-                wins_needed,
-            } => {
-                let score_display = format!("(Score: {challenger_score}-{defender_score})");
-                // GAME FEEL: Added Match Point notification to heighten tension near end-game (Ludwig)
-                let match_point_text = if !is_finished
-                    && (*challenger_score == wins_needed - 1 || *defender_score == wins_needed - 1)
-                {
-                    "\n\n🔥 MATCH POINT! 🔥 Next point wins!"
-                } else {
-                    ""
-                };
-
-                if exchange.result.is_parried() {
-                    if *is_finished {
-                        write!(
-                            f,
-                            "🏆 VICTORY! {} has won the duel! {}",
-                            exchange.winner, score_display
-                        )
-                    } else {
-                        write!(
-                            f,
-                            "⚔️ TOUCHÉ! A sharp wit! {} wins the exchange and attacks next! {}{}",
-                            exchange.winner, score_display, match_point_text
-                        )
-                    }
-                } else {
-                    let expected =
-                        if let ExchangeResult::Failed { ref correct, .. } = exchange.result {
-                            correct.as_str()
-                        } else {
-                            ""
-                        };
-
-                    if *is_finished {
-                        write!(
-                            f,
-                            "💥 OOF! That didn't land! {} wins the duel! {}\n\nExpected comeback: \"{}\"",
-                            exchange.winner, score_display, expected
-                        )
-                    } else {
-                        write!(
-                            f,
-                            "💥 OOF! That didn't land! {} wins the exchange and attacks again! {}{}\n\nExpected comeback: \"{}\"",
-                            exchange.winner, score_display, match_point_text, expected
-                        )
-                    }
-                }
-            }
-        }
-    }
+    RoleRegistered { role: Duelist },
+    InsultThrown { insult: String },
+    ExchangeProcessed { exchange: crate::duel::Exchange },
 }
 
 /// Tracks which session is playing which role.
@@ -386,14 +298,7 @@ impl Arena {
         match duel.respond(comeback.to_string()) {
             Ok(exchange) => {
                 let view = duel_state_view(duel);
-                let is_finished = duel.is_finished();
-                let outcome = ArenaOutcome::ExchangeProcessed {
-                    exchange,
-                    is_finished,
-                    challenger_score: view.challenger_score,
-                    defender_score: view.defender_score,
-                    wins_needed: view.wins_needed,
-                };
+                let outcome = ArenaOutcome::ExchangeProcessed { exchange };
                 Ok((outcome, view))
             }
             Err(e) => Err(ArenaError::from(e)),
@@ -439,7 +344,6 @@ mod tests {
         let mut arena = Arena::new();
         let (outcome, view) = arena.start_duel();
         assert!(matches!(outcome, ArenaOutcome::DuelStarted));
-        assert!(outcome.to_string().contains("En garde"));
         assert_eq!(view.phase, "awaiting_insult");
     }
 
@@ -468,7 +372,6 @@ mod tests {
             .throw_insult("p1", "You fight like a dairy farmer!")
             .unwrap();
         assert!(matches!(outcome, ArenaOutcome::InsultThrown { .. }));
-        assert!(outcome.to_string().contains("awaiting comeback"));
         assert_eq!(view.phase, "awaiting_comeback");
 
         // Correct comeback
@@ -476,7 +379,6 @@ mod tests {
             .respond("p2", "How appropriate. You fight like a cow!")
             .unwrap();
         assert!(matches!(outcome, ArenaOutcome::ExchangeProcessed { .. }));
-        assert!(outcome.to_string().contains("TOUCHÉ"));
         assert_eq!(view.phase, "awaiting_insult"); // Defender attacks next
     }
 
@@ -491,7 +393,6 @@ mod tests {
                 role: Duelist::Challenger
             }
         ));
-        assert!(outcome.to_string().contains("CHALLENGER"));
 
         let (outcome, _) = arena.register_defender("session2".to_string()).unwrap();
         assert!(matches!(
@@ -500,7 +401,6 @@ mod tests {
                 role: Duelist::Defender
             }
         ));
-        assert!(outcome.to_string().contains("DEFENDER"));
 
         // Can't register twice
         let result = arena.register_challenger("session3".to_string());
@@ -539,26 +439,18 @@ mod tests {
         arena.start_duel();
 
         // Throw "beggar manners" insult
-        let (outcome, view) = arena
+        let (_, view) = arena
             .throw_insult("p1", "You have the manners of a beggar.")
             .unwrap();
-        assert!(
-            outcome.to_string().contains("awaiting comeback"),
-            "Should be waiting for comeback"
-        );
         assert_eq!(view.phase, "awaiting_comeback");
 
         // Respond with correct comeback
-        let (outcome, view) = arena
+        let (_, view) = arena
             .respond(
                 "p2",
                 "I wanted to make sure you'd feel comfortable with me.",
             )
             .unwrap();
-        assert!(
-            outcome.to_string().contains("TOUCHÉ"),
-            "Should parry successfully"
-        );
         assert_eq!(view.phase, "awaiting_insult"); // Defender attacks next
     }
 
@@ -656,10 +548,9 @@ mod tests {
         assert!(matches!(result, Err(ArenaError::NotYourTurn(_))));
 
         // 3. Challenger CAN throw insult
-        let (outcome, view) = arena
+        let (_, view) = arena
             .throw_insult("alice", "You fight like a dairy farmer!")
             .unwrap();
-        assert!(outcome.to_string().contains("awaiting comeback"));
         assert_eq!(view.phase, "awaiting_comeback");
 
         // 4. Intruder cannot respond
@@ -671,10 +562,9 @@ mod tests {
         assert!(matches!(result, Err(ArenaError::NotYourTurn(_))));
 
         // 6. Defender CAN respond
-        let (outcome, view) = arena
+        let (_, view) = arena
             .respond("bob", "How appropriate. You fight like a cow!")
             .unwrap();
-        assert!(outcome.to_string().contains("TOUCHÉ"));
         assert_eq!(view.phase, "awaiting_insult");
 
         // Now Defender is attacker.
@@ -687,58 +577,6 @@ mod tests {
         let (outcome, _) = arena
             .throw_insult("bob", "You fight like a dairy farmer!")
             .unwrap();
-        assert!(outcome.to_string().contains("awaiting comeback"));
-    }
-}
-
-#[cfg(test)]
-#[allow(clippy::unwrap_used)]
-mod extra_tests {
-    use super::*;
-
-    #[test]
-    fn match_point_is_announced() {
-        let mut arena = Arena::new();
-        arena.start_duel();
-
-        // 1. Challenger wins 1st point (1-0)
-        arena
-            .throw_insult("p1", "You fight like a dairy farmer!")
-            .unwrap();
-        arena.respond("p2", "wrong").unwrap();
-
-        // 2. Challenger wins 2nd point (2-0) -> MATCH POINT
-        arena
-            .throw_insult("p1", "You fight like a dairy farmer!")
-            .unwrap();
-        let (outcome, _) = arena.respond("p2", "wrong").unwrap();
-
-        let text = outcome.to_string();
-        assert!(
-            text.contains("MATCH POINT"),
-            "Output should announce Match Point: {text}"
-        );
-        assert!(
-            text.contains("(Score: 2-0)"),
-            "Output should show score: {text}"
-        );
-
-        // 3. Defender wins 3rd point (2-1) -> Still MATCH POINT for Challenger
-        arena
-            .throw_insult("p1", "You fight like a dairy farmer!")
-            .unwrap();
-        let (outcome, _) = arena
-            .respond("p2", "How appropriate. You fight like a cow!")
-            .unwrap();
-
-        let text = outcome.to_string();
-        assert!(
-            text.contains("MATCH POINT"),
-            "Output should announce Match Point (2-1): {text}"
-        );
-        assert!(
-            text.contains("(Score: 2-1)"),
-            "Output should show score: {text}"
-        );
+        assert!(matches!(outcome, ArenaOutcome::InsultThrown { .. }));
     }
 }
