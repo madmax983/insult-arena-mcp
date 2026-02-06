@@ -27,6 +27,11 @@ use tracing::{info, warn};
 
 use crate::announcer::Announcer;
 use crate::arena::{Arena, DuelStateView};
+#[cfg(feature = "nova")]
+use crate::experimental::{
+    voodoo::VoodooDoll,
+    weather::{WeatherCondition, WeatherSystem},
+};
 
 pub mod response;
 pub use response::DuelResponse;
@@ -151,12 +156,49 @@ impl Default for InsultServer {
 }
 
 mod tools;
+#[cfg(feature = "nova")]
+use tools::tool_consult_voodoo;
 use tools::{
     tool_get_duel_state, tool_get_hint, tool_list_insults, tool_register_as_challenger,
     tool_register_as_defender, tool_respond, tool_start_duel, tool_throw_insult,
 };
 
 impl InsultServer {
+    #[cfg(feature = "nova")]
+    fn handle_consult_voodoo(text: &str, weather_str: Option<&str>) -> String {
+        let weather = weather_str.map_or_else(
+            || {
+                // No weather provided -> Randomize
+                let mut sys = WeatherSystem::new();
+                sys.randomize();
+                sys.current
+            },
+            |s| match s.to_lowercase().as_str() {
+                "clear" => WeatherCondition::Clear,
+                "fog" => WeatherCondition::Fog,
+                "storm" => WeatherCondition::Storm,
+                "heatwave" => WeatherCondition::Heatwave,
+                _ => {
+                    // Invalid weather provided -> Randomize
+                    let mut sys = WeatherSystem::new();
+                    sys.randomize();
+                    sys.current
+                }
+            },
+        );
+
+        let result = VoodooDoll::channel(text, &weather);
+
+        json!({
+            "success": true,
+            "message": "The Voodoo Lady chants...",
+            "original": text,
+            "weather": format!("{:?}", weather),
+            "cursed_text": result
+        })
+        .to_string()
+    }
+
     async fn handle_start_duel(&self) -> String {
         info!("⚔️  NEW DUEL STARTED!");
         info!("   Challenger vs Defender - First to 3 wins!");
@@ -325,17 +367,22 @@ impl ServerHandler for InsultServer {
         _params: Option<PaginatedRequestParams>,
         _runtime: Arc<dyn McpServer>,
     ) -> Result<ListToolsResult, RpcError> {
+        let mut tools = vec![
+            tool_start_duel(),
+            tool_register_as_challenger(),
+            tool_register_as_defender(),
+            tool_get_duel_state(),
+            tool_list_insults(),
+            tool_throw_insult(),
+            tool_respond(),
+            tool_get_hint(),
+        ];
+
+        #[cfg(feature = "nova")]
+        tools.push(tool_consult_voodoo());
+
         Ok(ListToolsResult {
-            tools: vec![
-                tool_start_duel(),
-                tool_register_as_challenger(),
-                tool_register_as_defender(),
-                tool_get_duel_state(),
-                tool_list_insults(),
-                tool_throw_insult(),
-                tool_respond(),
-                tool_get_hint(),
-            ],
+            tools,
             next_cursor: None,
             meta: None,
         })
@@ -412,6 +459,24 @@ impl ServerHandler for InsultServer {
                     .await
             }
             "get_hint" => self.handle_get_hint().await,
+            #[cfg(feature = "nova")]
+            "consult_voodoo" => {
+                let args = params.arguments.unwrap_or_default();
+                let text = args.get("text").and_then(|v| v.as_str()).unwrap_or("");
+                let weather = args.get("weather").and_then(|v| v.as_str());
+
+                if text.len() > crate::arena::MAX_INPUT_LENGTH {
+                    return Err(CallToolError::invalid_arguments(
+                        &params.name,
+                        Some(format!(
+                            "Text too long (max {} chars)",
+                            crate::arena::MAX_INPUT_LENGTH
+                        )),
+                    ));
+                }
+
+                Self::handle_consult_voodoo(text, weather)
+            }
             _ => {
                 return Err(CallToolError::unknown_tool(&params.name));
             }

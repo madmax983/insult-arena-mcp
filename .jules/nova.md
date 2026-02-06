@@ -27,3 +27,8 @@
 **Concept:** A dynamic environment system that adds flavor text and modifiers (e.g. Storms amplify crowd hype, Fog masks hints).
 **Fate:** Merged
 **Lesson:** Environmental variables provide a flexible "modifier layer" that can hook into multiple existing systems (Audience, Parrot) to create emergent complexity without changing the core loop.
+
+## [The Voodoo System]
+**Concept:** A text transformation tool that flavors insults based on weather conditions (e.g., slurrs speech in Heatwave, pirate-talk in Storm).
+**Fate:** Merged
+**Lesson:** Adding flavor tools that transform text allows for roleplay "juice" without altering game mechanics.

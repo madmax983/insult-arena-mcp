@@ -62,6 +62,46 @@ pub fn tool_start_duel() -> Tool {
     }
 }
 
+/// Tool: `consult_voodoo`
+///
+/// Experimental tool to transform text based on weather.
+#[cfg(feature = "nova")]
+pub fn tool_consult_voodoo() -> Tool {
+    let mut props = HashMap::new();
+
+    // text (required)
+    let mut text_prop = serde_json::Map::new();
+    text_prop.insert("type".to_string(), json!("string"));
+    text_prop.insert(
+        "description".to_string(),
+        json!("The text (insult) to transform"),
+    );
+    props.insert("text".to_string(), text_prop);
+
+    // weather (optional)
+    let mut weather_prop = serde_json::Map::new();
+    weather_prop.insert("type".to_string(), json!("string"));
+    weather_prop.insert(
+        "description".to_string(),
+        json!("The weather condition (Clear, Fog, Storm, Heatwave). Random if omitted."),
+    );
+    props.insert("weather".to_string(), weather_prop);
+
+    Tool {
+        name: "consult_voodoo".to_string(),
+        description: Some(
+            "Consult the Voodoo Lady to transform text based on weather conditions.".to_string(),
+        ),
+        input_schema: ToolInputSchema::new(vec!["text".to_string()], Some(props), None),
+        annotations: None,
+        execution: None,
+        icons: vec![],
+        meta: None,
+        output_schema: None,
+        title: None,
+    }
+}
+
 /// Tool: `register_as_challenger`
 ///
 /// Registers the calling session as the Challenger.
