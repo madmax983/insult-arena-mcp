@@ -33,15 +33,9 @@ pub enum ArenaError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArenaOutcome {
     DuelStarted,
-    RoleRegistered {
-        role: Duelist,
-    },
-    InsultThrown {
-        insult: String,
-    },
-    ExchangeProcessed {
-        exchange: crate::duel::Exchange,
-    },
+    RoleRegistered { role: Duelist },
+    InsultThrown { insult: String },
+    ExchangeProcessed { exchange: crate::duel::Exchange },
 }
 
 /// Tracks which session is playing which role.
@@ -586,4 +580,3 @@ mod tests {
         assert!(matches!(outcome, ArenaOutcome::InsultThrown { .. }));
     }
 }
-
