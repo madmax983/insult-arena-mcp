@@ -1,4 +1,30 @@
 //! Arena module: Encapsulates the game state and logic.
+//!
+//! # Hero's Journey
+//!
+//! ```
+//! use insult_arena_mcp::Arena;
+//!
+//! // 1. Create the Arena
+//! let mut arena = Arena::new();
+//!
+//! // 2. Start a new duel
+//! let (outcome, view) = arena.start_duel();
+//! assert_eq!(view.phase, "awaiting_insult");
+//!
+//! // 3. Register players
+//! arena.register_challenger("session_A".to_string()).unwrap();
+//! arena.register_defender("session_B".to_string()).unwrap();
+//!
+//! // 4. Challenger throws an insult
+//! let (outcome, view) = arena.throw_insult("session_A", "You fight like a dairy farmer!").unwrap();
+//!
+//! // 5. Defender responds
+//! let (outcome, view) = arena.respond("session_B", "How appropriate. You fight like a cow!").unwrap();
+//!
+//! // Defender won the exchange!
+//! assert_eq!(view.defender_score, 1);
+//! ```
 
 use crate::duel::{Duel, DuelState, Duelist, InsultError};
 use serde::{Deserialize, Serialize};
@@ -110,6 +136,19 @@ impl Arena {
         }
     }
 
+    /// Starts a new duel, resetting any existing state.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::{Arena, ArenaOutcome};
+    ///
+    /// let mut arena = Arena::new();
+    /// let (outcome, view) = arena.start_duel();
+    ///
+    /// assert_eq!(outcome, ArenaOutcome::DuelStarted);
+    /// assert_eq!(view.phase, "awaiting_insult");
+    /// ```
     pub fn start_duel(&mut self) -> (ArenaOutcome, DuelStateView) {
         let duel = Duel::new();
         let view = duel_state_view(&duel);
@@ -125,6 +164,22 @@ impl Arena {
     ///
     /// # Errors
     /// Returns error if the role is already taken.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::Arena;
+    ///
+    /// let mut arena = Arena::new();
+    /// arena.start_duel();
+    ///
+    /// let result = arena.register_challenger("session_123".to_string());
+    /// assert!(result.is_ok());
+    ///
+    /// // Cannot register if already taken
+    /// let result = arena.register_challenger("other_session".to_string());
+    /// assert!(result.is_err());
+    /// ```
     pub fn register_challenger(
         &mut self,
         session_id: String,
@@ -152,6 +207,18 @@ impl Arena {
     ///
     /// # Errors
     /// Returns error if the role is already taken.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::Arena;
+    ///
+    /// let mut arena = Arena::new();
+    /// arena.start_duel();
+    ///
+    /// let result = arena.register_defender("session_456".to_string());
+    /// assert!(result.is_ok());
+    /// ```
     pub fn register_defender(
         &mut self,
         session_id: String,
@@ -224,7 +291,29 @@ impl Arena {
     /// Throw an insult.
     ///
     /// # Errors
-    /// Returns error if input is too long, no duel is in progress, or the insult is invalid/unexpected.
+    /// Returns error if:
+    /// - Input is too long (> `MAX_INPUT_LENGTH`).
+    /// - No duel is in progress.
+    /// - It is not the session's turn.
+    /// - The insult is not known (not in the bank).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::Arena;
+    ///
+    /// let mut arena = Arena::new();
+    /// arena.start_duel();
+    /// arena.register_challenger("alice".to_string()).unwrap();
+    ///
+    /// // Alice throws a valid insult
+    /// let result = arena.throw_insult("alice", "You fight like a dairy farmer!");
+    /// assert!(result.is_ok());
+    ///
+    /// // Alice cannot throw again (now waiting for comeback)
+    /// let result = arena.throw_insult("alice", "Another insult");
+    /// assert!(result.is_err());
+    /// ```
     pub fn throw_insult(
         &mut self,
         session_id: &str,
@@ -268,7 +357,30 @@ impl Arena {
     /// Respond to an insult with a comeback.
     ///
     /// # Errors
-    /// Returns error if input is too long, no duel is in progress, or it's not the comeback phase.
+    /// Returns error if:
+    /// - Input is too long.
+    /// - No duel is in progress.
+    /// - It is not the session's turn.
+    /// - It is not the comeback phase.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::Arena;
+    ///
+    /// let mut arena = Arena::new();
+    /// arena.start_duel();
+    /// arena.register_challenger("alice".to_string()).unwrap();
+    /// arena.register_defender("bob".to_string()).unwrap();
+    ///
+    /// arena.throw_insult("alice", "You fight like a dairy farmer!").unwrap();
+    ///
+    /// // Bob responds
+    /// let (outcome, view) = arena.respond("bob", "How appropriate. You fight like a cow!").unwrap();
+    ///
+    /// // Bob won the exchange!
+    /// assert_eq!(view.defender_score, 1);
+    /// ```
     pub fn respond(
         &mut self,
         session_id: &str,

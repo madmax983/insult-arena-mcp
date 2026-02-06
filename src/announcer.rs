@@ -12,6 +12,28 @@ impl Announcer {
     ///
     /// * `outcome` - The event that just occurred.
     /// * `view` - The current state of the duel (required for score-related announcements).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::{Announcer, ArenaOutcome, Duelist};
+    ///
+    /// // Duel started
+    /// let msg = Announcer::announce(&ArenaOutcome::DuelStarted, None);
+    /// assert!(msg.contains("En garde"));
+    ///
+    /// // Insult thrown
+    /// let msg = Announcer::announce(
+    ///     &ArenaOutcome::InsultThrown { insult: "You fight like a dairy farmer!".into() },
+    ///     None
+    /// );
+    /// assert!(msg.contains("You bellow"));
+    /// ```
+    ///
+    /// # Logic
+    ///
+    /// - Detects "Match Point" situations (score is `wins_needed - 1`) and adds tension text.
+    /// - Distinguishes between winning an exchange vs winning the entire duel.
     #[must_use]
     pub fn announce(outcome: &ArenaOutcome, view: Option<&DuelStateView>) -> String {
         let mut f = String::new();
