@@ -68,6 +68,8 @@ pub use response::DuelResponse;
 pub struct InsultServer {
     arena: Arc<Mutex<Arena>>,
     runtime: Arc<RwLock<Option<Arc<HyperRuntime>>>>,
+    #[cfg(feature = "nova")]
+    gallery: Arc<Mutex<crate::experimental::gallery::Gallery>>,
 }
 
 impl InsultServer {
@@ -80,6 +82,8 @@ impl InsultServer {
         Self {
             arena: Arc::new(Mutex::new(Arena::new())),
             runtime: Arc::new(RwLock::new(None)),
+            #[cfg(feature = "nova")]
+            gallery: Arc::new(Mutex::new(crate::experimental::gallery::Gallery::new())),
         }
     }
 
@@ -139,6 +143,43 @@ impl InsultServer {
                 warn!("   ✗ Failed to send notification to {}: {}", session_id, e);
             } else {
                 info!("   ✓ Notification sent to {}", session_id);
+            }
+        }
+    }
+
+    /// Broadcasts a spectator announcement to all connected sessions.
+    #[cfg(feature = "nova")]
+    async fn broadcast_announcement(&self, message: &str) {
+        let runtime_guard = self.runtime.read().await;
+        let Some(runtime) = runtime_guard.as_ref() else {
+            return;
+        };
+
+        let sessions = runtime.sessions().await;
+        if sessions.is_empty() {
+            return;
+        }
+
+        let mut params = serde_json::Map::new();
+        params.insert("type".to_string(), json!("spectator_action"));
+        params.insert("message".to_string(), json!(message));
+
+        let notification = CustomNotification {
+            method: "notifications/spectator".to_string(),
+            params: Some(params),
+        };
+
+        info!("📢 Broadcasting spectator action: \"{}\"", message);
+
+        for session_id in sessions {
+            if let Err(e) = runtime
+                .notify_custom(&session_id, notification.clone())
+                .await
+            {
+                warn!(
+                    "   ✗ Failed to send notification to {}: {}",
+                    session_id, e
+                );
             }
         }
     }
@@ -316,6 +357,51 @@ impl InsultServer {
             Err(e) => DuelResponse::error(e.to_string()).to_json(),
         }
     }
+
+    #[cfg(feature = "nova")]
+    async fn handle_cheer(&self, session_id: String, target: String) -> String {
+        let mut gallery = self.gallery.lock().await;
+        let message = gallery.cheer(session_id, target);
+        drop(gallery); // Unlock before broadcast
+
+        self.broadcast_announcement(&message).await;
+
+        json!({
+            "success": true,
+            "message": message
+        })
+        .to_string()
+    }
+
+    #[cfg(feature = "nova")]
+    async fn handle_boo(&self, session_id: String, target: String) -> String {
+        let mut gallery = self.gallery.lock().await;
+        let message = gallery.boo(session_id, target);
+        drop(gallery);
+
+        self.broadcast_announcement(&message).await;
+
+        json!({
+            "success": true,
+            "message": message
+        })
+        .to_string()
+    }
+
+    #[cfg(feature = "nova")]
+    async fn handle_heckle(&self, session_id: String, heckle: String) -> String {
+        let mut gallery = self.gallery.lock().await;
+        let message = gallery.heckle(session_id, heckle);
+        drop(gallery);
+
+        self.broadcast_announcement(&message).await;
+
+        json!({
+            "success": true,
+            "message": message
+        })
+        .to_string()
+    }
 }
 
 #[async_trait]
@@ -325,17 +411,28 @@ impl ServerHandler for InsultServer {
         _params: Option<PaginatedRequestParams>,
         _runtime: Arc<dyn McpServer>,
     ) -> Result<ListToolsResult, RpcError> {
+        #[allow(unused_mut)]
+        let mut tools = vec![
+            tool_start_duel(),
+            tool_register_as_challenger(),
+            tool_register_as_defender(),
+            tool_get_duel_state(),
+            tool_list_insults(),
+            tool_throw_insult(),
+            tool_respond(),
+            tool_get_hint(),
+        ];
+
+        #[cfg(feature = "nova")]
+        {
+            use crate::experimental::gallery::{tool_boo, tool_cheer, tool_heckle};
+            tools.push(tool_cheer());
+            tools.push(tool_boo());
+            tools.push(tool_heckle());
+        }
+
         Ok(ListToolsResult {
-            tools: vec![
-                tool_start_duel(),
-                tool_register_as_challenger(),
-                tool_register_as_defender(),
-                tool_get_duel_state(),
-                tool_list_insults(),
-                tool_throw_insult(),
-                tool_respond(),
-                tool_get_hint(),
-            ],
+            tools,
             next_cursor: None,
             meta: None,
         })
@@ -412,6 +509,33 @@ impl ServerHandler for InsultServer {
                     .await
             }
             "get_hint" => self.handle_get_hint().await,
+            #[cfg(feature = "nova")]
+            "cheer" => {
+                let args = params.arguments.unwrap_or_default();
+                let target = args
+                    .get("target")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Unknown");
+                self.handle_cheer(session_id_str, target.to_string()).await
+            }
+            #[cfg(feature = "nova")]
+            "boo" => {
+                let args = params.arguments.unwrap_or_default();
+                let target = args
+                    .get("target")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Unknown");
+                self.handle_boo(session_id_str, target.to_string()).await
+            }
+            #[cfg(feature = "nova")]
+            "heckle" => {
+                let args = params.arguments.unwrap_or_default();
+                let message = args
+                    .get("message")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("...");
+                self.handle_heckle(session_id_str, message.to_string()).await
+            }
             _ => {
                 return Err(CallToolError::unknown_tool(&params.name));
             }
