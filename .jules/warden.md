@@ -23,3 +23,7 @@
 **2024-11-26 - DoS: Unbounded Search Query**
 **Threat:** `InsultBank::search_insults` (a public API) allocated memory proportional to input length (`Vec<char>`). A massive query string could cause memory exhaustion.
 **Defense:** Enforced `MAX_SEARCH_QUERY_LENGTH` (128 chars) limit and truncation before allocation.
+
+**2024-11-26 - DoS: Session ID Unbounded Allocation**
+**Threat:** `InsultServer::handle_call_tool_request` cloned the session ID string from `runtime.session_id()` *before* checking its length. An attacker could supply a massive session ID (via the `McpServer` implementation), causing a large heap allocation before the validation logic could reject it.
+**Defense:** Implemented a length check on the `Option<&String>` reference before cloning. If the session ID exceeds `MAX_SESSION_ID_LENGTH`, it returns an error immediately without allocation. Added a regression test `rejects_excessive_session_id_length`.
