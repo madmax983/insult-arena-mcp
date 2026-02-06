@@ -15,3 +15,11 @@
 **2024-11-25 - DoS: Input Allocation Optimization**
 **Threat:** Although `Arena` checks `MAX_INPUT_LENGTH`, the `InsultServer` was converting the input `serde_json::Value` to `String` *before* calling `Arena`. An attacker sending a large JSON string could cause a large heap allocation before the check rejected it.
 **Defense:** Added pre-allocation validation in `src/server/mod.rs` to check the length of the string slice (`&str`) from the JSON value before calling `to_string()`.
+
+**2024-11-26 - Log Injection**
+**Threat:** `InsultServer` logged user-controlled `insult` and `session_id` strings using `Display` (`{}`), which does not escape control characters. An attacker could inject newlines to forge log entries.
+**Defense:** Switched to `Debug` (`{:?}`) formatting for all user inputs in logs.
+
+**2024-11-26 - DoS: Unbounded Search Query**
+**Threat:** `InsultBank::search_insults` (a public API) allocated memory proportional to input length (`Vec<char>`). A massive query string could cause memory exhaustion.
+**Defense:** Enforced `MAX_SEARCH_QUERY_LENGTH` (128 chars) limit and truncation before allocation.
