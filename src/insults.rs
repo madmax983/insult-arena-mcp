@@ -547,3 +547,41 @@ mod sentry_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod sentry_robustness_tests {
+    use super::*;
+
+    #[test]
+    fn normalized_eq_unicode_behavior() {
+        // Verify that unicode characters are processed safely
+        // They should match themselves case-insensitively
+        assert!(normalized_eq("Ño", "ño"));
+
+        // But they should NOT match their base characters (Rust default behavior)
+        assert!(!normalized_eq("Ño", "No"));
+
+        // Verify emojis are ignored (not alphanumeric)
+        // "Cool 😎" -> "cool"
+        // "Cool" -> "cool"
+        assert!(normalized_eq("Cool 😎", "Cool"));
+    }
+
+    #[test]
+    fn check_comeback_handles_garbage_input() {
+        let bank = InsultBank::new();
+
+        // Garbage insult that shouldn't match anything in the bank
+        let result = bank.check_comeback("@@@@", "####");
+        assert!(result.is_none());
+
+        // Garbage comeback for a real insult
+        // "You fight like a dairy farmer!" (valid)
+        // "####" (invalid)
+        // "####" normalizes to ""
+        // "How appropriate..." normalizes to "howappropriate..."
+        // "" != "howappropriate..."
+        let result = bank.check_comeback("You fight like a dairy farmer!", "####");
+        assert!(result.is_none());
+    }
+}

@@ -168,7 +168,7 @@ impl Duel {
     #[must_use]
     pub fn with_wins_needed(wins_needed: u8) -> Self {
         Self {
-            wins_needed,
+            wins_needed: std::cmp::max(1, wins_needed),
             ..Self::new()
         }
     }
@@ -555,5 +555,77 @@ mod tests {
         let result = duel.result().unwrap();
         assert_eq!(result.winner, Duelist::Challenger);
         assert_eq!(result.challenger_score, 1);
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod sentry_repro_tests {
+    use super::*;
+
+    #[test]
+    fn zero_wins_needed_bug_reproduction() {
+        // If wins_needed is 0, the game logic is flawed.
+        // Even if Defender wins the first exchange (1-0), Challenger has 0 >= 0, so Challenger wins?
+        let mut duel = Duel::with_wins_needed(0);
+        duel.throw_insult("You fight like a dairy farmer!".to_string())
+            .unwrap();
+
+        // Defender wins the exchange
+        let exchange = duel
+            .respond("How appropriate. You fight like a cow!".to_string())
+            .unwrap();
+
+        assert!(exchange.result.is_parried());
+        assert_eq!(exchange.winner, Duelist::Defender);
+        assert_eq!(duel.scores(), (0, 1)); // Defender has 1 point
+
+        // CHECK BUG FIXED:
+        // wins_needed should be clamped to 1.
+        // Defender score is 1, Challenger is 0.
+        // Defender should win.
+        if duel.is_finished() {
+            let result = duel.result().unwrap();
+            assert_eq!(
+                result.winner,
+                Duelist::Defender,
+                "Fixed: Defender wins because wins_needed clamped to 1"
+            );
+        } else {
+            panic!("Duel should be finished because wins_needed is 1 and score is 1");
+        }
+    }
+
+    #[test]
+    fn max_wins_needed_saturation() {
+        // Test that we can reach the maximum possible score (255) without panicking
+        let mut duel = Duel::with_wins_needed(255);
+
+        let insult = "You fight like a dairy farmer!".to_string();
+        let wrong_comeback = "wrong".to_string();
+
+        // 1. Reach 254 wins
+        for _ in 0..254 {
+            duel.throw_insult(insult.clone()).unwrap();
+            let exchange = duel.respond(wrong_comeback.clone()).unwrap();
+            assert_eq!(exchange.winner, Duelist::Challenger);
+        }
+
+        let (c_score, _) = duel.scores();
+        assert_eq!(c_score, 254);
+        assert!(!duel.is_finished());
+
+        // 2. Reach 255 wins (Match Point!)
+        duel.throw_insult(insult).unwrap();
+        let exchange = duel.respond(wrong_comeback).unwrap();
+        assert_eq!(exchange.winner, Duelist::Challenger);
+
+        let (c_score, _) = duel.scores();
+        assert_eq!(c_score, 255);
+        assert!(duel.is_finished());
+
+        let result = duel.result().unwrap();
+        assert_eq!(result.winner, Duelist::Challenger);
+        assert_eq!(result.challenger_score, 255);
     }
 }
