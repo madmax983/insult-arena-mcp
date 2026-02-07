@@ -1,7 +1,32 @@
+//! Response DTOs for the MCP Server.
+//!
+//! This module defines the standard JSON response format returned by all
+//! tools in the Insult Arena.
+//!
+//! # The API Contract
+//!
+//! Every tool returns a JSON object with at least:
+//! - `success`: Boolean indicating if the action worked.
+//! - `message`: Human-readable description of the result.
+//!
+//! If successful, it may also contain:
+//! - `state`: The current `DuelStateView`.
+//! - `your_role`: The role of the calling session (if applicable).
+
 use crate::arena::DuelStateView;
 use serde::{Deserialize, Serialize};
 
-/// Response from the arena/server.
+/// Standard response format for all Arena tools.
+///
+/// # Examples
+///
+/// ```
+/// use insult_arena_mcp::DuelResponse;
+///
+/// // Create a simple error response
+/// let err = DuelResponse::error("Something went wrong");
+/// assert_eq!(err.success, false);
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DuelResponse {
     /// Whether the action succeeded.
@@ -17,6 +42,7 @@ pub struct DuelResponse {
 }
 
 impl DuelResponse {
+    /// Creates a successful response with the current duel state.
     pub fn success(message: impl Into<String>, state: DuelStateView) -> Self {
         Self {
             success: true,
@@ -26,6 +52,7 @@ impl DuelResponse {
         }
     }
 
+    /// Creates a successful response with state and the user's role.
     pub fn success_with_role(message: impl Into<String>, state: DuelStateView, role: &str) -> Self {
         Self {
             success: true,
@@ -35,6 +62,7 @@ impl DuelResponse {
         }
     }
 
+    /// Creates an error response.
     pub fn error(message: impl Into<String>) -> Self {
         Self {
             success: false,
@@ -44,6 +72,7 @@ impl DuelResponse {
         }
     }
 
+    /// Serializes the response to a pretty-printed JSON string.
     #[must_use]
     pub fn to_json(&self) -> String {
         serde_json::to_string_pretty(self)

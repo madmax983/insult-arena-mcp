@@ -1,3 +1,12 @@
+//! The Announcer module: Providing color commentary for the duel.
+//!
+//! This module is responsible for converting raw `ArenaOutcome` events into
+//! human-readable, flavorful text. It acts as the "Sportscaster" of the
+//! insult sword fighting arena.
+//!
+//! It separates the *logic* (who won, what happened) from the *presentation*
+//! (emojis, excitement, match point warnings).
+
 use crate::arena::{ArenaOutcome, DuelStateView};
 use crate::duel::{Duelist, ExchangeResult};
 use std::fmt::Write;
@@ -12,6 +21,16 @@ impl Announcer {
     ///
     /// * `outcome` - The event that just occurred.
     /// * `view` - The current state of the duel (required for score-related announcements).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::{Announcer, ArenaOutcome};
+    ///
+    /// // Simple event
+    /// let msg = Announcer::announce(&ArenaOutcome::DuelStarted, None);
+    /// assert!(msg.contains("En garde"));
+    /// ```
     #[must_use]
     pub fn announce(outcome: &ArenaOutcome, view: Option<&DuelStateView>) -> String {
         let mut f = String::new();

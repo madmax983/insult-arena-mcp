@@ -1,4 +1,43 @@
 //! Arena module: Encapsulates the game state and logic.
+//!
+//! # The Arena Manager
+//!
+//! While the `Duel` struct (in `src/duel.rs`) handles the pure state machine logic (rules, scores, turns),
+//! the `Arena` acts as the "Game Master" or "Referee". It wraps the `Duel` and adds a layer of
+//! session management and access control.
+//!
+//! ## Key Responsibilities
+//!
+//! 1. **Session Management**: Tracks which `session_id` is the Challenger and which is the Defender.
+//! 2. **Access Control**: Ensures players can only act when it is their turn.
+//! 3. **Input Validation**: Enforces limits on input length to prevent DoS.
+//! 4. **State Projection**: Converts internal `Duel` state into a `DuelStateView` for clients.
+//!
+//! ## The Manager's Manual (Usage Example)
+//!
+//! ```
+//! use insult_arena_mcp::{Arena, Duelist};
+//!
+//! // 1. Open the Arena
+//! let mut arena = Arena::new();
+//!
+//! // 2. Start a new duel
+//! let (outcome, view) = arena.start_duel();
+//! assert_eq!(view.phase, "awaiting_insult");
+//!
+//! // 3. Register players
+//! arena.register_challenger("session_alice".to_string()).unwrap();
+//! arena.register_defender("session_bob".to_string()).unwrap();
+//!
+//! // 4. Challenger throws an insult
+//! let (outcome, view) = arena.throw_insult("session_alice", "You fight like a dairy farmer!").unwrap();
+//!
+//! // 5. Defender tries to respond (but gets it wrong!)
+//! let (outcome, view) = arena.respond("session_bob", "I am rubber, you are glue.").unwrap();
+//!
+//! // 6. Check the result
+//! assert_eq!(view.challenger_score, 1); // Challenger gets a point!
+//! ```
 
 use crate::duel::{Duel, DuelState, Duelist, InsultError};
 use serde::{Deserialize, Serialize};
@@ -32,10 +71,23 @@ pub enum ArenaError {
 /// The outcome of an action in the Arena.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArenaOutcome {
+    /// A new duel has started.
     DuelStarted,
-    RoleRegistered { role: Duelist },
-    InsultThrown { insult: String },
-    ExchangeProcessed { exchange: crate::duel::Exchange },
+    /// A session has been registered for a role.
+    RoleRegistered {
+        /// The role that was assigned (Challenger/Defender).
+        role: Duelist,
+    },
+    /// An insult was successfully thrown.
+    InsultThrown {
+        /// The text of the insult.
+        insult: String,
+    },
+    /// An exchange (insult + comeback) was completed.
+    ExchangeProcessed {
+        /// The details of the exchange, including the winner.
+        exchange: crate::duel::Exchange,
+    },
 }
 
 /// Tracks which session is playing which role.
@@ -96,6 +148,19 @@ pub fn duel_state_view(duel: &Duel) -> DuelStateView {
 }
 
 /// The Arena encapsulates the game state (Duel) and session management.
+///
+/// It acts as the gateway to the `Duel`, enforcing session-based access control.
+///
+/// # Examples
+///
+/// ```
+/// use insult_arena_mcp::Arena;
+/// let mut arena = Arena::new();
+///
+/// // Start a duel
+/// let (outcome, view) = arena.start_duel();
+/// assert!(arena.get_duel_state(None).is_ok());
+/// ```
 pub struct Arena {
     duel: Option<Duel>,
     sessions: DuelSessions,
