@@ -10,7 +10,7 @@
 //!
 //! 1. **Session Management**: Tracks which `session_id` is the Challenger and which is the Defender.
 //! 2. **Access Control**: Ensures players can only act when it is their turn.
-//! 3. **Input Validation**: Enforces limits on input length to prevent DoS.
+//! 3. **Input Validation**: Enforces limits on input length to prevent `DoS`.
 //! 4. **State Projection**: Converts internal `Duel` state into a `DuelStateView` for clients.
 //!
 //! ## The Manager's Manual (Usage Example)
