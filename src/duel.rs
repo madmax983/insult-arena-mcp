@@ -229,13 +229,7 @@ impl Duel {
     /// ));
     /// ```
     pub fn throw_insult(&mut self, insult: String) -> Result<(), InsultError> {
-        let DuelState::AwaitingInsult { attacker } = self.state else {
-            return match self.state {
-                DuelState::AwaitingComeback { .. } => Err(InsultError::WaitingForComeback),
-                DuelState::Finished { .. } => Err(InsultError::DuelOver),
-                DuelState::AwaitingInsult { .. } => unreachable!(),
-            };
-        };
+        let attacker = self.validate_insult_turn()?;
 
         // Validate insult exists in bank
         if self.insult_bank.find_comeback(&insult).is_none() {
@@ -272,17 +266,51 @@ impl Duel {
     /// assert!(!exchange.result.is_parried());
     /// ```
     pub fn respond(&mut self, comeback: String) -> Result<Exchange, InsultError> {
-        let attacker = match self.state {
-            DuelState::AwaitingComeback { attacker } => attacker,
-            DuelState::AwaitingInsult { .. } => return Err(InsultError::WaitingForInsult),
-            DuelState::Finished { .. } => return Err(InsultError::DuelOver),
-        };
+        let attacker = self.validate_respond_turn()?;
 
         let insult = self
             .pending_insult
             .take()
             .ok_or(InsultError::WaitingForInsult)?;
 
+        let (result, winner) = self.resolve_exchange(insult, comeback, attacker);
+
+        self.update_scores(winner);
+
+        let exchange = Exchange {
+            attacker,
+            result,
+            winner,
+        };
+        self.exchanges.push(exchange.clone());
+
+        self.update_state_after_exchange(winner);
+
+        Ok(exchange)
+    }
+
+    const fn validate_insult_turn(&self) -> Result<Duelist, InsultError> {
+        match self.state {
+            DuelState::AwaitingInsult { attacker } => Ok(attacker),
+            DuelState::AwaitingComeback { .. } => Err(InsultError::WaitingForComeback),
+            DuelState::Finished { .. } => Err(InsultError::DuelOver),
+        }
+    }
+
+    const fn validate_respond_turn(&self) -> Result<Duelist, InsultError> {
+        match self.state {
+            DuelState::AwaitingComeback { attacker } => Ok(attacker),
+            DuelState::AwaitingInsult { .. } => Err(InsultError::WaitingForInsult),
+            DuelState::Finished { .. } => Err(InsultError::DuelOver),
+        }
+    }
+
+    fn resolve_exchange(
+        &self,
+        insult: String,
+        comeback: String,
+        attacker: Duelist,
+    ) -> (ExchangeResult, Duelist) {
         let defender = attacker.opponent();
 
         // Check if the comeback is correct
@@ -291,7 +319,7 @@ impl Duel {
             .check_comeback(&insult, &comeback)
             .is_some();
 
-        let (result, winner) = if is_correct {
+        if is_correct {
             // Successful parry! Defender wins exchange and becomes attacker.
             (ExchangeResult::Parried { insult, comeback }, defender)
         } else {
@@ -309,21 +337,17 @@ impl Duel {
                 },
                 attacker,
             )
-        };
+        }
+    }
 
-        // Update scores
+    const fn update_scores(&mut self, winner: Duelist) {
         match winner {
             Duelist::Challenger => self.challenger_score = self.challenger_score.saturating_add(1),
             Duelist::Defender => self.defender_score = self.defender_score.saturating_add(1),
         }
+    }
 
-        let exchange = Exchange {
-            attacker,
-            result,
-            winner,
-        };
-        self.exchanges.push(exchange.clone());
-
+    const fn update_state_after_exchange(&mut self, winner: Duelist) {
         // Check for victory
         if self.challenger_score >= self.wins_needed {
             self.state = DuelState::Finished {
@@ -337,8 +361,6 @@ impl Duel {
             // Winner of exchange becomes the attacker
             self.state = DuelState::AwaitingInsult { attacker: winner };
         }
-
-        Ok(exchange)
     }
 
     /// Gets the final result if the duel is over.
