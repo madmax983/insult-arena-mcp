@@ -22,111 +22,9 @@
 //! duel.throw_insult("You have the manners of a beggar.".to_string()).unwrap();
 //! ```
 
-use serde::{Deserialize, Serialize};
-
+use crate::error::InsultError;
+use crate::model::{DuelResult, DuelState, Duelist, Exchange, ExchangeResult};
 use crate::InsultBank;
-
-/// Identifies a duelist in the fight.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Duelist {
-    /// The challenger who initiated the duel.
-    Challenger,
-    /// The defender who accepted the challenge.
-    Defender,
-}
-
-impl Duelist {
-    /// Returns the opponent of this duelist.
-    #[must_use]
-    pub const fn opponent(self) -> Self {
-        match self {
-            Self::Challenger => Self::Defender,
-            Self::Defender => Self::Challenger,
-        }
-    }
-}
-
-impl std::fmt::Display for Duelist {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Challenger => write!(f, "Challenger"),
-            Self::Defender => write!(f, "Defender"),
-        }
-    }
-}
-
-/// The result of a single exchange.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ExchangeResult {
-    /// The defender parried with a perfect comeback.
-    Parried {
-        /// The insult that was thrown.
-        insult: String,
-        /// The comeback that defeated it.
-        comeback: String,
-    },
-    /// The defender failed to counter the insult.
-    Failed {
-        /// The insult that was thrown.
-        insult: String,
-        /// The failed comeback attempt.
-        attempt: String,
-        /// The correct comeback they should have used.
-        correct: String,
-    },
-}
-
-impl ExchangeResult {
-    /// Returns true if the defender successfully parried.
-    #[must_use]
-    pub const fn is_parried(&self) -> bool {
-        matches!(self, Self::Parried { .. })
-    }
-}
-
-/// A single exchange in the duel (insult + response).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Exchange {
-    /// Who threw the insult.
-    pub attacker: Duelist,
-    /// The result of the exchange.
-    pub result: ExchangeResult,
-    /// Who won this exchange.
-    pub winner: Duelist,
-}
-
-/// The current state of a duel.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum DuelState {
-    /// Waiting for an insult to be thrown.
-    AwaitingInsult {
-        /// Who should throw the insult.
-        attacker: Duelist,
-    },
-    /// Waiting for a comeback response.
-    AwaitingComeback {
-        /// Who threw the insult.
-        attacker: Duelist,
-    },
-    /// The duel is over.
-    Finished {
-        /// Who won the duel.
-        winner: Duelist,
-    },
-}
-
-/// The final result of a completed duel.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DuelResult {
-    /// The winner of the duel.
-    pub winner: Duelist,
-    /// Final score for the challenger.
-    pub challenger_score: u8,
-    /// Final score for the defender.
-    pub defender_score: u8,
-    /// All exchanges that occurred.
-    pub exchanges: Vec<Exchange>,
-}
 
 /// A sword fighting duel between two opponents.
 #[derive(Debug, Clone)]
@@ -366,26 +264,6 @@ impl Default for Duel {
     fn default() -> Self {
         Self::new()
     }
-}
-
-/// Errors that can occur during a duel.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum InsultError {
-    /// The insult is not recognized.
-    #[error("Unknown insult: {0}")]
-    UnknownInsult(String),
-    /// It's not time for an insult, we're waiting for a comeback.
-    #[error("Waiting for a comeback, not an insult")]
-    WaitingForComeback,
-    /// It's not time for a comeback, we're waiting for an insult.
-    #[error("Waiting for an insult, not a comeback")]
-    WaitingForInsult,
-    /// The duel is already over.
-    #[error("The duel is over")]
-    DuelOver,
-    /// No active duel.
-    #[error("No active duel - challenge someone first")]
-    NoDuel,
 }
 
 #[cfg(test)]

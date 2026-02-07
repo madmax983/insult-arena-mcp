@@ -1,4 +1,5 @@
-use crate::{Duel, Duelist, ExchangeResult};
+use crate::duel::Duel;
+use crate::model::{Duelist, ExchangeResult};
 use serde::{Deserialize, Serialize};
 use std::fmt::Write;
 

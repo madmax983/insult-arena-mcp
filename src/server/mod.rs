@@ -13,20 +13,21 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use rust_mcp_sdk::McpServer;
-use rust_mcp_sdk::mcp_server::ServerHandler;
 use rust_mcp_sdk::mcp_server::hyper_runtime::HyperRuntime;
+use rust_mcp_sdk::mcp_server::ServerHandler;
 use rust_mcp_sdk::schema::schema_utils::CallToolError;
 use rust_mcp_sdk::schema::{
     CallToolRequestParams, CallToolResult, CustomNotification, ListToolsResult,
     PaginatedRequestParams, RpcError, TextContent,
 };
+use rust_mcp_sdk::McpServer;
 use serde_json::json;
 use tokio::sync::{Mutex, RwLock};
 use tracing::{info, warn};
 
 use crate::announcer::Announcer;
-use crate::arena::{Arena, DuelStateView};
+use crate::arena::Arena;
+use crate::model::{DuelStateView, MAX_INPUT_LENGTH, MAX_SESSION_ID_LENGTH};
 
 pub mod response;
 pub use response::DuelResponse;
@@ -353,12 +354,11 @@ impl ServerHandler for InsultServer {
             .unwrap_or_else(|| "unknown".to_string());
 
         // Hardening: Validate session ID length
-        if session_id_str.len() > crate::arena::MAX_SESSION_ID_LENGTH {
+        if session_id_str.len() > MAX_SESSION_ID_LENGTH {
             return Err(CallToolError::invalid_arguments(
                 &params.name,
                 Some(format!(
-                    "Session ID too long (max {} chars)",
-                    crate::arena::MAX_SESSION_ID_LENGTH
+                    "Session ID too long (max {MAX_SESSION_ID_LENGTH} chars)"
                 )),
             ));
         }
@@ -380,12 +380,11 @@ impl ServerHandler for InsultServer {
                 let insult_str = args.get("insult").and_then(|v| v.as_str()).unwrap_or("");
 
                 // Hardening: Validate input length before allocation
-                if insult_str.len() > crate::arena::MAX_INPUT_LENGTH {
+                if insult_str.len() > MAX_INPUT_LENGTH {
                     return Err(CallToolError::invalid_arguments(
                         &params.name,
                         Some(format!(
-                            "Insult too long (max {} chars)",
-                            crate::arena::MAX_INPUT_LENGTH
+                            "Insult too long (max {MAX_INPUT_LENGTH} chars)"
                         )),
                     ));
                 }
@@ -398,12 +397,11 @@ impl ServerHandler for InsultServer {
                 let comeback_str = args.get("comeback").and_then(|v| v.as_str()).unwrap_or("");
 
                 // Hardening: Validate input length before allocation
-                if comeback_str.len() > crate::arena::MAX_INPUT_LENGTH {
+                if comeback_str.len() > MAX_INPUT_LENGTH {
                     return Err(CallToolError::invalid_arguments(
                         &params.name,
                         Some(format!(
-                            "Comeback too long (max {} chars)",
-                            crate::arena::MAX_INPUT_LENGTH
+                            "Comeback too long (max {MAX_INPUT_LENGTH} chars)"
                         )),
                     ));
                 }

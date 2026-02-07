@@ -1,70 +1,16 @@
 //! Arena module: Encapsulates the game state and logic.
 
-use crate::duel::{Duel, DuelState, Duelist, InsultError};
-use serde::{Deserialize, Serialize};
-
-pub const MAX_INPUT_LENGTH: usize = 1024;
-pub const MAX_SESSION_ID_LENGTH: usize = 128;
-
-/// Errors that can occur in the Arena.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum ArenaError {
-    #[error("No duel in progress. Call start_duel first!")]
-    NoDuel,
-    #[error("Input too long (max {0} chars)")]
-    InputTooLong(usize),
-    #[error("Session ID too long (max {0} chars)")]
-    SessionIdTooLong(usize),
-    #[error("{0} role is already taken!")]
-    RoleTaken(String),
-    #[error("It is not your turn! Waiting for {0}.")]
-    NotYourTurn(String),
-    #[error("Unknown insult: \"{0}\". Use list_insults to see valid options.")]
-    UnknownInsult(String),
-    #[error("No pending insult to hint about.")]
-    NoPendingInsult,
-    #[error("Could not find comeback for this insult.")]
-    ComebackNotFound,
-    #[error(transparent)]
-    DuelError(#[from] InsultError),
-}
-
-/// The outcome of an action in the Arena.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ArenaOutcome {
-    DuelStarted,
-    RoleRegistered { role: Duelist },
-    InsultThrown { insult: String },
-    ExchangeProcessed { exchange: crate::duel::Exchange },
-}
+use crate::duel::Duel;
+use crate::error::{ArenaError, InsultError};
+use crate::model::{
+    ArenaOutcome, DuelState, DuelStateView, Duelist, MAX_INPUT_LENGTH, MAX_SESSION_ID_LENGTH,
+};
 
 /// Tracks which session is playing which role.
 #[derive(Debug, Default)]
 struct DuelSessions {
     challenger: Option<String>,
     defender: Option<String>,
-}
-
-/// Serializable view of the duel state.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DuelStateView {
-    /// Current phase of the duel.
-    pub phase: String,
-    /// Who should act next (if applicable).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub next_to_act: Option<String>,
-    /// The pending insult waiting for a comeback.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pending_insult: Option<String>,
-    /// Challenger's score.
-    pub challenger_score: u8,
-    /// Defender's score.
-    pub defender_score: u8,
-    /// Wins needed to win the duel.
-    pub wins_needed: u8,
-    /// The winner (if duel is over).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub winner: Option<String>,
 }
 
 pub fn duel_state_view(duel: &Duel) -> DuelStateView {
