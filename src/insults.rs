@@ -592,4 +592,38 @@ mod sentry_robustness_tests {
         let result = bank.check_comeback("You fight like a dairy farmer!", "####");
         assert!(result.is_none());
     }
+
+    #[test]
+    fn search_insults_robustness() {
+        let bank = InsultBank::new();
+
+        // 1. Empty query returns ALL insults
+        // Implementation detail: empty needle matches everything.
+        let results = bank.search_insults("");
+        assert_eq!(results.len(), 16);
+
+        // 2. Query with only punctuation
+        // "!!!" -> normalized to "!!!" (because search query does NOT filter alphanumeric, only lowercase)
+        // Insults contain "!" so it might match.
+        // "You fight like a dairy farmer!" contains "!" at the end.
+        let results = bank.search_insults("!");
+        assert!(!results.is_empty());
+
+        // 3. Query with non-matching chars
+        let results = bank.search_insults("zxzxzx");
+        assert!(results.is_empty());
+
+        // 4. Unicode search
+        // "beggar"
+        let results = bank.search_insults("BEGGAR");
+        assert_eq!(results.len(), 1);
+        assert!(results[0].insult.contains("beggar"));
+
+        // 5. Long query (DoS protection)
+        // MAX_SEARCH_QUERY_LENGTH = 128
+        // If we send a huge string, it should be truncated and search should proceed safely (likely returning nothing or partial match).
+        let long_query = "a".repeat(1000);
+        let results = bank.search_insults(&long_query);
+        assert!(results.is_empty());
+    }
 }

@@ -297,4 +297,44 @@ mod tests {
             }
         ));
     }
+
+    #[test]
+    fn dojo_turn_loop_correctness() {
+        // Case: Sensei is very skilled (1.0).
+        // 1. Player throws insult.
+        // 2. Sensei responds (Parry).
+        // 3. Sensei attacks.
+        // 4. Player must respond.
+        let mut dojo = Dojo::new(1.0);
+        let _events = dojo.turn("You fight like a dairy farmer!").unwrap();
+
+        // Check final state after turn returns
+        // Should be AwaitingComeback { attacker: Defender } -> Player needs to respond to Sensei's attack.
+        assert!(matches!(
+            dojo.duel.state(),
+            DuelState::AwaitingComeback {
+                attacker: Duelist::Defender
+            }
+        ));
+
+        // Get the insult Sensei threw
+        let pending = dojo.duel.pending_insult().expect("Sensei should have thrown insult");
+        let correct_response = dojo.duel.insult_bank().find_comeback(pending).unwrap().to_string();
+
+        // 5. Player responds correctly.
+        // 6. Player Parries.
+        // 7. Loop: State is AwaitingInsult { attacker: Challenger }.
+        // 8. Loop checks: Attacker is Challenger? Yes. Break.
+        let events2 = dojo.turn(&correct_response).unwrap();
+
+        assert!(matches!(
+            dojo.duel.state(),
+            DuelState::AwaitingInsult {
+                attacker: Duelist::Challenger
+            }
+        ));
+
+        // Check events2 contains PlayerAction (Parried)
+        assert!(events2.iter().any(|e| matches!(e, DojoEvent::PlayerAction { description, .. } if description.contains("Touché"))));
+    }
 }
