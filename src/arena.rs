@@ -228,7 +228,7 @@ impl Arena {
     pub fn throw_insult(
         &mut self,
         session_id: &str,
-        insult: &str,
+        insult: String,
     ) -> Result<(ArenaOutcome, DuelStateView), ArenaError> {
         if insult.len() > MAX_INPUT_LENGTH {
             return Err(ArenaError::InputTooLong(MAX_INPUT_LENGTH));
@@ -250,17 +250,23 @@ impl Arena {
             }
         }
 
-        match duel.throw_insult(insult.to_string()) {
+        // ⚡ Bolt Optimization: Avoid double allocation.
+        // We need 'insult' for both Duel (consumed) and ArenaOutcome (consumed).
+        // Clone once instead of creating two new Strings from &str.
+        let insult_clone = insult.clone();
+
+        match duel.throw_insult(insult) {
             Ok(()) => {
                 let view = duel_state_view(duel);
                 Ok((
                     ArenaOutcome::InsultThrown {
-                        insult: insult.to_string(),
+                        insult: insult_clone,
                     },
                     view,
                 ))
             }
-            Err(InsultError::UnknownInsult(insult)) => Err(ArenaError::UnknownInsult(insult)),
+            // If it failed, we return the clone in the error
+            Err(InsultError::UnknownInsult(_)) => Err(ArenaError::UnknownInsult(insult_clone)),
             Err(e) => Err(ArenaError::from(e)),
         }
     }
@@ -272,7 +278,7 @@ impl Arena {
     pub fn respond(
         &mut self,
         session_id: &str,
-        comeback: &str,
+        comeback: String,
     ) -> Result<(ArenaOutcome, DuelStateView), ArenaError> {
         if comeback.len() > MAX_INPUT_LENGTH {
             return Err(ArenaError::InputTooLong(MAX_INPUT_LENGTH));
@@ -295,7 +301,9 @@ impl Arena {
             }
         }
 
-        match duel.respond(comeback.to_string()) {
+        // ⚡ Bolt Optimization: Move 'comeback' directly to Duel.
+        // Zero allocations here (was 1 from &str).
+        match duel.respond(comeback) {
             Ok(exchange) => {
                 let view = duel_state_view(duel);
                 let outcome = ArenaOutcome::ExchangeProcessed { exchange };
@@ -369,14 +377,14 @@ mod tests {
 
         // Throw insult
         let (outcome, view) = arena
-            .throw_insult("p1", "You fight like a dairy farmer!")
+            .throw_insult("p1", "You fight like a dairy farmer!".to_string())
             .unwrap();
         assert!(matches!(outcome, ArenaOutcome::InsultThrown { .. }));
         assert_eq!(view.phase, "awaiting_comeback");
 
         // Correct comeback
         let (outcome, view) = arena
-            .respond("p2", "How appropriate. You fight like a cow!")
+            .respond("p2", "How appropriate. You fight like a cow!".to_string())
             .unwrap();
         assert!(matches!(outcome, ArenaOutcome::ExchangeProcessed { .. }));
         assert_eq!(view.phase, "awaiting_insult"); // Defender attacks next
@@ -413,11 +421,11 @@ mod tests {
         arena.start_duel();
 
         let long_string = "a".repeat(5000);
-        let result = arena.throw_insult("p1", &long_string);
+        let result = arena.throw_insult("p1", long_string.clone());
 
         assert!(matches!(result, Err(ArenaError::InputTooLong(_))));
 
-        let result = arena.respond("p1", &long_string);
+        let result = arena.respond("p1", long_string);
         assert!(matches!(result, Err(ArenaError::InputTooLong(_))));
     }
 
@@ -440,7 +448,7 @@ mod tests {
 
         // Throw "beggar manners" insult
         let (_, view) = arena
-            .throw_insult("p1", "You have the manners of a beggar.")
+            .throw_insult("p1", "You have the manners of a beggar.".to_string())
             .unwrap();
         assert_eq!(view.phase, "awaiting_comeback");
 
@@ -448,7 +456,7 @@ mod tests {
         let (_, view) = arena
             .respond(
                 "p2",
-                "I wanted to make sure you'd feel comfortable with me.",
+                "I wanted to make sure you'd feel comfortable with me.".to_string(),
             )
             .unwrap();
         assert_eq!(view.phase, "awaiting_insult"); // Defender attacks next
@@ -457,14 +465,14 @@ mod tests {
     #[test]
     fn throw_insult_without_duel_returns_error() {
         let mut arena = Arena::new();
-        let result = arena.throw_insult("p1", "foo");
+        let result = arena.throw_insult("p1", "foo".to_string());
         assert_eq!(result.unwrap_err(), ArenaError::NoDuel);
     }
 
     #[test]
     fn respond_without_duel_returns_error() {
         let mut arena = Arena::new();
-        let result = arena.respond("p1", "bar");
+        let result = arena.respond("p1", "bar".to_string());
         assert_eq!(result.unwrap_err(), ArenaError::NoDuel);
     }
 
@@ -475,11 +483,11 @@ mod tests {
 
         // 1. Throw insult -> OK
         arena
-            .throw_insult("p1", "You fight like a dairy farmer!")
+            .throw_insult("p1", "You fight like a dairy farmer!".to_string())
             .unwrap();
 
         // 2. Throw insult AGAIN -> Error (Waiting for comeback)
-        let result = arena.throw_insult("p1", "You fight like a dairy farmer!");
+        let result = arena.throw_insult("p1", "You fight like a dairy farmer!".to_string());
         assert!(matches!(
             result,
             Err(ArenaError::DuelError(InsultError::WaitingForComeback))
@@ -487,11 +495,11 @@ mod tests {
 
         // 3. Respond -> OK (Parried, Defender becomes attacker)
         arena
-            .respond("p2", "How appropriate. You fight like a cow!")
+            .respond("p2", "How appropriate. You fight like a cow!".to_string())
             .unwrap();
 
         // 4. Respond AGAIN -> Error (Waiting for insult)
-        let result = arena.respond("p2", "Too late");
+        let result = arena.respond("p2", "Too late".to_string());
         assert!(matches!(
             result,
             Err(ArenaError::DuelError(InsultError::WaitingForInsult))
@@ -506,9 +514,9 @@ mod tests {
         // Win the duel (Challenger wins 3 times)
         for _ in 0..3 {
             arena
-                .throw_insult("p1", "You fight like a dairy farmer!")
+                .throw_insult("p1", "You fight like a dairy farmer!".to_string())
                 .unwrap();
-            arena.respond("p2", "wrong").unwrap();
+            arena.respond("p2", "wrong".to_string()).unwrap();
         }
 
         // Duel should be finished
@@ -516,14 +524,14 @@ mod tests {
         assert_eq!(view.phase, "finished");
 
         // Throw insult -> Error
-        let result = arena.throw_insult("p1", "You fight like a dairy farmer!");
+        let result = arena.throw_insult("p1", "You fight like a dairy farmer!".to_string());
         assert!(matches!(
             result,
             Err(ArenaError::DuelError(InsultError::DuelOver))
         ));
 
         // Respond -> Error
-        let result = arena.respond("p2", "wrong");
+        let result = arena.respond("p2", "wrong".to_string());
         assert!(matches!(
             result,
             Err(ArenaError::DuelError(InsultError::DuelOver))
@@ -540,42 +548,45 @@ mod tests {
         arena.register_defender("bob".to_string()).unwrap();
 
         // 1. Intruder cannot throw insult
-        let result = arena.throw_insult("eve", "You fight like a dairy farmer!");
+        let result = arena.throw_insult("eve", "You fight like a dairy farmer!".to_string());
         assert!(matches!(result, Err(ArenaError::NotYourTurn(_))));
 
         // 2. Defender cannot throw insult (it's Challenger's turn)
-        let result = arena.throw_insult("bob", "You fight like a dairy farmer!");
+        let result = arena.throw_insult("bob", "You fight like a dairy farmer!".to_string());
         assert!(matches!(result, Err(ArenaError::NotYourTurn(_))));
 
         // 3. Challenger CAN throw insult
         let (_, view) = arena
-            .throw_insult("alice", "You fight like a dairy farmer!")
+            .throw_insult("alice", "You fight like a dairy farmer!".to_string())
             .unwrap();
         assert_eq!(view.phase, "awaiting_comeback");
 
         // 4. Intruder cannot respond
-        let result = arena.respond("eve", "How appropriate. You fight like a cow!");
+        let result = arena.respond("eve", "How appropriate. You fight like a cow!".to_string());
         assert!(matches!(result, Err(ArenaError::NotYourTurn(_))));
 
         // 5. Challenger cannot respond (it's Defender's turn)
-        let result = arena.respond("alice", "How appropriate. You fight like a cow!");
+        let result = arena.respond(
+            "alice",
+            "How appropriate. You fight like a cow!".to_string(),
+        );
         assert!(matches!(result, Err(ArenaError::NotYourTurn(_))));
 
         // 6. Defender CAN respond
         let (_, view) = arena
-            .respond("bob", "How appropriate. You fight like a cow!")
+            .respond("bob", "How appropriate. You fight like a cow!".to_string())
             .unwrap();
         assert_eq!(view.phase, "awaiting_insult");
 
         // Now Defender is attacker.
 
         // 7. Challenger cannot throw insult (now Defender's turn)
-        let result = arena.throw_insult("alice", "You fight like a dairy farmer!");
+        let result = arena.throw_insult("alice", "You fight like a dairy farmer!".to_string());
         assert!(matches!(result, Err(ArenaError::NotYourTurn(_))));
 
         // 8. Defender CAN throw insult
         let (outcome, _) = arena
-            .throw_insult("bob", "You fight like a dairy farmer!")
+            .throw_insult("bob", "You fight like a dairy farmer!".to_string())
             .unwrap();
         assert!(matches!(outcome, ArenaOutcome::InsultThrown { .. }));
     }
