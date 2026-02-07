@@ -33,10 +33,10 @@
 
 pub mod announcer;
 pub mod arena;
-pub mod error;
-pub mod model;
 mod duel;
+pub mod error;
 mod insults;
+pub mod model;
 mod server;
 
 pub use announcer::Announcer;

@@ -13,14 +13,14 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use rust_mcp_sdk::mcp_server::hyper_runtime::HyperRuntime;
+use rust_mcp_sdk::McpServer;
 use rust_mcp_sdk::mcp_server::ServerHandler;
+use rust_mcp_sdk::mcp_server::hyper_runtime::HyperRuntime;
 use rust_mcp_sdk::schema::schema_utils::CallToolError;
 use rust_mcp_sdk::schema::{
     CallToolRequestParams, CallToolResult, CustomNotification, ListToolsResult,
     PaginatedRequestParams, RpcError, TextContent,
 };
-use rust_mcp_sdk::McpServer;
 use serde_json::json;
 use tokio::sync::{Mutex, RwLock};
 use tracing::{info, warn};
@@ -383,9 +383,7 @@ impl ServerHandler for InsultServer {
                 if insult_str.len() > MAX_INPUT_LENGTH {
                     return Err(CallToolError::invalid_arguments(
                         &params.name,
-                        Some(format!(
-                            "Insult too long (max {MAX_INPUT_LENGTH} chars)"
-                        )),
+                        Some(format!("Insult too long (max {MAX_INPUT_LENGTH} chars)")),
                     ));
                 }
 
@@ -400,9 +398,7 @@ impl ServerHandler for InsultServer {
                 if comeback_str.len() > MAX_INPUT_LENGTH {
                     return Err(CallToolError::invalid_arguments(
                         &params.name,
-                        Some(format!(
-                            "Comeback too long (max {MAX_INPUT_LENGTH} chars)"
-                        )),
+                        Some(format!("Comeback too long (max {MAX_INPUT_LENGTH} chars)")),
                     ));
                 }
 
