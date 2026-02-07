@@ -214,7 +214,7 @@ impl Dojo {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
 
@@ -318,8 +318,16 @@ mod tests {
         ));
 
         // Get the insult Sensei threw
-        let pending = dojo.duel.pending_insult().expect("Sensei should have thrown insult");
-        let correct_response = dojo.duel.insult_bank().find_comeback(pending).unwrap().to_string();
+        let pending = dojo
+            .duel
+            .pending_insult()
+            .expect("Sensei should have thrown insult");
+        let correct_response = dojo
+            .duel
+            .insult_bank()
+            .find_comeback(pending)
+            .unwrap()
+            .to_string();
 
         // 5. Player responds correctly.
         // 6. Player Parries.

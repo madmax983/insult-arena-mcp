@@ -1,6 +1,7 @@
 use insult_arena_mcp::{Announcer, Arena, ArenaOutcome};
 
 #[test]
+#[allow(clippy::unwrap_used)]
 fn full_duel_integration_with_match_point() {
     let mut arena = Arena::new();
     let (outcome, view) = arena.start_duel();
@@ -52,7 +53,10 @@ fn full_duel_integration_with_match_point() {
     // Score is 0-2. Wins needed is 3. Bob needs 1 more.
     // Announcer should say "MATCH POINT!"
     let msg = Announcer::announce(&outcome, Some(&view));
-    assert!(msg.contains("MATCH POINT"), "Announcement should contain match point warning");
+    assert!(
+        msg.contains("MATCH POINT"),
+        "Announcement should contain match point warning"
+    );
 
     // 5. Bob throws (for the win)
     let insult = "Nobody's ever drawn blood from me and nobody ever will!";
@@ -69,5 +73,8 @@ fn full_duel_integration_with_match_point() {
     let msg = Announcer::announce(&outcome, Some(&view));
     assert!(msg.contains("wins the duel"), "Should announce winner");
     assert!(msg.contains("Defender"));
-    assert!(msg.contains("OOF"), "Should indicate failure caused the win");
+    assert!(
+        msg.contains("OOF"),
+        "Should indicate failure caused the win"
+    );
 }

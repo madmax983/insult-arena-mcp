@@ -458,7 +458,10 @@ mod tests {
         let max_input = "a".repeat(MAX_INPUT_LENGTH);
         // It will fail with UnknownInsult, but NOT InputTooLong
         let result = arena.throw_insult("p1", &max_input);
-        assert!(matches!(result, Err(ArenaError::UnknownInsult(_)) | Err(ArenaError::NotYourTurn(_)) | Err(ArenaError::NoDuel)));
+        assert!(matches!(
+            result,
+            Err(ArenaError::UnknownInsult(_) | ArenaError::NotYourTurn(_) | ArenaError::NoDuel)
+        ));
         // Wait, start_duel was called. And no sessions registered (except the one we just did).
         // Let's reset arena to be clean.
         let mut arena = Arena::new();
@@ -485,7 +488,10 @@ mod tests {
         assert!(arena.register_challenger(session.to_string()).is_ok());
         assert!(arena.register_defender(session.to_string()).is_ok());
 
-        assert_eq!(arena.get_role_for_session(session), Some(Duelist::Challenger));
+        assert_eq!(
+            arena.get_role_for_session(session),
+            Some(Duelist::Challenger)
+        );
         // Logic: if session matches challenger, return challenger.
         // If it matches BOTH, it returns Challenger (first check).
         // This is fine, but ambiguous.
@@ -499,11 +505,15 @@ mod tests {
         arena.start_duel();
 
         // 1. Throw insult as Challenger (should work)
-        let (outcome, _) = arena.throw_insult(session, "You fight like a dairy farmer!").unwrap();
+        let (outcome, _) = arena
+            .throw_insult(session, "You fight like a dairy farmer!")
+            .unwrap();
         assert!(matches!(outcome, ArenaOutcome::InsultThrown { .. }));
 
         // 2. Respond as Defender (should work)
-        let (outcome, _) = arena.respond(session, "How appropriate. You fight like a cow!").unwrap();
+        let (outcome, _) = arena
+            .respond(session, "How appropriate. You fight like a cow!")
+            .unwrap();
         assert!(matches!(outcome, ArenaOutcome::ExchangeProcessed { .. }));
     }
 
