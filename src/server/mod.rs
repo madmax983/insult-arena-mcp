@@ -445,4 +445,5 @@ mod tests {
         assert!(response.contains("No duel in progress"));
     }
 }
-#[cfg(test)] mod log_injection_test;
+#[cfg(test)]
+mod log_injection_test;
