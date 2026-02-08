@@ -131,14 +131,14 @@ impl InsultServer {
         );
 
         for session_id in sessions {
-            info!("   → Sending to session: {}", session_id);
+            info!("   → Sending to session: {:?}", session_id);
             if let Err(e) = runtime
                 .notify_custom(&session_id, notification.clone())
                 .await
             {
-                warn!("   ✗ Failed to send notification to {}: {}", session_id, e);
+                warn!("   ✗ Failed to send notification to {:?}: {:?}", session_id, e);
             } else {
-                info!("   ✓ Notification sent to {}", session_id);
+                info!("   ✓ Notification sent to {:?}", session_id);
             }
         }
     }
@@ -273,7 +273,7 @@ impl InsultServer {
                 DuelResponse::success(Announcer::announce(&outcome, Some(&view)), view).to_json()
             }
             Err(e) => {
-                warn!("❌ Insult error: \"{}\"", e);
+                warn!("❌ Insult error: {:?}", e);
                 DuelResponse::error(e.to_string()).to_json()
             }
         }
@@ -287,7 +287,7 @@ impl InsultServer {
         match arena.respond(&session_id, &comeback) {
             Ok((outcome, view)) => {
                 let message = Announcer::announce(&outcome, Some(&view));
-                info!("   Result: {}", message);
+                info!("   Result: {:?}", message);
                 let is_finished = view.phase == "finished";
 
                 // Broadcast turn notification (unless duel is over)
@@ -423,6 +423,100 @@ impl ServerHandler for InsultServer {
             meta: None,
             structured_content: None,
         })
+    }
+}
+
+#[cfg(test)]
+mod security_tests {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Clone, Default)]
+    struct LogBuffer(Arc<Mutex<Vec<String>>>);
+
+    impl std::io::Write for LogBuffer {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            let s = String::from_utf8_lossy(buf).to_string();
+            self.0.lock().unwrap().push(s);
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn log_injection_prevention() {
+        let buffer = LogBuffer::default();
+        let buffer_clone = buffer.clone();
+
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(move || buffer_clone.clone())
+            .with_ansi(false)
+            .with_level(false)
+            .with_target(false)
+            .without_time() // Simplify output for checking
+            .finish();
+
+        let _guard = tracing::subscriber::set_default(subscriber);
+
+        let server = InsultServer::new();
+        server.handle_start_duel().await;
+
+        // Malicious input with newline injection
+        // This will fail validation (unknown insult) but be logged in the error path
+        let malicious_insult = "Invalid Insult\nINJECTED_LOG: FAKE_ENTRY";
+
+        let _ = server.handle_throw_insult("attacker".to_string(), malicious_insult.to_string()).await;
+
+        let logs = buffer.0.lock().unwrap().join("");
+
+        // If vulnerable, the log will contain the literal newline character followed by INJECTED_LOG
+        // The format is: ❌ Insult error: "{}"
+        // So we expect: ❌ Insult error: "Invalid Insult\nINJECTED_LOG: FAKE_ENTRY"
+
+        // We assert that the log does NOT contain the raw newline inside the message
+        // However, since we want to FAIL first if it IS vulnerable, we check for what we DON'T want.
+
+        // Wait, standard practice: Test fails if vulnerability exists?
+        // No, standard practice: Test asserts correct behavior. If code is wrong, test fails.
+        // Correct behavior: Newline is escaped.
+        // So we assert that logs do NOT contain "\nINJECTED_LOG".
+
+        // If vulnerable: logs contain "Invalid Insult\nINJECTED_LOG"
+        // If secure (Debug): logs contain "Invalid Insult\\nINJECTED_LOG" (escaped)
+
+        // Let's assert that we see the escaped version, or at least that we DON'T see the raw version acting as a newline.
+
+        println!("Captured logs:\n{}", logs);
+
+        // In the vulnerable version, the log line will be split.
+        // But since we capture all output into a string, we just look for the sequence.
+
+        // We want to ensure it is ESCAPED.
+        // The Debug format {:?} will produce "Invalid Insult\nINJECTED_LOG" -> "Invalid Insult\\nINJECTED_LOG"
+
+        // The error message format is: ❌ Insult error: "{}"
+        // If fixed, it becomes: ❌ Insult error: "{:?}" -> ❌ Insult error: "..."
+        // Or if I just change {} to {:?}, it becomes: ❌ Insult error: "Error("...")"
+
+        // Wait, e is `ArenaError::UnknownInsult(String)`.
+        // ArenaError's Display: "Unknown insult: \"{0}\". Use list_insults to see valid options."
+        // So e.to_string() contains the raw insult string inside quotes.
+
+        // Vulnerable: warn!("❌ Insult error: \"{}\"", e);
+        // e.to_string() -> Unknown insult: "Invalid Insult\nINJECTED_LOG: FAKE_ENTRY". ...
+        // Log output -> ❌ Insult error: "Unknown insult: "Invalid Insult
+        // INJECTED_LOG: FAKE_ENTRY". ..."
+
+        // Secure: warn!("❌ Insult error: {:?}", e);
+        // e matches ArenaError::UnknownInsult
+        // Debug output -> UnknownInsult("Invalid Insult\nINJECTED_LOG: FAKE_ENTRY")
+        // Which escapes the inner string.
+
+        // So if secure, we should NOT find "Invalid Insult\nINJECTED_LOG".
+
+        assert!(!logs.contains("Invalid Insult\nINJECTED_LOG"), "Log injection detected! Newline passed through unescaped.");
     }
 }
 
