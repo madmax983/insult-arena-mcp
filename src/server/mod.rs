@@ -467,7 +467,10 @@ mod tool_tests {
     use super::*;
     use serde_json::Map;
 
-    fn make_params(name: &str, args: Option<Map<String, serde_json::Value>>) -> CallToolRequestParams {
+    fn make_params(
+        name: &str,
+        args: Option<Map<String, serde_json::Value>>,
+    ) -> CallToolRequestParams {
         CallToolRequestParams {
             name: name.to_string(),
             arguments: args,
@@ -484,27 +487,51 @@ mod tool_tests {
     #[tokio::test]
     async fn throw_insult_valid() {
         let server = InsultServer::new();
-        server.process_tool_call(make_params("start_duel", None), None).await.unwrap();
+        server
+            .process_tool_call(make_params("start_duel", None), None)
+            .await
+            .unwrap();
 
         let mut args = Map::new();
-        args.insert("insult".to_string(), json!("You fight like a dairy farmer!"));
+        args.insert(
+            "insult".to_string(),
+            json!("You fight like a dairy farmer!"),
+        );
 
-        let result = server.process_tool_call(make_params("throw_insult", Some(args)), Some("p1".to_string())).await.unwrap();
+        let result = server
+            .process_tool_call(
+                make_params("throw_insult", Some(args)),
+                Some("p1".to_string()),
+            )
+            .await
+            .unwrap();
         let content = get_text_content(&result);
 
-        assert!(content.contains("awaiting comeback"), "Should be successful and waiting for comeback");
+        assert!(
+            content.contains("awaiting comeback"),
+            "Should be successful and waiting for comeback"
+        );
     }
 
     #[tokio::test]
     async fn throw_insult_missing_arg() {
         let server = InsultServer::new();
-        server.process_tool_call(make_params("start_duel", None), None).await.unwrap();
+        server
+            .process_tool_call(make_params("start_duel", None), None)
+            .await
+            .unwrap();
 
         // Missing "insult" arg -> defaults to empty string -> UnknownInsult error
-        let result = server.process_tool_call(make_params("throw_insult", None), Some("p1".to_string())).await.unwrap();
+        let result = server
+            .process_tool_call(make_params("throw_insult", None), Some("p1".to_string()))
+            .await
+            .unwrap();
         let content = get_text_content(&result);
 
-        assert!(content.contains("Unknown insult"), "Should return unknown insult error for empty input");
+        assert!(
+            content.contains("Unknown insult"),
+            "Should return unknown insult error for empty input"
+        );
     }
 
     #[tokio::test]
@@ -515,11 +542,16 @@ mod tool_tests {
         let long_string = "a".repeat(crate::arena::MAX_INPUT_LENGTH + 1);
         args.insert("insult".to_string(), json!(long_string));
 
-        let result = server.process_tool_call(make_params("throw_insult", Some(args)), Some("p1".to_string())).await;
+        let result = server
+            .process_tool_call(
+                make_params("throw_insult", Some(args)),
+                Some("p1".to_string()),
+            )
+            .await;
 
         assert!(matches!(result, Err(CallToolError { .. })));
         if let Err(e) = result {
-             assert!(e.0.to_string().contains("Insult too long"));
+            assert!(e.0.to_string().contains("Insult too long"));
         }
     }
 
@@ -528,18 +560,22 @@ mod tool_tests {
         let server = InsultServer::new();
         let long_id = "s".repeat(crate::arena::MAX_SESSION_ID_LENGTH + 1);
 
-        let result = server.process_tool_call(make_params("start_duel", None), Some(long_id)).await;
+        let result = server
+            .process_tool_call(make_params("start_duel", None), Some(long_id))
+            .await;
 
         assert!(matches!(result, Err(CallToolError { .. })));
         if let Err(e) = result {
-             assert!(e.0.to_string().contains("Session ID too long"));
+            assert!(e.0.to_string().contains("Session ID too long"));
         }
     }
 
     #[tokio::test]
     async fn unknown_tool() {
         let server = InsultServer::new();
-        let result = server.process_tool_call(make_params("make_coffee", None), None).await;
+        let result = server
+            .process_tool_call(make_params("make_coffee", None), None)
+            .await;
 
         assert!(matches!(result, Err(CallToolError { .. })));
     }
