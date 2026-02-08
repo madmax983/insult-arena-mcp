@@ -30,8 +30,12 @@ use crate::InsultBank;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Duelist {
     /// The challenger who initiated the duel.
+    ///
+    /// The challenger always throws the first insult.
     Challenger,
     /// The defender who accepted the challenge.
+    ///
+    /// The defender must parry the challenger's insults.
     Defender,
 }
 

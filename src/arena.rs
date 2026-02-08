@@ -32,9 +32,13 @@ pub enum ArenaError {
 /// The outcome of an action in the Arena.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArenaOutcome {
+    /// A new duel has started.
     DuelStarted,
+    /// A session has been registered for a role.
     RoleRegistered { role: Duelist },
+    /// An insult has been thrown by the attacker.
     InsultThrown { insult: String },
+    /// An exchange (insult + comeback) has been processed.
     ExchangeProcessed { exchange: crate::duel::Exchange },
 }
 
@@ -110,6 +114,14 @@ impl Arena {
         }
     }
 
+    /// Starts a new duel.
+    ///
+    /// This resets the duel state, clears any registered sessions, and prepares the arena
+    /// for a new round of combat. The Challenger (whomever registers first) will attack first.
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing the `ArenaOutcome::DuelStarted` event and the initial `DuelStateView`.
     pub fn start_duel(&mut self) -> (ArenaOutcome, DuelStateView) {
         let duel = Duel::new();
         let view = duel_state_view(&duel);

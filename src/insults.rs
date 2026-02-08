@@ -6,8 +6,12 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InsultPair {
     /// The insult thrown by the attacker.
+    ///
+    /// This is the string that initiates an exchange.
     pub insult: &'static str,
     /// The correct comeback that defeats the insult.
+    ///
+    /// This must be provided by the defender to win the exchange.
     pub comeback: &'static str,
 }
 
