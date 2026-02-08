@@ -57,7 +57,7 @@ impl Arena {
         }
 
         self.sessions.challenger = Some(session_id);
-        let state = self.duel.as_ref().map(|d| d.view());
+        let state = self.duel.as_ref().map(Duel::view);
 
         Ok((
             ArenaOutcome::RoleRegistered {
@@ -84,7 +84,7 @@ impl Arena {
         }
 
         self.sessions.defender = Some(session_id);
-        let state = self.duel.as_ref().map(|d| d.view());
+        let state = self.duel.as_ref().map(Duel::view);
 
         Ok((
             ArenaOutcome::RoleRegistered {

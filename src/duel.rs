@@ -22,9 +22,9 @@
 //! duel.throw_insult("You have the manners of a beggar.".to_string()).unwrap();
 //! ```
 
+use crate::InsultBank;
 use crate::error::InsultError;
 use crate::model::{DuelResult, DuelState, DuelStateView, Duelist, Exchange, ExchangeResult};
-use crate::InsultBank;
 
 /// A sword fighting duel between two opponents.
 #[derive(Debug, Clone)]

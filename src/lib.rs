@@ -33,8 +33,8 @@
 
 pub mod announcer;
 pub mod arena;
-pub mod error;
 mod duel;
+pub mod error;
 mod insults;
 pub mod model;
 mod server;
@@ -44,7 +44,9 @@ pub use arena::Arena;
 pub use duel::Duel;
 pub use error::{ArenaError, InsultError};
 pub use insults::{InsultBank, InsultPair};
-pub use model::{ArenaOutcome, DuelResult, DuelState, DuelStateView, Duelist, Exchange, ExchangeResult};
+pub use model::{
+    ArenaOutcome, DuelResult, DuelState, DuelStateView, Duelist, Exchange, ExchangeResult,
+};
 pub use server::{DuelResponse, InsultServer};
 
 #[cfg(feature = "nova")]
