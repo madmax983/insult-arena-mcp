@@ -1,5 +1,4 @@
-use crate::arena::{ArenaOutcome, DuelStateView};
-use crate::duel::{Duelist, ExchangeResult};
+use crate::model::{ArenaOutcome, DuelStateView, Duelist, ExchangeResult};
 use std::fmt::Write;
 
 /// Handles the generation of flavor text and commentary for game events.

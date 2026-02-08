@@ -1,98 +1,17 @@
 //! Arena module: Encapsulates the game state and logic.
 
-use crate::duel::{Duel, DuelState, Duelist, InsultError};
-use serde::{Deserialize, Serialize};
+use crate::duel::Duel;
+use crate::error::{ArenaError, InsultError};
+use crate::model::{ArenaOutcome, DuelState, DuelStateView, Duelist};
 
 pub const MAX_INPUT_LENGTH: usize = 1024;
 pub const MAX_SESSION_ID_LENGTH: usize = 128;
-
-/// Errors that can occur in the Arena.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum ArenaError {
-    #[error("No duel in progress. Call start_duel first!")]
-    NoDuel,
-    #[error("Input too long (max {0} chars)")]
-    InputTooLong(usize),
-    #[error("Session ID too long (max {0} chars)")]
-    SessionIdTooLong(usize),
-    #[error("{0} role is already taken!")]
-    RoleTaken(String),
-    #[error("It is not your turn! Waiting for {0}.")]
-    NotYourTurn(String),
-    #[error("Unknown insult: \"{0}\". Use list_insults to see valid options.")]
-    UnknownInsult(String),
-    #[error("No pending insult to hint about.")]
-    NoPendingInsult,
-    #[error("Could not find comeback for this insult.")]
-    ComebackNotFound,
-    #[error(transparent)]
-    DuelError(#[from] InsultError),
-}
-
-/// The outcome of an action in the Arena.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ArenaOutcome {
-    DuelStarted,
-    RoleRegistered { role: Duelist },
-    InsultThrown { insult: String },
-    ExchangeProcessed { exchange: crate::duel::Exchange },
-}
 
 /// Tracks which session is playing which role.
 #[derive(Debug, Default)]
 struct DuelSessions {
     challenger: Option<String>,
     defender: Option<String>,
-}
-
-/// Serializable view of the duel state.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DuelStateView {
-    /// Current phase of the duel.
-    pub phase: String,
-    /// Who should act next (if applicable).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub next_to_act: Option<String>,
-    /// The pending insult waiting for a comeback.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pending_insult: Option<String>,
-    /// Challenger's score.
-    pub challenger_score: u8,
-    /// Defender's score.
-    pub defender_score: u8,
-    /// Wins needed to win the duel.
-    pub wins_needed: u8,
-    /// The winner (if duel is over).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub winner: Option<String>,
-}
-
-pub fn duel_state_view(duel: &Duel) -> DuelStateView {
-    let (phase, next_to_act, winner) = match duel.state() {
-        DuelState::AwaitingInsult { attacker } => (
-            "awaiting_insult".to_string(),
-            Some(attacker.to_string()),
-            None,
-        ),
-        DuelState::AwaitingComeback { attacker } => (
-            "awaiting_comeback".to_string(),
-            Some(attacker.opponent().to_string()),
-            None,
-        ),
-        DuelState::Finished { winner } => ("finished".to_string(), None, Some(winner.to_string())),
-    };
-
-    let (challenger_score, defender_score) = duel.scores();
-
-    DuelStateView {
-        phase,
-        next_to_act,
-        pending_insult: duel.pending_insult().map(String::from),
-        challenger_score,
-        defender_score,
-        wins_needed: 3,
-        winner,
-    }
 }
 
 /// The Arena encapsulates the game state (Duel) and session management.
@@ -112,7 +31,7 @@ impl Arena {
 
     pub fn start_duel(&mut self) -> (ArenaOutcome, DuelStateView) {
         let duel = Duel::new();
-        let view = duel_state_view(&duel);
+        let view = duel.view();
         self.duel = Some(duel);
 
         // Clear session registrations for new duel
@@ -138,7 +57,7 @@ impl Arena {
         }
 
         self.sessions.challenger = Some(session_id);
-        let state = self.duel.as_ref().map(duel_state_view);
+        let state = self.duel.as_ref().map(|d| d.view());
 
         Ok((
             ArenaOutcome::RoleRegistered {
@@ -165,7 +84,7 @@ impl Arena {
         }
 
         self.sessions.defender = Some(session_id);
-        let state = self.duel.as_ref().map(duel_state_view);
+        let state = self.duel.as_ref().map(|d| d.view());
 
         Ok((
             ArenaOutcome::RoleRegistered {
@@ -198,7 +117,7 @@ impl Arena {
             return Err(ArenaError::NoDuel);
         };
 
-        let view = duel_state_view(duel);
+        let view = duel.view();
         let role = session_id.and_then(|id| self.get_role_for_session(id));
 
         Ok((view, role.map(|r| r.to_string())))
@@ -252,7 +171,7 @@ impl Arena {
 
         match duel.throw_insult(insult.to_string()) {
             Ok(()) => {
-                let view = duel_state_view(duel);
+                let view = duel.view();
                 Ok((
                     ArenaOutcome::InsultThrown {
                         insult: insult.to_string(),
@@ -297,7 +216,7 @@ impl Arena {
 
         match duel.respond(comeback.to_string()) {
             Ok(exchange) => {
-                let view = duel_state_view(duel);
+                let view = duel.view();
                 let outcome = ArenaOutcome::ExchangeProcessed { exchange };
                 Ok((outcome, view))
             }
