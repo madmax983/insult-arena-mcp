@@ -136,7 +136,10 @@ impl InsultServer {
                 .notify_custom(&session_id, notification.clone())
                 .await
             {
-                warn!("   ✗ Failed to send notification to {:?}: {:?}", session_id, e);
+                warn!(
+                    "   ✗ Failed to send notification to {:?}: {:?}",
+                    session_id, e
+                );
             } else {
                 info!("   ✓ Notification sent to {:?}", session_id);
             }
@@ -427,6 +430,7 @@ impl ServerHandler for InsultServer {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod security_tests {
     use super::*;
     use std::sync::{Arc, Mutex};
@@ -467,7 +471,9 @@ mod security_tests {
         // This will fail validation (unknown insult) but be logged in the error path
         let malicious_insult = "Invalid Insult\nINJECTED_LOG: FAKE_ENTRY";
 
-        let _ = server.handle_throw_insult("attacker".to_string(), malicious_insult.to_string()).await;
+        let _ = server
+            .handle_throw_insult("attacker".to_string(), malicious_insult.to_string())
+            .await;
 
         let logs = buffer.0.lock().unwrap().join("");
 
@@ -488,7 +494,7 @@ mod security_tests {
 
         // Let's assert that we see the escaped version, or at least that we DON'T see the raw version acting as a newline.
 
-        println!("Captured logs:\n{}", logs);
+        println!("Captured logs:\n{logs}");
 
         // In the vulnerable version, the log line will be split.
         // But since we capture all output into a string, we just look for the sequence.
@@ -516,7 +522,10 @@ mod security_tests {
 
         // So if secure, we should NOT find "Invalid Insult\nINJECTED_LOG".
 
-        assert!(!logs.contains("Invalid Insult\nINJECTED_LOG"), "Log injection detected! Newline passed through unescaped.");
+        assert!(
+            !logs.contains("Invalid Insult\nINJECTED_LOG"),
+            "Log injection detected! Newline passed through unescaped."
+        );
     }
 }
 
