@@ -316,38 +316,20 @@ impl InsultServer {
             Err(e) => DuelResponse::error(e.to_string()).to_json(),
         }
     }
-}
 
-#[async_trait]
-impl ServerHandler for InsultServer {
-    async fn handle_list_tools_request(
-        &self,
-        _params: Option<PaginatedRequestParams>,
-        _runtime: Arc<dyn McpServer>,
-    ) -> Result<ListToolsResult, RpcError> {
-        Ok(ListToolsResult {
-            tools: vec![
-                tool_start_duel(),
-                tool_register_as_challenger(),
-                tool_register_as_defender(),
-                tool_get_duel_state(),
-                tool_list_insults(),
-                tool_throw_insult(),
-                tool_respond(),
-                tool_get_hint(),
-            ],
-            next_cursor: None,
-            meta: None,
-        })
-    }
-
-    async fn handle_call_tool_request(
+    /// Processes a tool call request without requiring the `McpServer` runtime trait.
+    /// This enables easier testing of tool logic and validation.
+    ///
+    /// # Errors
+    /// Returns error if:
+    /// - Input length exceeds maximum limits
+    /// - Session ID is too long
+    /// - Tool name is unknown
+    pub async fn process_tool_call(
         &self,
         params: CallToolRequestParams,
-        runtime: Arc<dyn McpServer>,
+        session_id_opt: Option<String>,
     ) -> Result<CallToolResult, CallToolError> {
-        // Get session ID for role tracking
-        let session_id_opt = runtime.session_id();
         let session_id_str = session_id_opt
             .clone()
             .unwrap_or_else(|| "unknown".to_string());
@@ -426,6 +408,39 @@ impl ServerHandler for InsultServer {
     }
 }
 
+#[async_trait]
+impl ServerHandler for InsultServer {
+    async fn handle_list_tools_request(
+        &self,
+        _params: Option<PaginatedRequestParams>,
+        _runtime: Arc<dyn McpServer>,
+    ) -> Result<ListToolsResult, RpcError> {
+        Ok(ListToolsResult {
+            tools: vec![
+                tool_start_duel(),
+                tool_register_as_challenger(),
+                tool_register_as_defender(),
+                tool_get_duel_state(),
+                tool_list_insults(),
+                tool_throw_insult(),
+                tool_respond(),
+                tool_get_hint(),
+            ],
+            next_cursor: None,
+            meta: None,
+        })
+    }
+
+    async fn handle_call_tool_request(
+        &self,
+        params: CallToolRequestParams,
+        runtime: Arc<dyn McpServer>,
+    ) -> Result<CallToolResult, CallToolError> {
+        let session_id_opt = runtime.session_id();
+        self.process_tool_call(params, session_id_opt).await
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -443,5 +458,89 @@ mod tests {
         let server = InsultServer::new();
         let response = server.handle_get_duel_state(None).await;
         assert!(response.contains("No duel in progress"));
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tool_tests {
+    use super::*;
+    use serde_json::Map;
+
+    fn make_params(name: &str, args: Option<Map<String, serde_json::Value>>) -> CallToolRequestParams {
+        CallToolRequestParams {
+            name: name.to_string(),
+            arguments: args,
+            meta: None,
+            task: None,
+        }
+    }
+
+    fn get_text_content(result: &CallToolResult) -> String {
+        // Use Debug formatting to avoid matching on unknown ContentBlock variants
+        format!("{:?}", result.content[0])
+    }
+
+    #[tokio::test]
+    async fn throw_insult_valid() {
+        let server = InsultServer::new();
+        server.process_tool_call(make_params("start_duel", None), None).await.unwrap();
+
+        let mut args = Map::new();
+        args.insert("insult".to_string(), json!("You fight like a dairy farmer!"));
+
+        let result = server.process_tool_call(make_params("throw_insult", Some(args)), Some("p1".to_string())).await.unwrap();
+        let content = get_text_content(&result);
+
+        assert!(content.contains("awaiting comeback"), "Should be successful and waiting for comeback");
+    }
+
+    #[tokio::test]
+    async fn throw_insult_missing_arg() {
+        let server = InsultServer::new();
+        server.process_tool_call(make_params("start_duel", None), None).await.unwrap();
+
+        // Missing "insult" arg -> defaults to empty string -> UnknownInsult error
+        let result = server.process_tool_call(make_params("throw_insult", None), Some("p1".to_string())).await.unwrap();
+        let content = get_text_content(&result);
+
+        assert!(content.contains("Unknown insult"), "Should return unknown insult error for empty input");
+    }
+
+    #[tokio::test]
+    async fn throw_insult_too_long() {
+        let server = InsultServer::new();
+
+        let mut args = Map::new();
+        let long_string = "a".repeat(crate::arena::MAX_INPUT_LENGTH + 1);
+        args.insert("insult".to_string(), json!(long_string));
+
+        let result = server.process_tool_call(make_params("throw_insult", Some(args)), Some("p1".to_string())).await;
+
+        assert!(matches!(result, Err(CallToolError { .. })));
+        if let Err(e) = result {
+             assert!(e.0.to_string().contains("Insult too long"));
+        }
+    }
+
+    #[tokio::test]
+    async fn session_id_too_long() {
+        let server = InsultServer::new();
+        let long_id = "s".repeat(crate::arena::MAX_SESSION_ID_LENGTH + 1);
+
+        let result = server.process_tool_call(make_params("start_duel", None), Some(long_id)).await;
+
+        assert!(matches!(result, Err(CallToolError { .. })));
+        if let Err(e) = result {
+             assert!(e.0.to_string().contains("Session ID too long"));
+        }
+    }
+
+    #[tokio::test]
+    async fn unknown_tool() {
+        let server = InsultServer::new();
+        let result = server.process_tool_call(make_params("make_coffee", None), None).await;
+
+        assert!(matches!(result, Err(CallToolError { .. })));
     }
 }
