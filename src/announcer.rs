@@ -108,3 +108,192 @@ impl Announcer {
         f
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::duel::{Exchange, ExchangeResult};
+
+    struct TestCase {
+        name: &'static str,
+        outcome: ArenaOutcome,
+        view: Option<DuelStateView>,
+        expected_contains: Vec<&'static str>,
+    }
+
+    fn make_view(c_score: u8, d_score: u8, finished: bool) -> DuelStateView {
+        DuelStateView {
+            phase: if finished { "finished" } else { "active" }.to_string(),
+            next_to_act: None,
+            pending_insult: None,
+            challenger_score: c_score,
+            defender_score: d_score,
+            wins_needed: 3,
+            winner: None,
+        }
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn test_announcer_table_driven() {
+        let cases = vec![
+            TestCase {
+                name: "Duel Started",
+                outcome: ArenaOutcome::DuelStarted,
+                view: None,
+                expected_contains: vec!["En garde", "Challenger, throw the first insult"],
+            },
+            TestCase {
+                name: "Register Challenger",
+                outcome: ArenaOutcome::RoleRegistered {
+                    role: Duelist::Challenger,
+                },
+                view: None,
+                expected_contains: vec!["You are the CHALLENGER"],
+            },
+            TestCase {
+                name: "Register Defender",
+                outcome: ArenaOutcome::RoleRegistered {
+                    role: Duelist::Defender,
+                },
+                view: None,
+                expected_contains: vec!["You are the DEFENDER"],
+            },
+            TestCase {
+                name: "Insult Thrown",
+                outcome: ArenaOutcome::InsultThrown {
+                    insult: "You fight like a dairy farmer!".to_string(),
+                },
+                view: None,
+                expected_contains: vec!["You bellow", "You fight like a dairy farmer!"],
+            },
+            TestCase {
+                name: "Exchange Parried (Standard)",
+                outcome: ArenaOutcome::ExchangeProcessed {
+                    exchange: Exchange {
+                        attacker: Duelist::Challenger,
+                        result: ExchangeResult::Parried {
+                            insult: "i".to_string(),
+                            comeback: "c".to_string(),
+                        },
+                        winner: Duelist::Defender,
+                    },
+                },
+                view: Some(make_view(0, 1, false)),
+                expected_contains: vec!["TOUCHÉ", "Defender wins the exchange", "(Score: 0-1)"],
+            },
+            TestCase {
+                name: "Exchange Failed (Standard)",
+                outcome: ArenaOutcome::ExchangeProcessed {
+                    exchange: Exchange {
+                        attacker: Duelist::Challenger,
+                        result: ExchangeResult::Failed {
+                            insult: "i".to_string(),
+                            attempt: "bad".to_string(),
+                            correct: "correct".to_string(),
+                        },
+                        winner: Duelist::Challenger,
+                    },
+                },
+                view: Some(make_view(1, 0, false)),
+                expected_contains: vec![
+                    "OOF",
+                    "Challenger wins the exchange",
+                    "Expected comeback",
+                    "\"correct\"",
+                    "(Score: 1-0)",
+                ],
+            },
+            TestCase {
+                name: "Match Point Challenger",
+                outcome: ArenaOutcome::ExchangeProcessed {
+                    exchange: Exchange {
+                        attacker: Duelist::Defender,
+                        result: ExchangeResult::Failed {
+                            insult: "i".to_string(),
+                            attempt: "bad".to_string(),
+                            correct: "correct".to_string(),
+                        },
+                        winner: Duelist::Challenger,
+                    },
+                },
+                view: Some(make_view(2, 0, false)), // 2 wins, need 3. Match point!
+                expected_contains: vec!["MATCH POINT!", "Next point wins!"],
+            },
+            TestCase {
+                name: "Match Point Defender",
+                outcome: ArenaOutcome::ExchangeProcessed {
+                    exchange: Exchange {
+                        attacker: Duelist::Challenger,
+                        result: ExchangeResult::Parried {
+                            insult: "i".to_string(),
+                            comeback: "c".to_string(),
+                        },
+                        winner: Duelist::Defender,
+                    },
+                },
+                view: Some(make_view(1, 2, false)), // Defender has 2. Match point!
+                expected_contains: vec!["MATCH POINT!", "Next point wins!"],
+            },
+            TestCase {
+                name: "Victory (Parried)",
+                outcome: ArenaOutcome::ExchangeProcessed {
+                    exchange: Exchange {
+                        attacker: Duelist::Challenger,
+                        result: ExchangeResult::Parried {
+                            insult: "i".to_string(),
+                            comeback: "c".to_string(),
+                        },
+                        winner: Duelist::Defender,
+                    },
+                },
+                view: Some(make_view(0, 3, true)),
+                expected_contains: vec!["VICTORY!", "Defender has won the duel", "(Score: 0-3)"],
+            },
+            TestCase {
+                name: "Victory (Failed)",
+                outcome: ArenaOutcome::ExchangeProcessed {
+                    exchange: Exchange {
+                        attacker: Duelist::Defender,
+                        result: ExchangeResult::Failed {
+                            insult: "i".to_string(),
+                            attempt: "bad".to_string(),
+                            correct: "correct".to_string(),
+                        },
+                        winner: Duelist::Challenger,
+                    },
+                },
+                view: Some(make_view(3, 0, true)),
+                expected_contains: vec!["OOF", "Challenger wins the duel", "(Score: 3-0)"],
+            },
+            TestCase {
+                name: "View is None (Fallback)",
+                outcome: ArenaOutcome::ExchangeProcessed {
+                    exchange: Exchange {
+                        attacker: Duelist::Challenger,
+                        result: ExchangeResult::Parried {
+                            insult: "i".to_string(),
+                            comeback: "c".to_string(),
+                        },
+                        winner: Duelist::Defender,
+                    },
+                },
+                view: None,
+                expected_contains: vec!["(Score: ?-?)"],
+            },
+        ];
+
+        for case in cases {
+            let result = Announcer::announce(&case.outcome, case.view.as_ref());
+            for substring in case.expected_contains {
+                assert!(
+                    result.contains(substring),
+                    "Test '{}' failed: Output '{}' did not contain '{}'",
+                    case.name,
+                    result,
+                    substring
+                );
+            }
+        }
+    }
+}
