@@ -1,5 +1,7 @@
+use crate::duel::Duel;
+use crate::error::InsultError;
 use crate::experimental::audience::{Audience, Reaction};
-use crate::{Duel, DuelResult, DuelState, Duelist, ExchangeResult, InsultError};
+use crate::model::{DuelResult, DuelState, Duelist, ExchangeResult};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 

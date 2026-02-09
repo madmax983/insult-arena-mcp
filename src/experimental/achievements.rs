@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{Duel, Duelist};
+use crate::duel::Duel;
+use crate::model::Duelist;
 
 /// An award earned for specific feats in a duel.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

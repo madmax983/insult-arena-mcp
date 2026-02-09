@@ -1,4 +1,4 @@
-use crate::{Exchange, ExchangeResult};
+use crate::model::{Exchange, ExchangeResult};
 use serde::{Deserialize, Serialize};
 
 /// Represents the crowd's reaction to an exchange.
@@ -71,7 +71,7 @@ impl Audience {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Duelist, Exchange, ExchangeResult};
+    use crate::model::{Duelist, Exchange, ExchangeResult};
 
     #[test]
     fn test_parry_increases_hype() {
