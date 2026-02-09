@@ -131,18 +131,24 @@ impl InsultServer {
         );
 
         for session_id in sessions {
-            info!("   → Sending to session: {:?}", session_id);
-            if let Err(e) = runtime
-                .notify_custom(&session_id, notification.clone())
-                .await
-            {
-                warn!(
-                    "   ✗ Failed to send notification to {:?}: {:?}",
-                    session_id, e
-                );
-            } else {
-                info!("   ✓ Notification sent to {:?}", session_id);
-            }
+            let runtime = runtime.clone();
+            let notification = notification.clone();
+            let session_id = session_id.clone();
+
+            // 🛡️ HARDENING: Spawn a task for each notification to prevent
+            // a single slow client (Slowloris) from blocking the game loop
+            // or stalling other notifications.
+            tokio::spawn(async move {
+                info!("   → Sending to session: {:?}", session_id);
+                if let Err(e) = runtime.notify_custom(&session_id, notification).await {
+                    warn!(
+                        "   ✗ Failed to send notification to {:?}: {:?}",
+                        session_id, e
+                    );
+                } else {
+                    info!("   ✓ Notification sent to {:?}", session_id);
+                }
+            });
         }
     }
 }
