@@ -276,7 +276,7 @@ impl InsultServer {
                 DuelResponse::success(Announcer::announce(&outcome, Some(&view)), view).to_json()
             }
             Err(e) => {
-                warn!("❌ Insult error: \"{}\"", e);
+                warn!("❌ Insult error: {:?}", e);
                 DuelResponse::error(e.to_string()).to_json()
             }
         }
@@ -291,7 +291,7 @@ impl InsultServer {
         match arena.respond(&session_id, comeback) {
             Ok((outcome, view)) => {
                 let message = Announcer::announce(&outcome, Some(&view));
-                info!("   Result: {}", message);
+                info!("   Result: {:?}", message);
                 let is_finished = view.phase == "finished";
 
                 // Broadcast turn notification (unless duel is over)
@@ -555,3 +555,5 @@ mod tests {
         assert!(format!("{err:?}").contains("Session ID too long"));
     }
 }
+#[cfg(test)]
+mod log_injection_test;
