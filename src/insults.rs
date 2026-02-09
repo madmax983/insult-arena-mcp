@@ -1,4 +1,13 @@
 //! Classic insult/response pairs from the Monkey Island series.
+//!
+//! # Memory Efficiency
+//!
+//! The [`InsultBank`] stores all insults in static memory (`&'static str`), meaning
+//! there is zero heap allocation when creating the bank or accessing the insults.
+//! This ensures the server remains lightweight even under load.
+//!
+//! String comparisons are performed using iterators to avoid allocating temporary
+//! strings for normalization.
 
 use serde::{Deserialize, Serialize};
 

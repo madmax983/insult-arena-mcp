@@ -1,8 +1,20 @@
+//! Text generation for game events.
+//!
+//! The [`Announcer`] is a stateless formatter that converts internal game events
+//! (like [`ArenaOutcome`]) into human-readable strings. It handles:
+//!
+//! - Flavor text (e.g., "En garde!", "OOF!").
+//! - Score reporting.
+//! - Match point notifications.
+//! - Context-aware messages (e.g., winning exchange vs winning duel).
+
 use crate::arena::{ArenaOutcome, DuelStateView};
 use crate::duel::{Duelist, ExchangeResult};
 use std::fmt::Write;
 
-/// Handles the generation of flavor text and commentary for game events.
+/// The announcer responsible for generating commentary.
+///
+/// This struct is purely a namespace for static methods and holds no state.
 pub struct Announcer;
 
 impl Announcer {

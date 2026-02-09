@@ -30,11 +30,25 @@ use serde_json::json;
 use std::collections::HashMap;
 
 /// Helper to create an empty input schema (for tools with no arguments).
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let schema = empty_input_schema();
+/// assert!(schema.properties.is_none());
+/// ```
 pub fn empty_input_schema() -> ToolInputSchema {
     ToolInputSchema::new(vec![], None, None)
 }
 
 /// Helper to create an input schema with a single required string parameter.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let schema = string_param_schema("insult", "The insult text");
+/// assert!(schema.properties.unwrap().contains_key("insult"));
+/// ```
 pub fn string_param_schema(name: &str, description: &str) -> ToolInputSchema {
     let mut props = HashMap::new();
     let mut prop_map = serde_json::Map::new();

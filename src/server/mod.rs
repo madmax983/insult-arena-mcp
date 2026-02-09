@@ -2,8 +2,8 @@
 //!
 //! # Server Architecture
 //!
-//! The `InsultServer` manages the state of a single duel and handles
-//! interactions from multiple clients (sessions).
+//! The [`InsultServer`] acts as the "Game Master", managing the lifecycle of the duel
+//! and mediating between the MCP runtime and the core game logic in [`Arena`].
 //!
 //! ## State Management
 //!

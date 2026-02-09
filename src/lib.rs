@@ -7,10 +7,11 @@
 //!
 //! ## Features
 //!
-//! - 16 classic Monkey Island insults and comebacks
-//! - Turn-based dueling (first to 3 wins)
-//! - SSE transport for multi-client support
-//! - Works with Claude, GPT, and other MCP-compatible clients
+//! - **Classic Insults**: 16 pairs from the original game via [`InsultBank`].
+//! - **Game Logic**: Turn-based dueling engine via [`Duel`] and [`Arena`].
+//! - **Commentary**: Dynamic flavor text generation via [`Announcer`].
+//! - **MCP Server**: Full implementation with turn notifications via [`InsultServer`].
+//! - **Multi-Client**: SSE transport supports multiple connected AI agents.
 //!
 //! ## Quick Start
 //!

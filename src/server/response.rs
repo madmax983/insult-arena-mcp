@@ -2,6 +2,29 @@ use crate::arena::DuelStateView;
 use serde::{Deserialize, Serialize};
 
 /// Response from the arena/server.
+///
+/// # Hero's Journey (Example Usage)
+///
+/// ```
+/// use insult_arena_mcp::{DuelResponse, DuelStateView};
+///
+/// // 1. Construct a success response
+/// let view = DuelStateView {
+///     phase: "active".to_string(),
+///     challenger_score: 0,
+///     defender_score: 0,
+///     wins_needed: 3,
+///     // ... other fields
+///     # next_to_act: None, pending_insult: None, winner: None
+/// };
+///
+/// let response = DuelResponse::success("Duel started!", view);
+/// assert!(response.success);
+///
+/// // 2. Serialize to JSON for the client
+/// let json = response.to_json();
+/// assert!(json.contains("Duel started!"));
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DuelResponse {
     /// Whether the action succeeded.

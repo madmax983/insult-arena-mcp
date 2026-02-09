@@ -100,6 +100,9 @@ mod tests {
         // Use uppercase "DAIRY FARMER"
         let hint = parrot.hint("YOU FIGHT LIKE A DAIRY FARMER!").unwrap();
         // Should find "How appropriate. You fight like a cow!"
-        assert!(hint.contains("H__"), "Hint should be found even with uppercase input");
+        assert!(
+            hint.contains("H__"),
+            "Hint should be found even with uppercase input"
+        );
     }
 }
