@@ -93,4 +93,13 @@ mod tests {
                 || s.contains("Dead")
         );
     }
+
+    #[test]
+    fn hint_is_case_insensitive() {
+        let parrot = Parrot::new();
+        // Use uppercase "DAIRY FARMER"
+        let hint = parrot.hint("YOU FIGHT LIKE A DAIRY FARMER!").unwrap();
+        // Should find "How appropriate. You fight like a cow!"
+        assert!(hint.contains("H__"), "Hint should be found even with uppercase input");
+    }
 }

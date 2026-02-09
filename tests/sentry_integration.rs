@@ -22,13 +22,13 @@ fn full_duel_integration_with_match_point() {
 
     // 1. Alice throws
     let insult = "You fight like a dairy farmer!";
-    let (outcome, view) = arena.throw_insult("Alice", insult).unwrap();
+    let (outcome, view) = arena.throw_insult("Alice", insult.to_string()).unwrap();
     assert_eq!(view.phase, "awaiting_comeback");
     assert!(matches!(outcome, ArenaOutcome::InsultThrown { .. }));
 
     // 2. Bob responds (Correct)
     let comeback = "How appropriate. You fight like a cow!";
-    let (outcome, view) = arena.respond("Bob", comeback).unwrap();
+    let (outcome, view) = arena.respond("Bob", comeback.to_string()).unwrap();
     assert_eq!(view.defender_score, 1);
     assert_eq!(view.phase, "awaiting_insult");
     assert_eq!(view.next_to_act, Some("Defender".to_string()));
@@ -40,11 +40,11 @@ fn full_duel_integration_with_match_point() {
 
     // 3. Bob throws
     let insult = "You have the manners of a beggar.";
-    let (_, _view) = arena.throw_insult("Bob", insult).unwrap();
+    let (_, _view) = arena.throw_insult("Bob", insult.to_string()).unwrap();
 
     // 4. Alice fails
     let wrong_comeback = "I am rubber, you are glue.";
-    let (outcome, view) = arena.respond("Alice", wrong_comeback).unwrap();
+    let (outcome, view) = arena.respond("Alice", wrong_comeback.to_string()).unwrap();
     assert_eq!(view.defender_score, 2);
     assert_eq!(view.phase, "awaiting_insult"); // Bob won exchange, so Bob attacks
     assert_eq!(view.next_to_act, Some("Defender".to_string()));
@@ -60,11 +60,11 @@ fn full_duel_integration_with_match_point() {
 
     // 5. Bob throws (for the win)
     let insult = "Nobody's ever drawn blood from me and nobody ever will!";
-    let (_, _view) = arena.throw_insult("Bob", insult).unwrap();
+    let (_, _view) = arena.throw_insult("Bob", insult.to_string()).unwrap();
 
     // 6. Alice fails
     let wrong_comeback = "You run fast?";
-    let (outcome, view) = arena.respond("Alice", wrong_comeback).unwrap();
+    let (outcome, view) = arena.respond("Alice", wrong_comeback.to_string()).unwrap();
     assert_eq!(view.defender_score, 3);
     assert_eq!(view.phase, "finished");
     assert_eq!(view.winner, Some("Defender".to_string()));
