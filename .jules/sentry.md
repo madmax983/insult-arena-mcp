@@ -1,7 +1,17 @@
-**[Auth Logic Gap]**
-**Learning:** `Arena` state machine methods (`throw_insult`, `respond`) did not validate the caller's identity, allowing any session (or none) to act on behalf of players.
-**Action:** Enforce session ID as a required argument for state-modifying methods and validate against the registered role in the current turn.
+# Sentry's Journal
 
-**[Duel Logic Edge Case]**
-**Learning:** `Duel::with_wins_needed(0)` allowed a game state where the first player (Challenger) would win immediately upon any score update, even if they lost the exchange, because `0 >= 0` satisfied the victory condition prematurely.
-**Action:** Always clamp numeric configuration values (like `wins_needed`) to sane minimums (e.g., `max(1, value)`) in constructors to prevent logical inconsistencies.
+## [Arena] Hardcoded Game Rules
+**Learning:** The `Arena` module was hardcoding `wins_needed: 3` in `DuelStateView`, ignoring the actual configuration in `Duel`. This meant that if `Duel` defaults changed, the API response would be incorrect.
+**Action:** Always expose configuration/rules via getters in the Model (`Duel`) so the View/Controller (`Arena`) can source of truth it. Added `Duel::wins_needed()` and updated `Arena`.
+
+## [Testing] Announcer Message Specificity
+**Learning:** The `Announcer` has distinct victory messages for "Winning by Parry" (Victory!) vs "Winning by Opponent Failure" (OOF!). My integration test initially failed because I expected "VICTORY" in all winning cases.
+**Action:** When testing UI/Message outputs, verify the *specific* condition (e.g., check for "wins the duel" generic phrase if exact flavor text varies).
+
+## [InsultBank] Search Robustness
+**Learning:** `InsultBank::search_insults` returns ALL items for an empty query. While currently safe (16 items), this is a pattern to watch if data grows. The `MAX_SEARCH_QUERY_LENGTH` limit effectively prevents allocation DoS.
+**Action:** Keep explicit limits on all user-supplied query strings before allocation.
+
+## [Dojo] Turn Loop Verification
+**Learning:** Testing the `Dojo` autonomous turn loop required simulating a sequence of moves. The state transitions happen in a loop, so `turn()` might advance the state multiple steps (e.g. Player -> Sensei Parry -> Sensei Attack -> Player).
+**Action:** When testing autonomous agents/loops, verify the *final* state after the function returns, not just the immediate next state.

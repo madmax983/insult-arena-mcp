@@ -185,6 +185,12 @@ impl Duel {
         (self.challenger_score, self.defender_score)
     }
 
+    /// Returns the number of wins needed to win the duel.
+    #[must_use]
+    pub const fn wins_needed(&self) -> u8 {
+        self.wins_needed
+    }
+
     /// Returns the pending insult if waiting for a comeback.
     #[must_use]
     pub fn pending_insult(&self) -> Option<&str> {
@@ -566,6 +572,8 @@ mod tests {
     #[test]
     fn custom_wins_needed_works() {
         let mut duel = Duel::with_wins_needed(1);
+        assert_eq!(duel.wins_needed(), 1);
+
         duel.throw_insult("You fight like a dairy farmer!".to_string())
             .unwrap();
         // Respond incorrectly -> Challenger wins exchange -> Challenger wins duel (score 1)

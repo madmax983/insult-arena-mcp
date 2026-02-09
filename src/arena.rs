@@ -116,7 +116,7 @@ pub fn duel_state_view(duel: &Duel) -> DuelStateView {
         pending_insult: duel.pending_insult().map(String::from),
         challenger_score,
         defender_score,
-        wins_needed: 3,
+        wins_needed: duel.wins_needed(),
         winner,
     }
 }
@@ -553,6 +553,90 @@ mod tests {
 
         let result = arena.register_defender(long_id);
         assert!(matches!(result, Err(ArenaError::SessionIdTooLong(_))));
+    }
+
+    #[test]
+    fn boundary_check_limits() {
+        let mut arena = Arena::new();
+        arena.start_duel();
+
+        // Exact limit should pass (Session ID)
+        let max_id = "s".repeat(MAX_SESSION_ID_LENGTH);
+        assert!(arena.register_challenger(max_id).is_ok());
+
+        // Limit + 1 should fail
+        let too_long_id = "s".repeat(MAX_SESSION_ID_LENGTH + 1);
+        assert!(matches!(
+            arena.register_defender(too_long_id),
+            Err(ArenaError::SessionIdTooLong(_))
+        ));
+
+        // Exact limit should pass (Input)
+        // We need a valid session to throw insult
+        // Padding to reach exactly MAX_INPUT_LENGTH is tricky because it must match a valid insult?
+        // No, throw_insult checks length BEFORE checking if insult is valid.
+        // So we can test length check with invalid insult.
+
+        let max_input = "a".repeat(MAX_INPUT_LENGTH);
+        // It will fail with UnknownInsult, but NOT InputTooLong
+        let result = arena.throw_insult("p1", &max_input);
+        assert!(matches!(
+            result,
+            Err(ArenaError::UnknownInsult(_) | ArenaError::NotYourTurn(_) | ArenaError::NoDuel)
+        ));
+        // Wait, start_duel was called. And no sessions registered (except the one we just did).
+        // Let's reset arena to be clean.
+        let mut arena = Arena::new();
+        arena.start_duel();
+
+        let max_input = "a".repeat(MAX_INPUT_LENGTH);
+        let result = arena.throw_insult("any", &max_input);
+        // Should NOT be InputTooLong.
+        if let Err(ArenaError::InputTooLong(_)) = result {
+            panic!("Exact limit should be allowed");
+        }
+
+        let too_long_input = "a".repeat(MAX_INPUT_LENGTH + 1);
+        let result = arena.throw_insult("any", &too_long_input);
+        assert!(matches!(result, Err(ArenaError::InputTooLong(_))));
+    }
+
+    #[test]
+    fn allow_self_play() {
+        // Verify one session can play both roles
+        let mut arena = Arena::new();
+
+        let session = "solo_player";
+        assert!(arena.register_challenger(session.to_string()).is_ok());
+        assert!(arena.register_defender(session.to_string()).is_ok());
+
+        assert_eq!(
+            arena.get_role_for_session(session),
+            Some(Duelist::Challenger)
+        );
+        // Logic: if session matches challenger, return challenger.
+        // If it matches BOTH, it returns Challenger (first check).
+        // This is fine, but ambiguous.
+        // Arena::get_role_for_session implementation:
+        // if challenger == session { Challenger } else if defender == session { Defender }
+
+        // This means "get_role" returns the *primary* role.
+        // But turn enforcement uses:
+        // match attacker { Challenger => self.sessions.challenger == session, ... }
+
+        arena.start_duel();
+
+        // 1. Throw insult as Challenger (should work)
+        let (outcome, _) = arena
+            .throw_insult(session, "You fight like a dairy farmer!")
+            .unwrap();
+        assert!(matches!(outcome, ArenaOutcome::InsultThrown { .. }));
+
+        // 2. Respond as Defender (should work)
+        let (outcome, _) = arena
+            .respond(session, "How appropriate. You fight like a cow!")
+            .unwrap();
+        assert!(matches!(outcome, ArenaOutcome::ExchangeProcessed { .. }));
     }
 
     #[test]
