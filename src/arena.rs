@@ -240,14 +240,7 @@ impl Arena {
 
         // Validate turn/role
         if let DuelState::AwaitingInsult { attacker } = duel.state() {
-            let expected_session = match attacker {
-                Duelist::Challenger => self.sessions.challenger.as_ref(),
-                Duelist::Defender => self.sessions.defender.as_ref(),
-            };
-
-            if expected_session.is_some_and(|expected| expected != session_id) {
-                return Err(ArenaError::NotYourTurn(attacker.to_string()));
-            }
+            Self::validate_session_can_act(&self.sessions, attacker, session_id)?;
         }
 
         match duel.throw_insult(insult.to_string()) {
@@ -285,14 +278,7 @@ impl Arena {
         // Validate turn/role
         if let DuelState::AwaitingComeback { attacker } = duel.state() {
             let defender = attacker.opponent();
-            let expected_session = match defender {
-                Duelist::Challenger => self.sessions.challenger.as_ref(),
-                Duelist::Defender => self.sessions.defender.as_ref(),
-            };
-
-            if expected_session.is_some_and(|expected| expected != session_id) {
-                return Err(ArenaError::NotYourTurn(defender.to_string()));
-            }
+            Self::validate_session_can_act(&self.sessions, defender, session_id)?;
         }
 
         match duel.respond(comeback.to_string()) {
@@ -303,6 +289,22 @@ impl Arena {
             }
             Err(e) => Err(ArenaError::from(e)),
         }
+    }
+
+    fn validate_session_can_act(
+        sessions: &DuelSessions,
+        actor: Duelist,
+        session_id: &str,
+    ) -> Result<(), ArenaError> {
+        let expected_session = match actor {
+            Duelist::Challenger => sessions.challenger.as_ref(),
+            Duelist::Defender => sessions.defender.as_ref(),
+        };
+
+        if expected_session.is_some_and(|expected| expected != session_id) {
+            return Err(ArenaError::NotYourTurn(actor.to_string()));
+        }
+        Ok(())
     }
 
     /// Get a hint for the current pending insult.
