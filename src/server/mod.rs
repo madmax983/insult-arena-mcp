@@ -348,20 +348,24 @@ impl ServerHandler for InsultServer {
     ) -> Result<CallToolResult, CallToolError> {
         // Get session ID for role tracking
         let session_id_opt = runtime.session_id();
+
+        // Hardening: Validate session ID length before allocation/cloning
+        if let Some(ref id) = session_id_opt {
+            // Apply stricter validation if needed, but for now just length check
+            if id.len() > crate::arena::MAX_SESSION_ID_LENGTH {
+                return Err(CallToolError::invalid_arguments(
+                    &params.name,
+                    Some(format!(
+                        "Session ID too long (max {} chars)",
+                        crate::arena::MAX_SESSION_ID_LENGTH
+                    )),
+                ));
+            }
+        }
+
         let session_id_str = session_id_opt
             .clone()
             .unwrap_or_else(|| "unknown".to_string());
-
-        // Hardening: Validate session ID length
-        if session_id_str.len() > crate::arena::MAX_SESSION_ID_LENGTH {
-            return Err(CallToolError::invalid_arguments(
-                &params.name,
-                Some(format!(
-                    "Session ID too long (max {} chars)",
-                    crate::arena::MAX_SESSION_ID_LENGTH
-                )),
-            ));
-        }
 
         let result = match params.name.as_str() {
             "start_duel" => self.handle_start_duel().await,
@@ -443,5 +447,107 @@ mod tests {
         let server = InsultServer::new();
         let response = server.handle_get_duel_state(None).await;
         assert!(response.contains("No duel in progress"));
+    }
+
+    use rust_mcp_sdk::auth::AuthInfo;
+    use rust_mcp_sdk::error::McpSdkError;
+    use rust_mcp_sdk::schema::{
+        ClientJsonrpcRequest, ClientMessage, CustomRequest, InitializeRequestParams,
+        InitializeResult, MessageFromServer, RequestId, ResultFromClient, ResultFromServer,
+        ServerJsonrpcRequest, ServerMessage,
+    };
+    use rust_mcp_sdk::task_store::TaskStore;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    struct MockMcpServer {
+        session_id: Option<String>,
+    }
+
+    #[async_trait]
+    impl McpServer for MockMcpServer {
+        fn session_id(&self) -> Option<String> {
+            self.session_id.clone()
+        }
+
+        async fn notify_custom(&self, _notification: CustomRequest) -> Result<(), McpSdkError> {
+            Ok(())
+        }
+
+        async fn start(self: Arc<Self>) -> Result<(), McpSdkError> {
+            unimplemented!()
+        }
+        async fn set_client_details(&self, _: InitializeRequestParams) -> Result<(), McpSdkError> {
+            unimplemented!()
+        }
+        fn server_info(&self) -> &InitializeResult {
+            unimplemented!()
+        }
+        fn client_info(&self) -> Option<InitializeRequestParams> {
+            unimplemented!()
+        }
+        async fn auth_info(&self) -> tokio::sync::RwLockReadGuard<'_, Option<AuthInfo>> {
+            unimplemented!()
+        }
+        async fn auth_info_cloned(&self) -> Option<AuthInfo> {
+            unimplemented!()
+        }
+        async fn update_auth_info(&self, _: Option<AuthInfo>) {
+            unimplemented!()
+        }
+        async fn wait_for_initialization(&self) {
+            unimplemented!()
+        }
+        fn task_store(
+            &self,
+        ) -> Option<Arc<dyn TaskStore<ClientJsonrpcRequest, ResultFromServer> + 'static>> {
+            unimplemented!()
+        }
+        fn client_task_store(
+            &self,
+        ) -> Option<Arc<dyn TaskStore<ServerJsonrpcRequest, ResultFromClient> + 'static>> {
+            unimplemented!()
+        }
+        async fn stderr_message(&self, _: String) -> Result<(), McpSdkError> {
+            unimplemented!()
+        }
+        async fn send(
+            &self,
+            _: MessageFromServer,
+            _: Option<RequestId>,
+            _: Option<Duration>,
+        ) -> Result<Option<ClientMessage>, McpSdkError> {
+            unimplemented!()
+        }
+        async fn send_batch(
+            &self,
+            _: Vec<ServerMessage>,
+            _: Option<Duration>,
+        ) -> Result<Option<Vec<ClientMessage>>, McpSdkError> {
+            unimplemented!()
+        }
+    }
+
+    #[tokio::test]
+    #[allow(clippy::expect_used)]
+    async fn rejects_excessive_session_id_length() {
+        let server = InsultServer::new();
+        let long_session_id = "a".repeat(crate::arena::MAX_SESSION_ID_LENGTH + 1);
+        let mock_server = Arc::new(MockMcpServer {
+            session_id: Some(long_session_id),
+        });
+
+        let params = CallToolRequestParams {
+            name: "get_duel_state".to_string(),
+            arguments: None,
+            meta: None,
+            task: None,
+        };
+
+        let result = server.handle_call_tool_request(params, mock_server).await;
+
+        assert!(result.is_err());
+        let err = result.expect_err("Should error on long session ID");
+        assert!(format!("{err:?}").contains("Session ID too long"));
     }
 }
