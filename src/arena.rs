@@ -17,10 +17,10 @@
 //! arena.register_defender("session_B".to_string()).unwrap();
 //!
 //! // 4. Challenger throws an insult
-//! let (outcome, view) = arena.throw_insult("session_A", "You fight like a dairy farmer!").unwrap();
+//! let (outcome, view) = arena.throw_insult("session_A", "You fight like a dairy farmer!".to_string()).unwrap();
 //!
 //! // 5. Defender responds
-//! let (outcome, view) = arena.respond("session_B", "How appropriate. You fight like a cow!").unwrap();
+//! let (outcome, view) = arena.respond("session_B", "How appropriate. You fight like a cow!".to_string()).unwrap();
 //!
 //! // Defender won the exchange!
 //! assert_eq!(view.defender_score, 1);
@@ -307,11 +307,11 @@ impl Arena {
     /// arena.register_challenger("alice".to_string()).unwrap();
     ///
     /// // Alice throws a valid insult
-    /// let result = arena.throw_insult("alice", "You fight like a dairy farmer!");
+    /// let result = arena.throw_insult("alice", "You fight like a dairy farmer!".to_string());
     /// assert!(result.is_ok());
     ///
     /// // Alice cannot throw again (now waiting for comeback)
-    /// let result = arena.throw_insult("alice", "Another insult");
+    /// let result = arena.throw_insult("alice", "Another insult".to_string());
     /// assert!(result.is_err());
     /// ```
     pub fn throw_insult(
@@ -372,10 +372,10 @@ impl Arena {
     /// arena.register_challenger("alice".to_string()).unwrap();
     /// arena.register_defender("bob".to_string()).unwrap();
     ///
-    /// arena.throw_insult("alice", "You fight like a dairy farmer!").unwrap();
+    /// arena.throw_insult("alice", "You fight like a dairy farmer!".to_string()).unwrap();
     ///
     /// // Bob responds
-    /// let (outcome, view) = arena.respond("bob", "How appropriate. You fight like a cow!").unwrap();
+    /// let (outcome, view) = arena.respond("bob", "How appropriate. You fight like a cow!".to_string()).unwrap();
     ///
     /// // Bob won the exchange!
     /// assert_eq!(view.defender_score, 1);
@@ -579,7 +579,7 @@ mod tests {
 
         let max_input = "a".repeat(MAX_INPUT_LENGTH);
         // It will fail with UnknownInsult, but NOT InputTooLong
-        let result = arena.throw_insult("p1", &max_input);
+        let result = arena.throw_insult("p1", max_input);
         assert!(matches!(
             result,
             Err(ArenaError::UnknownInsult(_) | ArenaError::NotYourTurn(_) | ArenaError::NoDuel)
@@ -590,14 +590,14 @@ mod tests {
         arena.start_duel();
 
         let max_input = "a".repeat(MAX_INPUT_LENGTH);
-        let result = arena.throw_insult("any", &max_input);
+        let result = arena.throw_insult("any", max_input);
         // Should NOT be InputTooLong.
         if let Err(ArenaError::InputTooLong(_)) = result {
             panic!("Exact limit should be allowed");
         }
 
         let too_long_input = "a".repeat(MAX_INPUT_LENGTH + 1);
-        let result = arena.throw_insult("any", &too_long_input);
+        let result = arena.throw_insult("any", too_long_input);
         assert!(matches!(result, Err(ArenaError::InputTooLong(_))));
     }
 
@@ -628,13 +628,13 @@ mod tests {
 
         // 1. Throw insult as Challenger (should work)
         let (outcome, _) = arena
-            .throw_insult(session, "You fight like a dairy farmer!")
+            .throw_insult(session, "You fight like a dairy farmer!".to_string())
             .unwrap();
         assert!(matches!(outcome, ArenaOutcome::InsultThrown { .. }));
 
         // 2. Respond as Defender (should work)
         let (outcome, _) = arena
-            .respond(session, "How appropriate. You fight like a cow!")
+            .respond(session, "How appropriate. You fight like a cow!".to_string())
             .unwrap();
         assert!(matches!(outcome, ArenaOutcome::ExchangeProcessed { .. }));
     }
