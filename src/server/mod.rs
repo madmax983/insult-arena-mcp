@@ -264,9 +264,12 @@ impl InsultServer {
     async fn handle_throw_insult(&self, session_id: String, insult: String) -> String {
         let mut arena = self.arena.lock().await;
 
-        match arena.throw_insult(&session_id, &insult) {
+        // ⚡ Bolt Optimization: Pass ownership of 'insult' to Arena to avoid allocation.
+        match arena.throw_insult(&session_id, insult) {
             Ok((outcome, view)) => {
-                info!("🗣️  INSULT: {:?}", insult);
+                if let crate::arena::ArenaOutcome::InsultThrown { ref insult } = outcome {
+                    info!("🗣️  INSULT: {:?}", insult);
+                }
                 drop(arena); // Release lock before broadcast
                 self.broadcast_turn_notification(&view).await;
 
@@ -284,7 +287,8 @@ impl InsultServer {
 
         info!("💬 COMEBACK ATTEMPT: {:?}", comeback);
 
-        match arena.respond(&session_id, &comeback) {
+        // ⚡ Bolt Optimization: Pass ownership of 'comeback' to Arena to avoid allocation.
+        match arena.respond(&session_id, comeback) {
             Ok((outcome, view)) => {
                 let message = Announcer::announce(&outcome, Some(&view));
                 info!("   Result: {}", message);
