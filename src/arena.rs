@@ -71,6 +71,56 @@ struct DuelSessions {
     defender: Option<String>,
 }
 
+impl DuelSessions {
+    fn register_challenger(&mut self, session_id: String) -> Result<Duelist, ArenaError> {
+        if session_id.len() > MAX_SESSION_ID_LENGTH {
+            return Err(ArenaError::SessionIdTooLong(MAX_SESSION_ID_LENGTH));
+        }
+
+        if self.challenger.is_some() {
+            return Err(ArenaError::RoleTaken("Challenger".to_string()));
+        }
+
+        self.challenger = Some(session_id);
+        Ok(Duelist::Challenger)
+    }
+
+    fn register_defender(&mut self, session_id: String) -> Result<Duelist, ArenaError> {
+        if session_id.len() > MAX_SESSION_ID_LENGTH {
+            return Err(ArenaError::SessionIdTooLong(MAX_SESSION_ID_LENGTH));
+        }
+
+        if self.defender.is_some() {
+            return Err(ArenaError::RoleTaken("Defender".to_string()));
+        }
+
+        self.defender = Some(session_id);
+        Ok(Duelist::Defender)
+    }
+
+    fn get_role(&self, session_id: &str) -> Option<Duelist> {
+        if self.challenger.as_deref() == Some(session_id) {
+            Some(Duelist::Challenger)
+        } else if self.defender.as_deref() == Some(session_id) {
+            Some(Duelist::Defender)
+        } else {
+            None
+        }
+    }
+
+    fn validate_turn(&self, actor: Duelist, session_id: &str) -> Result<(), ArenaError> {
+        let expected_session = match actor {
+            Duelist::Challenger => self.challenger.as_deref(),
+            Duelist::Defender => self.defender.as_deref(),
+        };
+
+        if expected_session.is_some_and(|expected| expected != session_id) {
+            return Err(ArenaError::NotYourTurn(actor.to_string()));
+        }
+        Ok(())
+    }
+}
+
 /// Serializable view of the duel state.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DuelStateView {
@@ -93,31 +143,35 @@ pub struct DuelStateView {
     pub winner: Option<String>,
 }
 
-pub fn duel_state_view(duel: &Duel) -> DuelStateView {
-    let (phase, next_to_act, winner) = match duel.state() {
-        DuelState::AwaitingInsult { attacker } => (
-            "awaiting_insult".to_string(),
-            Some(attacker.to_string()),
-            None,
-        ),
-        DuelState::AwaitingComeback { attacker } => (
-            "awaiting_comeback".to_string(),
-            Some(attacker.opponent().to_string()),
-            None,
-        ),
-        DuelState::Finished { winner } => ("finished".to_string(), None, Some(winner.to_string())),
-    };
+impl From<&Duel> for DuelStateView {
+    fn from(duel: &Duel) -> Self {
+        let (phase, next_to_act, winner) = match duel.state() {
+            DuelState::AwaitingInsult { attacker } => (
+                "awaiting_insult".to_string(),
+                Some(attacker.to_string()),
+                None,
+            ),
+            DuelState::AwaitingComeback { attacker } => (
+                "awaiting_comeback".to_string(),
+                Some(attacker.opponent().to_string()),
+                None,
+            ),
+            DuelState::Finished { winner } => {
+                ("finished".to_string(), None, Some(winner.to_string()))
+            }
+        };
 
-    let (challenger_score, defender_score) = duel.scores();
+        let (challenger_score, defender_score) = duel.scores();
 
-    DuelStateView {
-        phase,
-        next_to_act,
-        pending_insult: duel.pending_insult().map(String::from),
-        challenger_score,
-        defender_score,
-        wins_needed: duel.wins_needed(),
-        winner,
+        Self {
+            phase,
+            next_to_act,
+            pending_insult: duel.pending_insult().map(String::from),
+            challenger_score,
+            defender_score,
+            wins_needed: duel.wins_needed(),
+            winner,
+        }
     }
 }
 
@@ -151,7 +205,7 @@ impl Arena {
     /// ```
     pub fn start_duel(&mut self) -> (ArenaOutcome, DuelStateView) {
         let duel = Duel::new();
-        let view = duel_state_view(&duel);
+        let view = DuelStateView::from(&duel);
         self.duel = Some(duel);
 
         // Clear session registrations for new duel
@@ -184,23 +238,10 @@ impl Arena {
         &mut self,
         session_id: String,
     ) -> Result<(ArenaOutcome, Option<DuelStateView>), ArenaError> {
-        if session_id.len() > MAX_SESSION_ID_LENGTH {
-            return Err(ArenaError::SessionIdTooLong(MAX_SESSION_ID_LENGTH));
-        }
+        let role = self.sessions.register_challenger(session_id)?;
+        let state = self.duel.as_ref().map(DuelStateView::from);
 
-        if self.sessions.challenger.is_some() {
-            return Err(ArenaError::RoleTaken("Challenger".to_string()));
-        }
-
-        self.sessions.challenger = Some(session_id);
-        let state = self.duel.as_ref().map(duel_state_view);
-
-        Ok((
-            ArenaOutcome::RoleRegistered {
-                role: Duelist::Challenger,
-            },
-            state,
-        ))
+        Ok((ArenaOutcome::RoleRegistered { role }, state))
     }
 
     /// Register a session as the defender.
@@ -223,34 +264,15 @@ impl Arena {
         &mut self,
         session_id: String,
     ) -> Result<(ArenaOutcome, Option<DuelStateView>), ArenaError> {
-        if session_id.len() > MAX_SESSION_ID_LENGTH {
-            return Err(ArenaError::SessionIdTooLong(MAX_SESSION_ID_LENGTH));
-        }
+        let role = self.sessions.register_defender(session_id)?;
+        let state = self.duel.as_ref().map(DuelStateView::from);
 
-        if self.sessions.defender.is_some() {
-            return Err(ArenaError::RoleTaken("Defender".to_string()));
-        }
-
-        self.sessions.defender = Some(session_id);
-        let state = self.duel.as_ref().map(duel_state_view);
-
-        Ok((
-            ArenaOutcome::RoleRegistered {
-                role: Duelist::Defender,
-            },
-            state,
-        ))
+        Ok((ArenaOutcome::RoleRegistered { role }, state))
     }
 
     #[must_use]
     pub fn get_role_for_session(&self, session_id: &str) -> Option<Duelist> {
-        if self.sessions.challenger.as_deref() == Some(session_id) {
-            Some(Duelist::Challenger)
-        } else if self.sessions.defender.as_deref() == Some(session_id) {
-            Some(Duelist::Defender)
-        } else {
-            None
-        }
+        self.sessions.get_role(session_id)
     }
 
     /// Get the current state of the duel.
@@ -265,7 +287,7 @@ impl Arena {
             return Err(ArenaError::NoDuel);
         };
 
-        let view = duel_state_view(duel);
+        let view = DuelStateView::from(duel);
         let role = session_id.and_then(|id| self.get_role_for_session(id));
 
         Ok((view, role.map(|r| r.to_string())))
@@ -329,7 +351,7 @@ impl Arena {
 
         // Validate turn/role
         if let DuelState::AwaitingInsult { attacker } = duel.state() {
-            Self::validate_session_can_act(&self.sessions, attacker, session_id)?;
+            self.sessions.validate_turn(attacker, session_id)?;
         }
 
         // ⚡ Bolt Optimization: Avoid double allocation.
@@ -339,7 +361,7 @@ impl Arena {
 
         match duel.throw_insult(insult) {
             Ok(()) => {
-                let view = duel_state_view(duel);
+                let view = DuelStateView::from(&*duel);
                 Ok((
                     ArenaOutcome::InsultThrown {
                         insult: insult_clone,
@@ -396,35 +418,19 @@ impl Arena {
         // Validate turn/role
         if let DuelState::AwaitingComeback { attacker } = duel.state() {
             let defender = attacker.opponent();
-            Self::validate_session_can_act(&self.sessions, defender, session_id)?;
+            self.sessions.validate_turn(defender, session_id)?;
         }
 
         // ⚡ Bolt Optimization: Move 'comeback' directly to Duel.
         // Zero allocations here (was 1 from &str).
         match duel.respond(comeback) {
             Ok(exchange) => {
-                let view = duel_state_view(duel);
+                let view = DuelStateView::from(&*duel);
                 let outcome = ArenaOutcome::ExchangeProcessed { exchange };
                 Ok((outcome, view))
             }
             Err(e) => Err(ArenaError::from(e)),
         }
-    }
-
-    fn validate_session_can_act(
-        sessions: &DuelSessions,
-        actor: Duelist,
-        session_id: &str,
-    ) -> Result<(), ArenaError> {
-        let expected_session = match actor {
-            Duelist::Challenger => sessions.challenger.as_ref(),
-            Duelist::Defender => sessions.defender.as_ref(),
-        };
-
-        if expected_session.is_some_and(|expected| expected != session_id) {
-            return Err(ArenaError::NotYourTurn(actor.to_string()));
-        }
-        Ok(())
     }
 
     /// Get a hint for the current pending insult.
@@ -634,7 +640,10 @@ mod tests {
 
         // 2. Respond as Defender (should work)
         let (outcome, _) = arena
-            .respond(session, "How appropriate. You fight like a cow!".to_string())
+            .respond(
+                session,
+                "How appropriate. You fight like a cow!".to_string(),
+            )
             .unwrap();
         assert!(matches!(outcome, ArenaOutcome::ExchangeProcessed { .. }));
     }
