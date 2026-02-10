@@ -1,5 +1,5 @@
-use insult_arena_mcp::{Arena, ArenaOutcome, Duelist};
 use insult_arena_mcp::arena::ArenaError;
+use insult_arena_mcp::{Arena, ArenaOutcome, Duelist};
 
 #[test]
 #[allow(clippy::unwrap_used)]
@@ -14,7 +14,9 @@ fn test_unrestricted_game_reset_dos() {
     arena.register_challenger("alice".to_string()).unwrap();
     arena.register_defender("bob".to_string()).unwrap();
 
-    arena.throw_insult("alice", "You fight like a dairy farmer!".to_string()).unwrap();
+    arena
+        .throw_insult("alice", "You fight like a dairy farmer!".to_string())
+        .unwrap();
 
     // Verify state is "mid-game"
     let (view, _) = arena.get_duel_state(None).unwrap();
@@ -25,7 +27,10 @@ fn test_unrestricted_game_reset_dos() {
     let result = arena.start_duel();
 
     // 4. Verify the defense: Game state is PROTECTED!
-    assert!(result.is_err(), "start_duel should fail when a game is in progress");
+    assert!(
+        result.is_err(),
+        "start_duel should fail when a game is in progress"
+    );
     assert_eq!(result.unwrap_err(), ArenaError::DuelInProgress);
 
     // 5. Verify state is STILL "mid-game"
@@ -34,5 +39,8 @@ fn test_unrestricted_game_reset_dos() {
 
     // 6. Verify players are NOT kicked
     let (_, _role) = arena.get_duel_state(Some("alice")).unwrap();
-    assert!(matches!(arena.get_role_for_session("alice"), Some(Duelist::Challenger)));
+    assert!(matches!(
+        arena.get_role_for_session("alice"),
+        Some(Duelist::Challenger)
+    ));
 }
