@@ -1,3 +1,5 @@
-**[Zero-allocation string normalization]**
-**Learning:** When normalizing strings (e.g. for case-insensitive comparison), prefer iterators (`chars().flat_map(char::to_lowercase)`) over allocating new `String`s (`collect().to_lowercase()`). This avoids O(N) heap allocations in hot loops.
-**Action:** Check string normalization logic in hot paths and refactor to use iterator chains.
+# Bolt's Journal
+
+**[Stack Buffering for Search]**
+**Learning:** Zero-allocation via lazy iterators can introduce hidden CPU costs (O(N*M) instead of O(M)) if normalization logic is re-executed inside hot loops.
+**Action:** When optimizing small, frequent string operations, prefer stack-based buffers (like `[char; 256]`) to store normalized data. This avoids heap allocation *and* repeated computation, providing the best of both worlds.
