@@ -583,7 +583,10 @@ mod tests {
 
         // 2. Respond as Defender (should work)
         let (outcome, _) = arena
-            .respond(session, "How appropriate. You fight like a cow!".to_string())
+            .respond(
+                session,
+                "How appropriate. You fight like a cow!".to_string(),
+            )
             .unwrap();
         assert!(matches!(outcome, ArenaOutcome::ExchangeProcessed { .. }));
     }
