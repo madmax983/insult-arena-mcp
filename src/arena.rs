@@ -9,7 +9,7 @@
 //! let mut arena = Arena::new();
 //!
 //! // 2. Start a new duel
-//! let (outcome, view) = arena.start_duel();
+//! let (outcome, view) = arena.start_duel().unwrap();
 //! assert_eq!(view.phase, "awaiting_insult");
 //!
 //! // 3. Register players
@@ -59,6 +59,8 @@ pub enum ArenaError {
     NoPendingInsult,
     #[error("Could not find comeback for this insult.")]
     ComebackNotFound,
+    #[error("A duel is already in progress. Wait for it to finish!")]
+    DuelInProgress,
     #[error(transparent)]
     DuelError(#[from] InsultError),
 }
@@ -209,12 +211,19 @@ impl Arena {
     /// use insult_arena_mcp::{Arena, ArenaOutcome};
     ///
     /// let mut arena = Arena::new();
-    /// let (outcome, view) = arena.start_duel();
+    /// let (outcome, view) = arena.start_duel().unwrap();
     ///
     /// assert_eq!(outcome, ArenaOutcome::DuelStarted);
     /// assert_eq!(view.phase, "awaiting_insult");
     /// ```
-    pub fn start_duel(&mut self) -> (ArenaOutcome, DuelStateView) {
+    ///
+    /// # Errors
+    /// Returns error if a duel is already in progress and not finished.
+    pub fn start_duel(&mut self) -> Result<(ArenaOutcome, DuelStateView), ArenaError> {
+        if self.duel.as_ref().is_some_and(|duel| !duel.is_finished()) {
+            return Err(ArenaError::DuelInProgress);
+        }
+
         let duel = Duel::new();
         let view = DuelStateView::from(&duel);
         self.duel = Some(duel);
@@ -222,7 +231,7 @@ impl Arena {
         // Clear session registrations for new duel
         self.sessions = DuelSessions::default();
 
-        (ArenaOutcome::DuelStarted, view)
+        Ok((ArenaOutcome::DuelStarted, view))
     }
 
     /// Register a session as the challenger.
@@ -481,7 +490,7 @@ mod tests {
     #[test]
     fn start_duel_creates_new_game() {
         let mut arena = Arena::new();
-        let (outcome, view) = arena.start_duel();
+        let (outcome, view) = arena.start_duel().unwrap();
         assert!(matches!(outcome, ArenaOutcome::DuelStarted));
         assert_eq!(view.phase, "awaiting_insult");
     }
@@ -496,7 +505,7 @@ mod tests {
     #[test]
     fn list_insults_returns_all_insults() {
         let mut arena = Arena::new();
-        arena.start_duel();
+        arena.start_duel().unwrap();
         let insults = arena.list_insults().unwrap();
         assert!(insults.iter().any(|&s| s.contains("dairy farmer")));
     }
@@ -504,7 +513,7 @@ mod tests {
     #[test]
     fn full_exchange_flow() {
         let mut arena = Arena::new();
-        arena.start_duel();
+        arena.start_duel().unwrap();
 
         // Throw insult
         let (outcome, view) = arena
@@ -549,7 +558,7 @@ mod tests {
     #[test]
     fn rejects_excessive_input_length() {
         let mut arena = Arena::new();
-        arena.start_duel();
+        arena.start_duel().unwrap();
 
         let long_string = "a".repeat(5000);
         let result = arena.throw_insult("p1", long_string.clone());
@@ -575,7 +584,7 @@ mod tests {
     #[test]
     fn boundary_check_limits() {
         let mut arena = Arena::new();
-        arena.start_duel();
+        arena.start_duel().unwrap();
 
         // Exact limit should pass (Session ID)
         let max_id = "s".repeat(MAX_SESSION_ID_LENGTH);
@@ -604,7 +613,7 @@ mod tests {
         // Wait, start_duel was called. And no sessions registered (except the one we just did).
         // Let's reset arena to be clean.
         let mut arena = Arena::new();
-        arena.start_duel();
+        arena.start_duel().unwrap();
 
         let max_input = "a".repeat(MAX_INPUT_LENGTH);
         let result = arena.throw_insult("any", max_input);
@@ -641,7 +650,7 @@ mod tests {
         // But turn enforcement uses:
         // match attacker { Challenger => self.sessions.challenger == session, ... }
 
-        arena.start_duel();
+        arena.start_duel().unwrap();
 
         // 1. Throw insult as Challenger (should work)
         let (outcome, _) = arena
@@ -662,7 +671,7 @@ mod tests {
     #[test]
     fn beggar_manners_insult_exchange_works() {
         let mut arena = Arena::new();
-        arena.start_duel();
+        arena.start_duel().unwrap();
 
         // Throw "beggar manners" insult
         let (_, view) = arena
@@ -697,7 +706,7 @@ mod tests {
     #[test]
     fn state_mismatch_errors_are_reported() {
         let mut arena = Arena::new();
-        arena.start_duel();
+        arena.start_duel().unwrap();
 
         // 1. Throw insult -> OK
         arena
@@ -727,7 +736,7 @@ mod tests {
     #[test]
     fn actions_after_duel_finished_return_error() {
         let mut arena = Arena::new();
-        arena.start_duel();
+        arena.start_duel().unwrap();
 
         // Win the duel (Challenger wins 3 times)
         for _ in 0..3 {
@@ -759,7 +768,7 @@ mod tests {
     #[test]
     fn test_turn_enforcement_and_role_protection() {
         let mut arena = Arena::new();
-        arena.start_duel();
+        arena.start_duel().unwrap();
 
         // Register roles
         arena.register_challenger("alice".to_string()).unwrap();

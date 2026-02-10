@@ -4,7 +4,7 @@ use insult_arena_mcp::{Announcer, Arena, ArenaOutcome};
 #[allow(clippy::unwrap_used)]
 fn full_duel_integration_with_match_point() {
     let mut arena = Arena::new();
-    let (outcome, view) = arena.start_duel();
+    let (outcome, view) = arena.start_duel().unwrap();
     assert_eq!(view.phase, "awaiting_insult");
     assert!(matches!(outcome, ArenaOutcome::DuelStarted));
 
