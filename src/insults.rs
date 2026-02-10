@@ -115,6 +115,7 @@ fn normalized_eq(a: &str, b: &str) -> bool {
 /// Used only for testing.
 #[cfg(test)]
 fn contains_ignore_case(haystack: &str, needle: &str) -> bool {
+    // For tests, heap allocation is acceptable to keep test code simple
     let needle_chars: Vec<char> = needle.chars().flat_map(char::to_lowercase).collect();
     contains_ignore_case_char_slice(haystack, &needle_chars)
 }
@@ -270,16 +271,33 @@ impl InsultBank {
     /// ```
     #[must_use]
     pub fn search_insults(&self, query: &str) -> Vec<&InsultPair> {
-        // Hardening: Limit query length to prevent DoS via massive allocation.
-        // We take the first MAX_SEARCH_QUERY_LENGTH chars.
-        let query_chars: Vec<char> = query
+        // ⚡ Bolt Optimization: Zero-allocation search using stack buffer!
+        // Avoiding Vec<char> heap allocation (O(1) alloc) while preserving
+        // O(M) normalization cost (vs O(H*M) with lazy iterator).
+
+        // Fixed-size stack buffer sufficient for max query length (128) + expansion.
+        // 256 chars = 1KB stack usage, well within safe limits.
+        const BUFFER_SIZE: usize = 256;
+        let mut buffer = ['\0'; BUFFER_SIZE];
+        let mut len = 0;
+
+        for c in query
             .chars()
             .take(MAX_SEARCH_QUERY_LENGTH)
             .flat_map(char::to_lowercase)
-            .collect();
+        {
+            if len < BUFFER_SIZE {
+                buffer[len] = c;
+                len += 1;
+            } else {
+                break;
+            }
+        }
+        let query_chars = &buffer[..len];
+
         self.pairs
             .iter()
-            .filter(|pair| contains_ignore_case_char_slice(pair.insult, &query_chars))
+            .filter(|pair| contains_ignore_case_char_slice(pair.insult, query_chars))
             .collect()
     }
 
