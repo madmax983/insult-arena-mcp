@@ -189,16 +189,14 @@ impl InsultServer {
             Ok((outcome, state)) => {
                 info!("🎭 Session {:?} registered as Challenger", session);
                 state.map_or_else(
-                    || {
-                        DuelResponse {
-                            success: true,
-                            message: Announcer::announce(&outcome, None),
-                            state: None,
-                            your_role: Some("Challenger".to_string()),
-                            insults: None,
-                            hint: None,
-                            insult: None,
-                        }
+                    || DuelResponse {
+                        success: true,
+                        message: Announcer::announce(&outcome, None),
+                        state: None,
+                        your_role: Some("Challenger".to_string()),
+                        insults: None,
+                        hint: None,
+                        insult: None,
                     },
                     |state| {
                         DuelResponse::success_with_role(
@@ -221,16 +219,14 @@ impl InsultServer {
             Ok((outcome, state)) => {
                 info!("🎭 Session {:?} registered as Defender", session);
                 state.map_or_else(
-                    || {
-                        DuelResponse {
-                            success: true,
-                            message: Announcer::announce(&outcome, None),
-                            state: None,
-                            your_role: Some("Defender".to_string()),
-                            insults: None,
-                            hint: None,
-                            insult: None,
-                        }
+                    || DuelResponse {
+                        success: true,
+                        message: Announcer::announce(&outcome, None),
+                        state: None,
+                        your_role: Some("Defender".to_string()),
+                        insults: None,
+                        hint: None,
+                        insult: None,
                     },
                     |state| {
                         DuelResponse::success_with_role(
