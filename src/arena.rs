@@ -29,7 +29,15 @@
 use crate::duel::{Duel, DuelState, Duelist, InsultError};
 use serde::{Deserialize, Serialize};
 
+/// Maximum length of any user input string (insults, comebacks).
+///
+/// This limit prevents Denial of Service (`DoS`) attacks via memory exhaustion.
 pub const MAX_INPUT_LENGTH: usize = 1024;
+
+/// Maximum length of a session ID string.
+///
+/// This limit prevents Denial of Service (`DoS`) attacks where malicious clients
+/// send excessively long session IDs.
 pub const MAX_SESSION_ID_LENGTH: usize = 128;
 
 /// Errors that can occur in the Arena.
@@ -65,6 +73,9 @@ pub enum ArenaOutcome {
 }
 
 /// Tracks which session is playing which role.
+///
+/// This internal struct maps the abstract roles ([`Duelist::Challenger`] and [`Duelist::Defender`])
+/// to concrete session IDs provided by the MCP runtime.
 #[derive(Debug, Default)]
 struct DuelSessions {
     challenger: Option<String>,
