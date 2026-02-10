@@ -37,6 +37,15 @@ pub struct DuelResponse {
     /// Your role in this duel (if registered).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub your_role: Option<String>,
+    /// List of available insults (for `list_insults`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub insults: Option<Vec<String>>,
+    /// Hint for the current comeback (for `get_hint`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hint: Option<String>,
+    /// The pending insult (for `get_hint`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub insult: Option<String>,
 }
 
 impl DuelResponse {
@@ -46,6 +55,9 @@ impl DuelResponse {
             message: message.into(),
             state: Some(state),
             your_role: None,
+            insults: None,
+            hint: None,
+            insult: None,
         }
     }
 
@@ -55,6 +67,9 @@ impl DuelResponse {
             message: message.into(),
             state: Some(state),
             your_role: Some(role.to_string()),
+            insults: None,
+            hint: None,
+            insult: None,
         }
     }
 
@@ -64,6 +79,33 @@ impl DuelResponse {
             message: message.into(),
             state: None,
             your_role: None,
+            insults: None,
+            hint: None,
+            insult: None,
+        }
+    }
+
+    pub fn with_insults(message: impl Into<String>, insults: Vec<String>) -> Self {
+        Self {
+            success: true,
+            message: message.into(),
+            state: None,
+            your_role: None,
+            insults: Some(insults),
+            hint: None,
+            insult: None,
+        }
+    }
+
+    pub fn with_hint(message: impl Into<String>, hint: String, insult: String) -> Self {
+        Self {
+            success: true,
+            message: message.into(),
+            state: None,
+            your_role: None,
+            insults: None,
+            hint: Some(hint),
+            insult: Some(insult),
         }
     }
 

@@ -25,30 +25,17 @@
 //! }
 //! ```
 
-use rust_mcp_sdk::schema::{Tool, ToolInputSchema};
+use rust_mcp_sdk::schema::schema_utils::CallToolError;
+use rust_mcp_sdk::schema::{CallToolRequestParams, Tool, ToolInputSchema};
 use serde_json::json;
 use std::collections::HashMap;
 
 /// Helper to create an empty input schema (for tools with no arguments).
-///
-/// # Examples
-///
-/// ```rust,ignore
-/// let schema = empty_input_schema();
-/// assert!(schema.properties.is_none());
-/// ```
 pub fn empty_input_schema() -> ToolInputSchema {
     ToolInputSchema::new(vec![], None, None)
 }
 
 /// Helper to create an input schema with a single required string parameter.
-///
-/// # Examples
-///
-/// ```rust,ignore
-/// let schema = string_param_schema("insult", "The insult text");
-/// assert!(schema.properties.unwrap().contains_key("insult"));
-/// ```
 pub fn string_param_schema(name: &str, description: &str) -> ToolInputSchema {
     let mut props = HashMap::new();
     let mut prop_map = serde_json::Map::new();
@@ -59,9 +46,78 @@ pub fn string_param_schema(name: &str, description: &str) -> ToolInputSchema {
     ToolInputSchema::new(vec![name.to_string()], Some(props), None)
 }
 
+/// Represents a parsed and validated tool action.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ToolAction {
+    StartDuel,
+    RegisterChallenger,
+    RegisterDefender,
+    GetDuelState,
+    ListInsults,
+    ThrowInsult { insult: String },
+    Respond { comeback: String },
+    GetHint,
+}
+
+impl TryFrom<CallToolRequestParams> for ToolAction {
+    type Error = CallToolError;
+
+    fn try_from(params: CallToolRequestParams) -> Result<Self, Self::Error> {
+        match params.name.as_str() {
+            "start_duel" => Ok(Self::StartDuel),
+            "register_as_challenger" => Ok(Self::RegisterChallenger),
+            "register_as_defender" => Ok(Self::RegisterDefender),
+            "get_duel_state" => Ok(Self::GetDuelState),
+            "list_insults" => Ok(Self::ListInsults),
+            "throw_insult" => {
+                let args = params.arguments.unwrap_or_default();
+                let insult_str = args
+                    .get("insult")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+
+                if insult_str.len() > crate::arena::MAX_INPUT_LENGTH {
+                    return Err(CallToolError::invalid_arguments(
+                        &params.name,
+                        Some(format!(
+                            "Insult too long (max {} chars)",
+                            crate::arena::MAX_INPUT_LENGTH
+                        )),
+                    ));
+                }
+
+                Ok(Self::ThrowInsult { insult: insult_str })
+            }
+            "respond" => {
+                let args = params.arguments.unwrap_or_default();
+                let comeback_str = args
+                    .get("comeback")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+
+                if comeback_str.len() > crate::arena::MAX_INPUT_LENGTH {
+                    return Err(CallToolError::invalid_arguments(
+                        &params.name,
+                        Some(format!(
+                            "Comeback too long (max {} chars)",
+                            crate::arena::MAX_INPUT_LENGTH
+                        )),
+                    ));
+                }
+
+                Ok(Self::Respond {
+                    comeback: comeback_str,
+                })
+            }
+            "get_hint" => Ok(Self::GetHint),
+            _ => Err(CallToolError::unknown_tool(&params.name)),
+        }
+    }
+}
+
 /// Tool: `start_duel`
-///
-/// Starts a new duel, resetting the state and waiting for registrations.
 pub fn tool_start_duel() -> Tool {
     Tool {
         name: "start_duel".to_string(),
@@ -77,8 +133,6 @@ pub fn tool_start_duel() -> Tool {
 }
 
 /// Tool: `register_as_challenger`
-///
-/// Registers the calling session as the Challenger.
 pub fn tool_register_as_challenger() -> Tool {
     Tool {
         name: "register_as_challenger".to_string(),
@@ -96,8 +150,6 @@ pub fn tool_register_as_challenger() -> Tool {
 }
 
 /// Tool: `register_as_defender`
-///
-/// Registers the calling session as the Defender.
 pub fn tool_register_as_defender() -> Tool {
     Tool {
         name: "register_as_defender".to_string(),
@@ -116,8 +168,6 @@ pub fn tool_register_as_defender() -> Tool {
 }
 
 /// Tool: `get_duel_state`
-///
-/// Returns the full state of the current duel.
 pub fn tool_get_duel_state() -> Tool {
     Tool {
         name: "get_duel_state".to_string(),
@@ -133,8 +183,6 @@ pub fn tool_get_duel_state() -> Tool {
 }
 
 /// Tool: `list_insults`
-///
-/// Returns a list of all valid insults in the bank.
 pub fn tool_list_insults() -> Tool {
     Tool {
         name: "list_insults".to_string(),
@@ -150,8 +198,6 @@ pub fn tool_list_insults() -> Tool {
 }
 
 /// Tool: `throw_insult`
-///
-/// The action for the attacker to use an insult.
 pub fn tool_throw_insult() -> Tool {
     Tool {
         name: "throw_insult".to_string(),
@@ -167,8 +213,6 @@ pub fn tool_throw_insult() -> Tool {
 }
 
 /// Tool: `respond`
-///
-/// The action for the defender to reply with a comeback.
 pub fn tool_respond() -> Tool {
     Tool {
         name: "respond".to_string(),
@@ -184,8 +228,6 @@ pub fn tool_respond() -> Tool {
 }
 
 /// Tool: `get_hint`
-///
-/// Returns a masked hint for the current required comeback.
 pub fn tool_get_hint() -> Tool {
     Tool {
         name: "get_hint".to_string(),
