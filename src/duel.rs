@@ -319,30 +319,29 @@ impl Duel {
         attacker: Duelist,
         defender: Duelist,
     ) -> (ExchangeResult, Duelist) {
-        let is_correct = self
+        if self
             .insult_bank
             .check_comeback(&insult, &comeback)
-            .is_some();
-
-        if is_correct {
+            .is_some()
+        {
             // Successful parry! Defender wins exchange and becomes attacker.
-            (ExchangeResult::Parried { insult, comeback }, defender)
-        } else {
-            // Failed comeback. Attacker wins exchange.
-            let correct = self
-                .insult_bank
-                .find_comeback(&insult)
-                .unwrap_or("???")
-                .to_string();
-            (
-                ExchangeResult::Failed {
-                    insult,
-                    attempt: comeback,
-                    correct,
-                },
-                attacker,
-            )
+            return (ExchangeResult::Parried { insult, comeback }, defender);
         }
+
+        // Failed comeback. Attacker wins exchange.
+        let correct = self
+            .insult_bank
+            .find_comeback(&insult)
+            .unwrap_or("???")
+            .to_string();
+        (
+            ExchangeResult::Failed {
+                insult,
+                attempt: comeback,
+                correct,
+            },
+            attacker,
+        )
     }
 
     const fn update_scores(&mut self, winner: Duelist) {
