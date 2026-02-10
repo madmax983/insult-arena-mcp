@@ -4,6 +4,65 @@
 //! Each tool corresponds to an action the AI can take in the game, such as
 //! starting a duel, throwing an insult, or responding with a comeback.
 //!
+//! # Tool Usage Guide
+//!
+//! Clients interact with the game by calling these tools via JSON-RPC.
+//!
+//! ## 1. Start a Duel
+//!
+//! To begin, one client calls `start_duel`.
+//!
+//! ```json
+//! // Request
+//! {
+//!   "jsonrpc": "2.0",
+//!   "id": 1,
+//!   "method": "tools/call",
+//!   "params": {
+//!     "name": "start_duel",
+//!     "arguments": {}
+//!   }
+//! }
+//! ```
+//!
+//! ## 2. Throw an Insult
+//!
+//! The Challenger throws an insult using `throw_insult`.
+//!
+//! ```json
+//! // Request
+//! {
+//!   "jsonrpc": "2.0",
+//!   "id": 2,
+//!   "method": "tools/call",
+//!   "params": {
+//!     "name": "throw_insult",
+//!     "arguments": {
+//!       "insult": "You fight like a dairy farmer!"
+//!     }
+//!   }
+//! }
+//! ```
+//!
+//! ## 3. Respond with a Comeback
+//!
+//! The Defender responds using `respond`.
+//!
+//! ```json
+//! // Request
+//! {
+//!   "jsonrpc": "2.0",
+//!   "id": 3,
+//!   "method": "tools/call",
+//!   "params": {
+//!     "name": "respond",
+//!     "arguments": {
+//!       "comeback": "How appropriate. You fight like a cow!"
+//!     }
+//!   }
+//! }
+//! ```
+//!
 //! # Schema Examples
 //!
 //! The `throw_insult` tool appears to the LLM like this:

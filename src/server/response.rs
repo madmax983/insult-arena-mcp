@@ -14,8 +14,9 @@ use serde::{Deserialize, Serialize};
 ///     challenger_score: 0,
 ///     defender_score: 0,
 ///     wins_needed: 3,
-///     // ... other fields
-///     # next_to_act: None, pending_insult: None, winner: None
+///     next_to_act: None,
+///     pending_insult: None,
+///     winner: None
 /// };
 ///
 /// let response = DuelResponse::success("Duel started!", view);
@@ -40,6 +41,7 @@ pub struct DuelResponse {
 }
 
 impl DuelResponse {
+    /// Creates a success response with the current duel state.
     pub fn success(message: impl Into<String>, state: DuelStateView) -> Self {
         Self {
             success: true,
@@ -49,6 +51,7 @@ impl DuelResponse {
         }
     }
 
+    /// Creates a success response that also includes the user's role.
     pub fn success_with_role(message: impl Into<String>, state: DuelStateView, role: &str) -> Self {
         Self {
             success: true,
@@ -58,6 +61,7 @@ impl DuelResponse {
         }
     }
 
+    /// Creates an error response.
     pub fn error(message: impl Into<String>) -> Self {
         Self {
             success: false,
@@ -67,6 +71,9 @@ impl DuelResponse {
         }
     }
 
+    /// Serializes the response to a JSON string.
+    ///
+    /// Returns an error message string if serialization fails (which should be rare).
     #[must_use]
     pub fn to_json(&self) -> String {
         serde_json::to_string_pretty(self)
