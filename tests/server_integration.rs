@@ -1,4 +1,6 @@
+use async_trait::async_trait;
 use insult_arena_mcp::InsultServer;
+use rust_mcp_sdk::McpServer;
 use rust_mcp_sdk::auth::AuthInfo;
 use rust_mcp_sdk::error::McpSdkError;
 use rust_mcp_sdk::mcp_server::ServerHandler;
@@ -8,11 +10,9 @@ use rust_mcp_sdk::schema::{
     ResultFromServer, ServerJsonrpcRequest, ServerMessage,
 };
 use rust_mcp_sdk::task_store::TaskStore;
-use rust_mcp_sdk::McpServer;
 use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
-use async_trait::async_trait;
 
 struct MockMcpServer {
     session_id: Option<String>,
@@ -82,6 +82,8 @@ impl McpServer for MockMcpServer {
     }
 }
 
+#[allow(clippy::unwrap_used)]
+#[allow(clippy::expect_used)]
 async fn call_tool(
     server: &InsultServer,
     session_id: &str,
@@ -112,6 +114,7 @@ async fn call_tool(
 }
 
 #[tokio::test]
+#[allow(clippy::unwrap_used)]
 async fn test_full_game_loop() {
     let server = InsultServer::new();
 
@@ -149,13 +152,7 @@ async fn test_full_game_loop() {
 
     // 6. Bob responds correctly
     let comeback = "How appropriate. You fight like a cow!";
-    let result = call_tool(
-        &server,
-        "Bob",
-        "respond",
-        json!({ "comeback": comeback }),
-    )
-    .await;
+    let result = call_tool(&server, "Bob", "respond", json!({ "comeback": comeback })).await;
     let text = format!("{:?}", result.content[0]);
     assert!(text.contains("success"));
     assert!(text.contains("TOUCHÉ"));
@@ -164,13 +161,7 @@ async fn test_full_game_loop() {
 
     // 7. Bob is now attacker. Throw insult.
     let insult = "You have the manners of a beggar.";
-    let result = call_tool(
-        &server,
-        "Bob",
-        "throw_insult",
-        json!({ "insult": insult }),
-    )
-    .await;
+    let result = call_tool(&server, "Bob", "throw_insult", json!({ "insult": insult })).await;
     assert!(format!("{:?}", result.content[0]).contains("success"));
 
     // 8. Alice responds incorrectly
@@ -191,11 +182,12 @@ async fn test_full_game_loop() {
     let result = call_tool(&server, "Alice", "get_duel_state", json!({})).await;
     let text = format!("{:?}", result.content[0]);
     // Relaxed check for debug string format
-    assert!(text.contains("challenger_score") && text.contains("0"));
-    assert!(text.contains("defender_score") && text.contains("2"));
+    assert!(text.contains("challenger_score") && text.contains('0'));
+    assert!(text.contains("defender_score") && text.contains('2'));
 }
 
 #[tokio::test]
+#[allow(clippy::unwrap_used)]
 async fn test_concurrent_turns() {
     let server = Arc::new(InsultServer::new());
 
@@ -248,26 +240,25 @@ async fn test_concurrent_turns() {
     let text2 = format!("{:?}", res2.content[0]);
 
     // Alice's attempt should fail (Waiting for comeback / Not your turn)
-    assert!(text1.contains("Waiting for a comeback") || text1.contains("error") || text1.contains("success\": false"));
+    assert!(
+        text1.contains("Waiting for a comeback")
+            || text1.contains("error")
+            || text1.contains("success\": false")
+    );
 
     // Bob's attempt should succeed
     assert!(text2.contains("success") && text2.contains("true"));
 }
 
 #[tokio::test]
+#[allow(clippy::unwrap_used)]
 async fn test_error_handling() {
     let server = InsultServer::new();
     call_tool(&server, "any", "start_duel", json!({})).await;
     call_tool(&server, "Alice", "register_as_challenger", json!({})).await;
 
     // Empty insult
-    let result = call_tool(
-        &server,
-        "Alice",
-        "throw_insult",
-        json!({ "insult": "" }),
-    )
-    .await;
+    let result = call_tool(&server, "Alice", "throw_insult", json!({ "insult": "" })).await;
     let text = format!("{:?}", result.content[0]);
     // Empty insult is "unknown"
     assert!(text.contains("Unknown insult") || text.contains("error"));
