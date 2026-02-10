@@ -1,15 +1,6 @@
 //! Classic insult/response pairs from the Monkey Island series.
 
-use serde::{Deserialize, Serialize};
-
-/// A matched insult and comeback pair.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct InsultPair {
-    /// The insult thrown by the attacker.
-    pub insult: &'static str,
-    /// The correct comeback that defeats the insult.
-    pub comeback: &'static str,
-}
+pub use crate::model::InsultPair;
 
 const MAX_SEARCH_QUERY_LENGTH: usize = 128;
 
