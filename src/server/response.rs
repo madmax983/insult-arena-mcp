@@ -1,4 +1,4 @@
-use crate::arena::DuelStateView;
+use crate::duel::DuelStateView;
 use serde::{Deserialize, Serialize};
 
 /// Response from the arena/server.

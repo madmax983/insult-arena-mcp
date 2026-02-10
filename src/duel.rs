@@ -128,6 +128,60 @@ pub struct DuelResult {
     pub exchanges: Vec<Exchange>,
 }
 
+/// Serializable view of the duel state.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DuelStateView {
+    /// Current phase of the duel.
+    pub phase: String,
+    /// Who should act next (if applicable).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_to_act: Option<String>,
+    /// The pending insult waiting for a comeback.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pending_insult: Option<String>,
+    /// Challenger's score.
+    pub challenger_score: u8,
+    /// Defender's score.
+    pub defender_score: u8,
+    /// Wins needed to win the duel.
+    pub wins_needed: u8,
+    /// The winner (if duel is over).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub winner: Option<String>,
+}
+
+impl From<&Duel> for DuelStateView {
+    fn from(duel: &Duel) -> Self {
+        let (phase, next_to_act, winner) = match duel.state() {
+            DuelState::AwaitingInsult { attacker } => (
+                "awaiting_insult".to_string(),
+                Some(attacker.to_string()),
+                None,
+            ),
+            DuelState::AwaitingComeback { attacker } => (
+                "awaiting_comeback".to_string(),
+                Some(attacker.opponent().to_string()),
+                None,
+            ),
+            DuelState::Finished { winner } => {
+                ("finished".to_string(), None, Some(winner.to_string()))
+            }
+        };
+
+        let (challenger_score, defender_score) = duel.scores();
+
+        Self {
+            phase,
+            next_to_act,
+            pending_insult: duel.pending_insult().map(String::from),
+            challenger_score,
+            defender_score,
+            wins_needed: duel.wins_needed(),
+            winner,
+        }
+    }
+}
+
 /// A sword fighting duel between two opponents.
 #[derive(Debug, Clone)]
 pub struct Duel {
