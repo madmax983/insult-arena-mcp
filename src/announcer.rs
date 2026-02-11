@@ -22,30 +22,42 @@ impl Announcer {
     ///
     /// # Arguments
     ///
-    /// * `outcome` - The event that just occurred.
+    /// * `outcome` - The event that just occurred ([`ArenaOutcome`]).
     /// * `view` - The current state of the duel (required for score-related announcements).
+    ///
+    /// # Logic
+    ///
+    /// The announcer adapts the message based on the game state:
+    ///
+    /// 1. **Match Point**: If a player is one point away from winning (`wins_needed - 1`),
+    ///    it appends a "MATCH POINT!" warning to heighten tension.
+    /// 2. **Victory**: Checks if the duel is finished to distinguish between "winning an exchange"
+    ///    and "winning the duel".
+    /// 3. **Roles**: Provides role-specific welcome messages when players register.
     ///
     /// # Examples
     ///
     /// ```
     /// use insult_arena_mcp::{Announcer, ArenaOutcome, Duelist};
     ///
-    /// // Duel started
+    /// // 1. Duel Start
     /// let msg = Announcer::announce(&ArenaOutcome::DuelStarted, None);
     /// assert!(msg.contains("En garde"));
     ///
-    /// // Insult thrown
+    /// // 2. Player Registration
+    /// let msg = Announcer::announce(
+    ///     &ArenaOutcome::RoleRegistered { role: Duelist::Challenger },
+    ///     None
+    /// );
+    /// assert!(msg.contains("You are the CHALLENGER"));
+    ///
+    /// // 3. Insult Thrown
     /// let msg = Announcer::announce(
     ///     &ArenaOutcome::InsultThrown { insult: "You fight like a dairy farmer!".into() },
     ///     None
     /// );
     /// assert!(msg.contains("You bellow"));
     /// ```
-    ///
-    /// # Logic
-    ///
-    /// - Detects "Match Point" situations (score is `wins_needed - 1`) and adds tension text.
-    /// - Distinguishes between winning an exchange vs winning the entire duel.
     #[must_use]
     pub fn announce(outcome: &ArenaOutcome, view: Option<&DuelStateView>) -> String {
         let mut f = String::new();
