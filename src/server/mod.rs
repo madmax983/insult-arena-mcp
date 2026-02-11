@@ -111,7 +111,7 @@ impl InsultServer {
     ///
     /// This method spawns a new Tokio task for each connected session to ensure
     /// that a slow or unresponsive client does not block the entire server or
-    /// delay notifications to other players (DoS protection).
+    /// delay notifications to other players (`DoS` protection).
     async fn broadcast_turn_notification(&self, state: &DuelStateView) {
         let runtime_guard: tokio::sync::RwLockReadGuard<'_, Option<Arc<HyperRuntime>>> =
             self.runtime.read().await;
