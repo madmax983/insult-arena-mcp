@@ -25,11 +25,11 @@
 //!
 //! ## Example
 //!
-//! ```rust,ignore
+//! ```rust
 //! use insult_arena_mcp::InsultServer;
 //!
+//! // Create a new server instance (starts with no active duel)
 //! let server = InsultServer::new();
-//! // Server implements MCP's ServerHandler trait
 //! ```
 
 pub mod announcer;

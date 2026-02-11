@@ -106,15 +106,32 @@ pub fn string_param_schema(name: &str, description: &str) -> ToolInputSchema {
 }
 
 /// Represents a parsed and validated tool action.
+///
+/// This enum encapsulates the intent of a client's tool call.
+/// It is constructed by parsing `CallToolRequestParams`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolAction {
+    /// Start a new duel.
     StartDuel,
+    /// Register as the Challenger (attacks first).
     RegisterChallenger,
+    /// Register as the Defender (responds to insults).
     RegisterDefender,
+    /// Check the current game state.
     GetDuelState,
+    /// List all valid insults.
     ListInsults,
-    ThrowInsult { insult: String },
-    Respond { comeback: String },
+    /// Throw a specific insult.
+    ThrowInsult {
+        /// The insult string to throw.
+        insult: String,
+    },
+    /// Respond with a comeback.
+    Respond {
+        /// The comeback string to use.
+        comeback: String,
+    },
+    /// Get a hint for the current pending insult.
     GetHint,
 }
 

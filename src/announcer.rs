@@ -1,12 +1,28 @@
 //! Text generation for game events.
 //!
-//! The [`Announcer`] is a stateless formatter that converts internal game events
-//! (like [`ArenaOutcome`]) into human-readable strings. It handles:
+//! # The Storyteller of the Arena
 //!
-//! - Flavor text (e.g., "En garde!", "OOF!").
-//! - Score reporting.
-//! - Match point notifications.
-//! - Context-aware messages (e.g., winning exchange vs winning duel).
+//! The [`Announcer`] is responsible for converting the raw data of the game state ([`ArenaOutcome`])
+//! into the colorful commentary that players see. It is the "voice" of the game.
+//!
+//! ## Design
+//!
+//! - **Stateless**: The Announcer holds no data. It is a pure function over the input state.
+//! - **Context-Aware**: It adapts messages based on game context (e.g., announcing "Match Point!" when scores are critical).
+//! - **Flavorful**: It uses emojis and dramatic punctuation to create an engaging atmosphere.
+//!
+//! ## Usage
+//!
+//! The Announcer is typically used by the [`crate::InsultServer`] to generate the `message` field
+//! of the JSON-RPC response.
+//!
+//! ```
+//! use insult_arena_mcp::{Announcer, ArenaOutcome};
+//!
+//! let outcome = ArenaOutcome::DuelStarted;
+//! let message = Announcer::announce(&outcome, None);
+//! println!("{}", message); // "⚔️ En garde! ..."
+//! ```
 
 use crate::arena::ArenaOutcome;
 use crate::duel::{DuelStateView, Duelist, ExchangeResult};

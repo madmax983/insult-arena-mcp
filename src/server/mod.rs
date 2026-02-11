@@ -36,6 +36,20 @@ pub use response::DuelResponse;
 ///
 /// Handles tool execution and state management for the duel.
 ///
+/// # Architecture
+///
+/// It uses an [`Arc<Mutex<Arena>>`] to share game state safely across async tasks.
+/// Notifications are sent via the `HyperRuntime` which is injected after server start.
+///
+/// # Example
+///
+/// ```
+/// use insult_arena_mcp::InsultServer;
+///
+/// let server = InsultServer::new();
+/// // The server is now ready to handle MCP requests.
+/// ```
+///
 /// # Turn Notifications
 ///
 /// The server implements an autonomous flow where clients are notified when it is
@@ -92,6 +106,12 @@ impl InsultServer {
     }
 
     /// Broadcasts a turn notification to all connected sessions.
+    ///
+    /// # Architecture
+    ///
+    /// This method spawns a new Tokio task for each connected session to ensure
+    /// that a slow or unresponsive client does not block the entire server or
+    /// delay notifications to other players (DoS protection).
     async fn broadcast_turn_notification(&self, state: &DuelStateView) {
         let runtime_guard: tokio::sync::RwLockReadGuard<'_, Option<Arc<HyperRuntime>>> =
             self.runtime.read().await;
