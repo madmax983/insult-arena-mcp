@@ -84,30 +84,22 @@ struct DuelSessions {
 }
 
 impl DuelSessions {
-    fn register_challenger(&mut self, session_id: String) -> Result<Duelist, ArenaError> {
+    fn register(&mut self, role: Duelist, session_id: String) -> Result<(), ArenaError> {
         if session_id.len() > MAX_SESSION_ID_LENGTH {
             return Err(ArenaError::SessionIdTooLong(MAX_SESSION_ID_LENGTH));
         }
 
-        if self.challenger.is_some() {
-            return Err(ArenaError::RoleTaken("Challenger".to_string()));
+        let slot = match role {
+            Duelist::Challenger => &mut self.challenger,
+            Duelist::Defender => &mut self.defender,
+        };
+
+        if slot.is_some() {
+            return Err(ArenaError::RoleTaken(role.to_string()));
         }
 
-        self.challenger = Some(session_id);
-        Ok(Duelist::Challenger)
-    }
-
-    fn register_defender(&mut self, session_id: String) -> Result<Duelist, ArenaError> {
-        if session_id.len() > MAX_SESSION_ID_LENGTH {
-            return Err(ArenaError::SessionIdTooLong(MAX_SESSION_ID_LENGTH));
-        }
-
-        if self.defender.is_some() {
-            return Err(ArenaError::RoleTaken("Defender".to_string()));
-        }
-
-        self.defender = Some(session_id);
-        Ok(Duelist::Defender)
+        *slot = Some(session_id);
+        Ok(())
     }
 
     fn get_role(&self, session_id: &str) -> Option<Duelist> {
@@ -203,7 +195,8 @@ impl Arena {
         &mut self,
         session_id: String,
     ) -> Result<(ArenaOutcome, Option<DuelStateView>), ArenaError> {
-        let role = self.sessions.register_challenger(session_id)?;
+        let role = Duelist::Challenger;
+        self.sessions.register(role, session_id)?;
         let state = self.duel.as_ref().map(DuelStateView::from);
 
         Ok((ArenaOutcome::RoleRegistered { role }, state))
@@ -229,7 +222,8 @@ impl Arena {
         &mut self,
         session_id: String,
     ) -> Result<(ArenaOutcome, Option<DuelStateView>), ArenaError> {
-        let role = self.sessions.register_defender(session_id)?;
+        let role = Duelist::Defender;
+        self.sessions.register(role, session_id)?;
         let state = self.duel.as_ref().map(DuelStateView::from);
 
         Ok((ArenaOutcome::RoleRegistered { role }, state))
