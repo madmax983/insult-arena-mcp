@@ -172,13 +172,19 @@ impl InsultServer {
         info!("   Challenger attacks first...");
 
         let mut arena = self.arena.lock().await;
-        let (outcome, view) = arena.start_duel();
+        match arena.start_duel() {
+            Ok((outcome, view)) => {
+                // Broadcast initial state
+                drop(arena);
+                self.broadcast_turn_notification(&view).await;
 
-        // Broadcast initial state
-        drop(arena);
-        self.broadcast_turn_notification(&view).await;
-
-        DuelResponse::success(Announcer::announce(&outcome, Some(&view)), view)
+                DuelResponse::success(Announcer::announce(&outcome, Some(&view)), view).to_json()
+            }
+            Err(e) => {
+                warn!("❌ Start duel error: {:?}", e);
+                DuelResponse::error(e.to_string()).to_json()
+            }
+        }
     }
 
     async fn handle_register_as_challenger(&self, session_id: Option<String>) -> DuelResponse {
