@@ -11,6 +11,7 @@
 //! - **Dojo**: A single-player training mode against an AI "Sensei".
 //! - **Parrot**: A helper system that provides masked hints for comebacks.
 //! - **Reporter**: Generates a narrative chronicle of the duel.
+//! - **Sensei**: AI Logic for the Dojo opponent.
 //! - **Weather**: Simulates environmental conditions (Fog, Storm) that affect gameplay.
 //!
 //! # Feature Flags
@@ -22,4 +23,5 @@ pub mod audience;
 pub mod dojo;
 pub mod parrot;
 pub mod reporter;
+pub mod sensei;
 pub mod weather;
