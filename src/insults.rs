@@ -251,10 +251,17 @@ impl InsultBank {
     /// ```
     #[must_use]
     pub fn find_comeback(&self, insult: &str) -> Option<&str> {
+        self.find_pair(insult).map(|pair| pair.comeback)
+    }
+
+    /// Finds the `InsultPair` matching the insult.
+    ///
+    /// Returns the canonical pair from the bank if the input insult matches.
+    #[must_use]
+    pub fn find_pair(&self, insult: &str) -> Option<&InsultPair> {
         self.pairs
             .iter()
             .find(|pair| normalized_eq(pair.insult, insult))
-            .map(|pair| pair.comeback)
     }
 
     /// Finds insults that match a partial string (for learning mode).

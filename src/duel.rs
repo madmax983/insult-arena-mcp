@@ -22,6 +22,8 @@
 //! duel.throw_insult("You have the manners of a beggar.".to_string()).unwrap();
 //! ```
 
+use std::borrow::Cow;
+
 use serde::{Deserialize, Serialize};
 
 use crate::InsultBank;
@@ -188,7 +190,9 @@ pub struct Duel {
     /// Current state of the duel.
     state: DuelState,
     /// The current pending insult (if any).
-    pending_insult: Option<String>,
+    ///
+    /// Stores `Cow` to avoid allocation when the insult is canonical (from the bank).
+    pending_insult: Option<Cow<'static, str>>,
     /// Score for challenger.
     challenger_score: u8,
     /// Score for defender.
@@ -297,12 +301,17 @@ impl Duel {
             };
         };
 
-        // Validate insult exists in bank
-        if self.insult_bank.find_comeback(&insult).is_none() {
-            return Err(InsultError::UnknownInsult(insult));
-        }
+        // Validate insult exists in bank and canonicalize
+        // ⚡ Bolt Optimization: Use 'find_pair' to get the canonical insult string
+        // from the static bank. This allows us to store a reference (Cow::Borrowed)
+        // instead of allocating a new string for the pending insult.
+        // If validation fails, we return the user's input string in the error.
+        let pair = self
+            .insult_bank
+            .find_pair(&insult)
+            .ok_or(InsultError::UnknownInsult(insult))?;
 
-        self.pending_insult = Some(insult);
+        self.pending_insult = Some(Cow::Borrowed(pair.insult));
         self.state = DuelState::AwaitingComeback { attacker };
         Ok(())
     }
@@ -351,7 +360,7 @@ impl Duel {
         Ok(exchange)
     }
 
-    fn validate_respond_phase(&mut self) -> Result<(Duelist, String), InsultError> {
+    fn validate_respond_phase(&mut self) -> Result<(Duelist, Cow<'static, str>), InsultError> {
         let attacker = match self.state {
             DuelState::AwaitingComeback { attacker } => attacker,
             DuelState::AwaitingInsult { .. } => return Err(InsultError::WaitingForInsult),
@@ -368,7 +377,7 @@ impl Duel {
 
     fn resolve_exchange(
         &self,
-        insult: String,
+        insult: Cow<'static, str>,
         comeback: String,
         attacker: Duelist,
         defender: Duelist,
@@ -379,7 +388,13 @@ impl Duel {
             .is_some()
         {
             // Successful parry! Defender wins exchange and becomes attacker.
-            return (ExchangeResult::Parried { insult, comeback }, defender);
+            return (
+                ExchangeResult::Parried {
+                    insult: insult.into_owned(),
+                    comeback,
+                },
+                defender,
+            );
         }
 
         // Failed comeback. Attacker wins exchange.
@@ -390,7 +405,7 @@ impl Duel {
             .to_string();
         (
             ExchangeResult::Failed {
-                insult,
+                insult: insult.into_owned(),
                 attempt: comeback,
                 correct,
             },
