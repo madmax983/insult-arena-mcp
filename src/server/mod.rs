@@ -161,12 +161,12 @@ impl Default for InsultServer {
 
 mod tools;
 use tools::{
-    tool_get_duel_state, tool_get_hint, tool_list_insults, tool_register_as_challenger,
+    ToolAction, tool_get_duel_state, tool_get_hint, tool_list_insults, tool_register_as_challenger,
     tool_register_as_defender, tool_respond, tool_start_duel, tool_throw_insult,
 };
 
 impl InsultServer {
-    async fn handle_start_duel(&self) -> String {
+    async fn handle_start_duel(&self) -> DuelResponse {
         info!("⚔️  NEW DUEL STARTED!");
         info!("   Challenger vs Defender - First to 3 wins!");
         info!("   Challenger attacks first...");
@@ -187,7 +187,7 @@ impl InsultServer {
         }
     }
 
-    async fn handle_register_as_challenger(&self, session_id: Option<String>) -> String {
+    async fn handle_register_as_challenger(&self, session_id: Option<String>) -> DuelResponse {
         let mut arena = self.arena.lock().await;
         let session = session_id.unwrap_or_else(|| "unknown".to_string());
 
@@ -195,13 +195,14 @@ impl InsultServer {
             Ok((outcome, state)) => {
                 info!("🎭 Session {:?} registered as Challenger", session);
                 state.map_or_else(
-                    || {
-                        json!({
-                           "success": true,
-                           "message": Announcer::announce(&outcome, None),
-                           "your_role": "Challenger"
-                        })
-                        .to_string()
+                    || DuelResponse {
+                        success: true,
+                        message: Announcer::announce(&outcome, None),
+                        state: None,
+                        your_role: Some("Challenger".to_string()),
+                        insults: None,
+                        hint: None,
+                        insult: None,
                     },
                     |state| {
                         DuelResponse::success_with_role(
@@ -209,15 +210,14 @@ impl InsultServer {
                             state,
                             "Challenger",
                         )
-                        .to_json()
                     },
                 )
             }
-            Err(e) => DuelResponse::error(e.to_string()).to_json(),
+            Err(e) => DuelResponse::error(e.to_string()),
         }
     }
 
-    async fn handle_register_as_defender(&self, session_id: Option<String>) -> String {
+    async fn handle_register_as_defender(&self, session_id: Option<String>) -> DuelResponse {
         let mut arena = self.arena.lock().await;
         let session = session_id.unwrap_or_else(|| "unknown".to_string());
 
@@ -225,13 +225,14 @@ impl InsultServer {
             Ok((outcome, state)) => {
                 info!("🎭 Session {:?} registered as Defender", session);
                 state.map_or_else(
-                    || {
-                        json!({
-                           "success": true,
-                           "message": Announcer::announce(&outcome, None),
-                           "your_role": "Defender"
-                        })
-                        .to_string()
+                    || DuelResponse {
+                        success: true,
+                        message: Announcer::announce(&outcome, None),
+                        state: None,
+                        your_role: Some("Defender".to_string()),
+                        insults: None,
+                        hint: None,
+                        insult: None,
                     },
                     |state| {
                         DuelResponse::success_with_role(
@@ -239,44 +240,40 @@ impl InsultServer {
                             state,
                             "Defender",
                         )
-                        .to_json()
                     },
                 )
             }
-            Err(e) => DuelResponse::error(e.to_string()).to_json(),
+            Err(e) => DuelResponse::error(e.to_string()),
         }
     }
 
-    async fn handle_get_duel_state(&self, session_id: Option<String>) -> String {
+    async fn handle_get_duel_state(&self, session_id: Option<String>) -> DuelResponse {
         let arena = self.arena.lock().await;
 
         match arena.get_duel_state(session_id.as_deref()) {
             Ok((view, role)) => {
                 if let Some(role_name) = role {
                     DuelResponse::success_with_role("Current duel state:", view, &role_name)
-                        .to_json()
                 } else {
-                    DuelResponse::success("Current duel state:", view).to_json()
+                    DuelResponse::success("Current duel state:", view)
                 }
             }
-            Err(e) => DuelResponse::error(e.to_string()).to_json(),
+            Err(e) => DuelResponse::error(e.to_string()),
         }
     }
 
-    async fn handle_list_insults(&self) -> String {
+    async fn handle_list_insults(&self) -> DuelResponse {
         let arena = self.arena.lock().await;
         match arena.list_insults() {
-            Ok(insults) => json!({
-                "success": true,
-                "message": "Available insults for the duel:",
-                "insults": insults
-            })
-            .to_string(),
-            Err(e) => DuelResponse::error(e.to_string()).to_json(),
+            Ok(insults) => DuelResponse::with_insults(
+                "Available insults for the duel:",
+                insults.into_iter().map(String::from).collect(),
+            ),
+            Err(e) => DuelResponse::error(e.to_string()),
         }
     }
 
-    async fn handle_throw_insult(&self, session_id: String, insult: String) -> String {
+    async fn handle_throw_insult(&self, session_id: String, insult: String) -> DuelResponse {
         let mut arena = self.arena.lock().await;
 
         // ⚡ Bolt Optimization: Pass ownership of 'insult' to Arena to avoid allocation.
@@ -288,16 +285,16 @@ impl InsultServer {
                 drop(arena); // Release lock before broadcast
                 self.broadcast_turn_notification(&view).await;
 
-                DuelResponse::success(Announcer::announce(&outcome, Some(&view)), view).to_json()
+                DuelResponse::success(Announcer::announce(&outcome, Some(&view)), view)
             }
             Err(e) => {
                 warn!("❌ Insult error: {:?}", e);
-                DuelResponse::error(e.to_string()).to_json()
+                DuelResponse::error(e.to_string())
             }
         }
     }
 
-    async fn handle_respond(&self, session_id: String, comeback: String) -> String {
+    async fn handle_respond(&self, session_id: String, comeback: String) -> DuelResponse {
         let mut arena = self.arena.lock().await;
 
         info!("💬 COMEBACK ATTEMPT: {:?}", comeback);
@@ -315,24 +312,20 @@ impl InsultServer {
                     self.broadcast_turn_notification(&view).await;
                 }
 
-                DuelResponse::success(message, view).to_json()
+                DuelResponse::success(message, view)
             }
-            Err(e) => DuelResponse::error(e.to_string()).to_json(),
+            Err(e) => DuelResponse::error(e.to_string()),
         }
     }
 
-    async fn handle_get_hint(&self) -> String {
+    async fn handle_get_hint(&self) -> DuelResponse {
         let arena = self.arena.lock().await;
 
         match arena.get_hint() {
-            Ok((hint, insult)) => json!({
-                "success": true,
-                "message": "Here's a hint for the comeback:",
-                "hint": hint,
-                "insult": insult
-            })
-            .to_string(),
-            Err(e) => DuelResponse::error(e.to_string()).to_json(),
+            Ok((hint, insult)) => {
+                DuelResponse::with_hint("Here's a hint for the comeback:", hint, insult)
+            }
+            Err(e) => DuelResponse::error(e.to_string()),
         }
     }
 }
@@ -386,62 +379,31 @@ impl ServerHandler for InsultServer {
             .clone()
             .unwrap_or_else(|| "unknown".to_string());
 
-        let result = match params.name.as_str() {
-            "start_duel" => self.handle_start_duel().await,
-            "register_as_challenger" => {
+        // Parse and validate the action
+        let action = ToolAction::try_from(params)?;
+
+        // Execute the action
+        let response = match action {
+            ToolAction::StartDuel => self.handle_start_duel().await,
+            ToolAction::RegisterChallenger => {
                 self.handle_register_as_challenger(session_id_opt.clone())
                     .await
             }
-            "register_as_defender" => {
+            ToolAction::RegisterDefender => {
                 self.handle_register_as_defender(session_id_opt.clone())
                     .await
             }
-            "get_duel_state" => self.handle_get_duel_state(session_id_opt).await,
-            "list_insults" => self.handle_list_insults().await,
-            "throw_insult" => {
-                let args = params.arguments.unwrap_or_default();
-                let insult_str = args.get("insult").and_then(|v| v.as_str()).unwrap_or("");
-
-                // Hardening: Validate input length before allocation
-                if insult_str.len() > crate::arena::MAX_INPUT_LENGTH {
-                    return Err(CallToolError::invalid_arguments(
-                        &params.name,
-                        Some(format!(
-                            "Insult too long (max {} chars)",
-                            crate::arena::MAX_INPUT_LENGTH
-                        )),
-                    ));
-                }
-
-                self.handle_throw_insult(session_id_str, insult_str.to_string())
-                    .await
+            ToolAction::GetDuelState => self.handle_get_duel_state(session_id_opt).await,
+            ToolAction::ListInsults => self.handle_list_insults().await,
+            ToolAction::ThrowInsult { insult } => {
+                self.handle_throw_insult(session_id_str, insult).await
             }
-            "respond" => {
-                let args = params.arguments.unwrap_or_default();
-                let comeback_str = args.get("comeback").and_then(|v| v.as_str()).unwrap_or("");
-
-                // Hardening: Validate input length before allocation
-                if comeback_str.len() > crate::arena::MAX_INPUT_LENGTH {
-                    return Err(CallToolError::invalid_arguments(
-                        &params.name,
-                        Some(format!(
-                            "Comeback too long (max {} chars)",
-                            crate::arena::MAX_INPUT_LENGTH
-                        )),
-                    ));
-                }
-
-                self.handle_respond(session_id_str, comeback_str.to_string())
-                    .await
-            }
-            "get_hint" => self.handle_get_hint().await,
-            _ => {
-                return Err(CallToolError::unknown_tool(&params.name));
-            }
+            ToolAction::Respond { comeback } => self.handle_respond(session_id_str, comeback).await,
+            ToolAction::GetHint => self.handle_get_hint().await,
         };
 
         Ok(CallToolResult {
-            content: vec![TextContent::new(result, None, None).into()],
+            content: vec![TextContent::new(response.to_json(), None, None).into()],
             is_error: None,
             meta: None,
             structured_content: None,
@@ -557,15 +519,16 @@ mod tests {
     async fn start_duel_creates_new_game() {
         let server = InsultServer::new();
         let response = server.handle_start_duel().await;
-        assert!(response.contains("En garde"));
-        assert!(response.contains("success"));
+        assert!(response.message.contains("En garde"));
+        assert!(response.success);
     }
 
     #[tokio::test]
     async fn get_state_without_duel_returns_error() {
         let server = InsultServer::new();
         let response = server.handle_get_duel_state(None).await;
-        assert!(response.contains("No duel in progress"));
+        assert!(!response.success);
+        assert!(response.message.contains("No duel in progress"));
     }
 
     use rust_mcp_sdk::auth::AuthInfo;
