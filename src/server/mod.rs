@@ -179,11 +179,11 @@ impl InsultServer {
                 drop(arena);
                 self.broadcast_turn_notification(&view).await;
 
-                DuelResponse::success(Announcer::announce(&outcome, Some(&view)), view).to_json()
+                DuelResponse::success(Announcer::announce(&outcome, Some(&view)), view)
             }
             Err(e) => {
                 warn!("❌ Start duel error: {:?}", e);
-                DuelResponse::error(e.to_string()).to_json()
+                DuelResponse::error(e.to_string())
             }
         }
     }
