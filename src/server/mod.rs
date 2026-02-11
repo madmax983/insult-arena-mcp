@@ -26,7 +26,8 @@ use tokio::sync::{Mutex, RwLock};
 use tracing::{info, warn};
 
 use crate::announcer::Announcer;
-use crate::arena::{Arena, DuelStateView};
+use crate::arena::Arena;
+use crate::duel::DuelStateView;
 
 pub mod response;
 pub use response::DuelResponse;

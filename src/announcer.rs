@@ -8,8 +8,8 @@
 //! - Match point notifications.
 //! - Context-aware messages (e.g., winning exchange vs winning duel).
 
-use crate::arena::{ArenaOutcome, DuelStateView};
-use crate::duel::{Duelist, ExchangeResult};
+use crate::arena::ArenaOutcome;
+use crate::duel::{DuelStateView, Duelist, ExchangeResult};
 use std::fmt::Write;
 
 /// The announcer responsible for generating commentary.
