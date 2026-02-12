@@ -87,71 +87,79 @@ impl Announcer {
                 let _ = write!(f, "🗣️ You bellow: \"{insult}\" ... awaiting comeback!");
             }
             ArenaOutcome::ExchangeProcessed { exchange } => {
-                let (scores, is_finished, match_point_text) = view.map_or_else(
-                    || (None, false, ""),
-                    |view| {
-                        let is_finished = view.phase == "finished";
-
-                        // GAME FEEL: Added Match Point notification to heighten tension near end-game (Ludwig)
-                        let match_point_text = if !is_finished
-                            && (view.challenger_score == view.wins_needed - 1
-                                || view.defender_score == view.wins_needed - 1)
-                        {
-                            "\n\n🔥 MATCH POINT! 🔥 Next point wins!"
-                        } else {
-                            ""
-                        };
-                        (
-                            Some((view.challenger_score, view.defender_score)),
-                            is_finished,
-                            match_point_text,
-                        )
-                    },
-                );
-
-                // ⚡ Bolt Optimization:
-                // Removed intermediate `score_display` string allocation (via `format!`).
-                // Now writes scores directly to the result buffer.
-                if exchange.result.is_parried() {
-                    if is_finished {
-                        let _ = write!(f, "🏆 VICTORY! {} has won the duel! ", exchange.winner);
-                    } else {
-                        let _ = write!(
-                            f,
-                            "⚔️ TOUCHÉ! A sharp wit! {} wins the exchange and attacks next! ",
-                            exchange.winner
-                        );
-                    }
-                } else {
-                    let _ = write!(f, "💥 OOF! That didn't land! ");
-                    if is_finished {
-                        let _ = write!(f, "{} wins the duel! ", exchange.winner);
-                    } else {
-                        let _ = write!(
-                            f,
-                            "{} wins the exchange and attacks again! ",
-                            exchange.winner
-                        );
-                    }
-                }
-
-                // Append score directly
-                if let Some((challenger, defender)) = scores {
-                    let _ = write!(f, "(Score: {challenger}-{defender})");
-                } else {
-                    let _ = write!(f, "(Score: ?-?)");
-                }
-
-                // Append match point text
-                let _ = write!(f, "{match_point_text}");
-
-                // Append expected comeback if failed
-                if let ExchangeResult::Failed { ref correct, .. } = exchange.result {
-                    let _ = write!(f, "\n\nExpected comeback: \"{correct}\"");
-                }
+                Self::format_exchange(&mut f, exchange, view);
             }
         }
         f
+    }
+
+    fn format_exchange(
+        f: &mut String,
+        exchange: &crate::duel::Exchange,
+        view: Option<&DuelStateView>,
+    ) {
+        let (scores, is_finished, match_point_text) = view.map_or_else(
+            || (None, false, ""),
+            |view| {
+                let is_finished = view.phase == "finished";
+
+                // GAME FEEL: Added Match Point notification to heighten tension near end-game (Ludwig)
+                let match_point_text = if !is_finished
+                    && (view.challenger_score == view.wins_needed - 1
+                        || view.defender_score == view.wins_needed - 1)
+                {
+                    "\n\n🔥 MATCH POINT! 🔥 Next point wins!"
+                } else {
+                    ""
+                };
+                (
+                    Some((view.challenger_score, view.defender_score)),
+                    is_finished,
+                    match_point_text,
+                )
+            },
+        );
+
+        // ⚡ Bolt Optimization:
+        // Removed intermediate `score_display` string allocation (via `format!`).
+        // Now writes scores directly to the result buffer.
+        if exchange.result.is_parried() {
+            if is_finished {
+                let _ = write!(f, "🏆 VICTORY! {} has won the duel! ", exchange.winner);
+            } else {
+                let _ = write!(
+                    f,
+                    "⚔️ TOUCHÉ! A sharp wit! {} wins the exchange and attacks next! ",
+                    exchange.winner
+                );
+            }
+        } else {
+            let _ = write!(f, "💥 OOF! That didn't land! ");
+            if is_finished {
+                let _ = write!(f, "{} wins the duel! ", exchange.winner);
+            } else {
+                let _ = write!(
+                    f,
+                    "{} wins the exchange and attacks again! ",
+                    exchange.winner
+                );
+            }
+        }
+
+        // Append score directly
+        if let Some((challenger, defender)) = scores {
+            let _ = write!(f, "(Score: {challenger}-{defender})");
+        } else {
+            let _ = write!(f, "(Score: ?-?)");
+        }
+
+        // Append match point text
+        let _ = write!(f, "{match_point_text}");
+
+        // Append expected comeback if failed
+        if let ExchangeResult::Failed { ref correct, .. } = exchange.result {
+            let _ = write!(f, "\n\nExpected comeback: \"{correct}\"");
+        }
     }
 }
 
