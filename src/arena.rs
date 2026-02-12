@@ -171,6 +171,21 @@ impl Arena {
         Ok((ArenaOutcome::DuelStarted, view))
     }
 
+    /// Register a session for a specific role.
+    ///
+    /// # Errors
+    /// Returns error if the role is already taken or session ID is invalid.
+    pub fn register(
+        &mut self,
+        role: Duelist,
+        session_id: String,
+    ) -> Result<(ArenaOutcome, Option<DuelStateView>), ArenaError> {
+        self.sessions.register(role, session_id)?;
+        let state = self.duel.as_ref().map(DuelStateView::from);
+
+        Ok((ArenaOutcome::RoleRegistered { role }, state))
+    }
+
     /// Register a session as the challenger.
     ///
     /// # Errors
@@ -195,11 +210,7 @@ impl Arena {
         &mut self,
         session_id: String,
     ) -> Result<(ArenaOutcome, Option<DuelStateView>), ArenaError> {
-        let role = Duelist::Challenger;
-        self.sessions.register(role, session_id)?;
-        let state = self.duel.as_ref().map(DuelStateView::from);
-
-        Ok((ArenaOutcome::RoleRegistered { role }, state))
+        self.register(Duelist::Challenger, session_id)
     }
 
     /// Register a session as the defender.
@@ -222,11 +233,7 @@ impl Arena {
         &mut self,
         session_id: String,
     ) -> Result<(ArenaOutcome, Option<DuelStateView>), ArenaError> {
-        let role = Duelist::Defender;
-        self.sessions.register(role, session_id)?;
-        let state = self.duel.as_ref().map(DuelStateView::from);
-
-        Ok((ArenaOutcome::RoleRegistered { role }, state))
+        self.register(Duelist::Defender, session_id)
     }
 
     #[must_use]

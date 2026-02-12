@@ -27,7 +27,7 @@ use tracing::{info, warn};
 
 use crate::announcer::Announcer;
 use crate::arena::Arena;
-use crate::duel::DuelStateView;
+use crate::duel::{DuelStateView, Duelist};
 
 pub mod response;
 pub use response::DuelResponse;
@@ -128,21 +128,18 @@ impl InsultServer {
             return;
         }
 
-        // Build params as a Map<String, Value>
-        let mut params = serde_json::Map::new();
-        params.insert("type".to_string(), json!("turn_notification"));
-        params.insert("state".to_string(), json!(state));
-        params.insert(
-            "message".to_string(),
-            json!(format!(
+        let params = json!({
+            "type": "turn_notification",
+            "state": state,
+            "message": format!(
                 "It's {}'s turn!",
                 state.next_to_act.as_deref().unwrap_or("unknown")
-            )),
-        );
+            )
+        });
 
         let notification = CustomNotification {
             method: "notifications/turn".to_string(),
-            params: Some(params),
+            params: params.as_object().cloned(),
         };
 
         info!(
@@ -208,19 +205,19 @@ impl InsultServer {
         }
     }
 
-    async fn handle_register_as_challenger(&self, session_id: Option<String>) -> DuelResponse {
+    async fn handle_register(&self, role: Duelist, session_id: Option<String>) -> DuelResponse {
         let mut arena = self.arena.lock().await;
         let session = session_id.unwrap_or_else(|| "unknown".to_string());
 
-        match arena.register_challenger(session.clone()) {
+        match arena.register(role, session.clone()) {
             Ok((outcome, state)) => {
-                info!("🎭 Session {:?} registered as Challenger", session);
+                info!("🎭 Session {:?} registered as {}", session, role);
                 state.map_or_else(
                     || DuelResponse {
                         success: true,
                         message: Announcer::announce(&outcome, None),
                         state: None,
-                        your_role: Some("Challenger".to_string()),
+                        your_role: Some(role.to_string()),
                         insults: None,
                         hint: None,
                         insult: None,
@@ -229,7 +226,7 @@ impl InsultServer {
                         DuelResponse::success_with_role(
                             Announcer::announce(&outcome, Some(&state)),
                             state,
-                            "Challenger",
+                            &role.to_string(),
                         )
                     },
                 )
@@ -238,34 +235,12 @@ impl InsultServer {
         }
     }
 
-    async fn handle_register_as_defender(&self, session_id: Option<String>) -> DuelResponse {
-        let mut arena = self.arena.lock().await;
-        let session = session_id.unwrap_or_else(|| "unknown".to_string());
+    async fn handle_register_as_challenger(&self, session_id: Option<String>) -> DuelResponse {
+        self.handle_register(Duelist::Challenger, session_id).await
+    }
 
-        match arena.register_defender(session.clone()) {
-            Ok((outcome, state)) => {
-                info!("🎭 Session {:?} registered as Defender", session);
-                state.map_or_else(
-                    || DuelResponse {
-                        success: true,
-                        message: Announcer::announce(&outcome, None),
-                        state: None,
-                        your_role: Some("Defender".to_string()),
-                        insults: None,
-                        hint: None,
-                        insult: None,
-                    },
-                    |state| {
-                        DuelResponse::success_with_role(
-                            Announcer::announce(&outcome, Some(&state)),
-                            state,
-                            "Defender",
-                        )
-                    },
-                )
-            }
-            Err(e) => DuelResponse::error(e.to_string()),
-        }
+    async fn handle_register_as_defender(&self, session_id: Option<String>) -> DuelResponse {
+        self.handle_register(Duelist::Defender, session_id).await
     }
 
     async fn handle_get_duel_state(&self, session_id: Option<String>) -> DuelResponse {
