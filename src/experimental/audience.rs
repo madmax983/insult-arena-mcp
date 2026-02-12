@@ -15,6 +15,34 @@ pub enum Reaction {
 }
 
 /// A virtual audience that tracks the "hype" of the duel.
+///
+/// # Hero's Journey
+///
+/// ```
+/// use insult_arena_mcp::experimental::audience::{Audience, Reaction};
+/// use insult_arena_mcp::{Exchange, Duelist, ExchangeResult};
+///
+/// // 1. Create an audience
+/// let mut audience = Audience::new();
+///
+/// // 2. Create an exchange
+/// let exchange = Exchange {
+///     attacker: Duelist::Challenger,
+///     winner: Duelist::Defender,
+///     result: ExchangeResult::Parried {
+///         insult: "You fight like a dairy farmer!".into(),
+///         comeback: "How appropriate. You fight like a cow!".into()
+///     }
+/// };
+///
+/// // 3. React!
+/// let reaction = audience.react(&exchange);
+/// match reaction {
+///     Reaction::Cheer(msg) => println!("👏 {}", msg),
+///     _ => println!("😐"),
+/// }
+/// assert!(audience.hype > 50);
+/// ```
 #[derive(Debug, Clone)]
 pub struct Audience {
     /// Hype level from 0 to 100. Starts at 50.

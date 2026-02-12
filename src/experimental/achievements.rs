@@ -27,6 +27,27 @@ impl Achievement {
 }
 
 /// Analyzes a completed duel and returns a list of earned achievements.
+///
+/// # Hero's Journey
+///
+/// ```
+/// use insult_arena_mcp::Duel;
+/// use insult_arena_mcp::experimental::achievements;
+///
+/// // 1. Play a duel (Challenger wins 3-0)
+/// let mut duel = Duel::new();
+/// for _ in 0..3 {
+///     duel.throw_insult("You fight like a dairy farmer!".to_string()).unwrap();
+///     duel.respond("wrong".to_string()).unwrap();
+/// }
+///
+/// // 2. Check for achievements
+/// let awards = achievements::analyze(&duel);
+///
+/// // 3. Should earn "Untouchable"
+/// assert!(awards.iter().any(|a| a.id == "untouchable"));
+/// println!("🏆 Earned: {}", awards[0].name);
+/// ```
 #[must_use]
 pub fn analyze(duel: &Duel) -> Vec<Achievement> {
     let mut achievements = Vec::new();

@@ -2,6 +2,22 @@ use crate::insults::InsultBank;
 use rand::seq::SliceRandom;
 
 /// A helpful parrot that gives hints for insults.
+///
+/// # Hero's Journey
+///
+/// ```
+/// use insult_arena_mcp::experimental::parrot::Parrot;
+///
+/// // 1. Summon the parrot
+/// let parrot = Parrot::new();
+/// println!("🦜 {}", parrot.squawk());
+///
+/// // 2. Ask for a hint
+/// let insult = "You fight like a dairy farmer!";
+/// if let Some(hint) = parrot.hint(insult) {
+///     println!("Hint: {}", hint); // "H__ a__________. Y__ f____ l___ a c__!"
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub struct Parrot {
     bank: InsultBank,
