@@ -46,6 +46,8 @@ impl Dojo {
     /// # Errors
     ///
     /// Returns error if the move is invalid for the current state.
+    #[allow(clippy::expect_used)]
+    #[allow(clippy::missing_panics_doc)]
     pub fn turn(&mut self, input: &str) -> Result<Vec<DojoEvent>, InsultError> {
         let mut events = Vec::new();
 

@@ -11,17 +11,12 @@ pub struct Sensei {
 impl Sensei {
     /// Creates a new Sensei with the given skill level.
     #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     pub fn new(skill: f64) -> Self {
         // Clamp skill between 0.0 and 1.0
-        let skill = if skill < 0.0 {
-            0.0
-        } else if skill > 1.0 {
-            1.0
-        } else {
-            skill
-        };
-
-        Self { skill }
+        Self {
+            skill: skill.clamp(0.0, 1.0),
+        }
     }
 
     /// Decides on an insult to throw.
