@@ -15,3 +15,7 @@
 ## [Dojo] Turn Loop Verification
 **Learning:** Testing the `Dojo` autonomous turn loop required simulating a sequence of moves. The state transitions happen in a loop, so `turn()` might advance the state multiple steps (e.g. Player -> Sensei Parry -> Sensei Attack -> Player).
 **Action:** When testing autonomous agents/loops, verify the *final* state after the function returns, not just the immediate next state.
+
+## [Arena] Hint Access Control
+**Learning:** `Arena::get_hint` was a method that accessed shared game state (the pending insult) but took no arguments, allowing *any* connected client to access privileged information (the correct answer). This pattern of implicit access to shared state without context checks is a security vulnerability in multi-user systems.
+**Action:** Always verify *who* is asking for information in shared state methods, especially in "read-only" operations that might reveal hidden state. Enforced strict turn validation for `get_hint` using `DuelSessions`.
