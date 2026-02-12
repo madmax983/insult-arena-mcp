@@ -29,6 +29,10 @@ use serde::{Deserialize, Serialize};
 use crate::InsultBank;
 
 /// Identifies a duelist in the fight.
+///
+/// The game is always played between two parties:
+/// - **Challenger**: The one who starts the duel.
+/// - **Defender**: The one who was challenged.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Duelist {
     /// The challenger who initiated the duel.
@@ -61,6 +65,8 @@ impl std::fmt::Display for Duelist {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ExchangeResult {
     /// The defender parried with a perfect comeback.
+    ///
+    /// The defender wins the exchange and becomes the attacker.
     Parried {
         /// The insult that was thrown.
         insult: String,
@@ -68,6 +74,8 @@ pub enum ExchangeResult {
         comeback: String,
     },
     /// The defender failed to counter the insult.
+    ///
+    /// The attacker wins the exchange and attacks again.
     Failed {
         /// The insult that was thrown.
         insult: String,
@@ -98,6 +106,11 @@ pub struct Exchange {
 }
 
 /// The current state of a duel.
+///
+/// The duel is a state machine that transitions between:
+/// 1. `AwaitingInsult` (Attacker's turn)
+/// 2. `AwaitingComeback` (Defender's turn)
+/// 3. `Finished` (Game Over)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DuelState {
     /// Waiting for an insult to be thrown.
