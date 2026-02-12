@@ -31,3 +31,7 @@
 **2025-05-24 - DoS: Unbounded Allocation in Tool Parsing**
 **Threat:** The `throw_insult` and `respond` tools in `src/server/tools.rs` converted input `serde_json::Value`s to `String` using `.to_string()` *before* checking `MAX_INPUT_LENGTH`. An attacker could cause memory exhaustion by sending a massive JSON string, which would be allocated on the heap before rejection.
 **Defense:** Moved the length check to inspect the `&str` slice (via `as_str()`) *before* allocation. Added unit test `rejects_excessive_input_length_efficiently` to verify.
+
+**2025-05-24 - DoS: Unbounded Notification Concurrency**
+**Threat:** `InsultServer::broadcast_turn_notification` spawned a `tokio::task` for every connected session in an unbounded loop. An attacker controlling many connections could trigger thousands of concurrent tasks, leading to resource exhaustion (OOM/CPU).
+**Defense:** Implemented a bounded `mpsc` channel (capacity 100) and a background worker with a `Semaphore` (limit 50) to process notifications. Notifications are dropped (load shedding) if the channel is full.

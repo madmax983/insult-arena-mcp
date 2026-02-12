@@ -22,7 +22,7 @@ use rust_mcp_sdk::schema::{
     PaginatedRequestParams, RpcError, TextContent,
 };
 use serde_json::json;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock, Semaphore, mpsc};
 use tracing::{info, warn};
 
 use crate::announcer::Announcer;
@@ -31,6 +31,12 @@ use crate::duel::DuelStateView;
 
 pub mod response;
 pub use response::DuelResponse;
+
+/// Internal job for sending notifications to sessions.
+struct NotificationJob {
+    sessions: Vec<String>,
+    notification: CustomNotification,
+}
 
 /// MCP server for insult sword fighting with turn notifications.
 ///
@@ -83,6 +89,10 @@ pub use response::DuelResponse;
 pub struct InsultServer {
     arena: Arc<Mutex<Arena>>,
     runtime: Arc<RwLock<Option<Arc<HyperRuntime>>>>,
+    notification_tx: mpsc::Sender<NotificationJob>,
+    // Holds the receiver until it can be spawned in set_runtime.
+    // Wrapped in Arc<Mutex<Option>> so we can take it out safely and share InsultServer.
+    notification_rx: Arc<Mutex<Option<mpsc::Receiver<NotificationJob>>>>,
 }
 
 impl InsultServer {
@@ -92,9 +102,14 @@ impl InsultServer {
     /// Call `start_duel` (via tool) to initialize a new game.
     #[must_use]
     pub fn new() -> Self {
+        // Create a bounded channel for notifications (load shedding)
+        let (tx, rx) = mpsc::channel(100);
+
         Self {
             arena: Arc::new(Mutex::new(Arena::new())),
             runtime: Arc::new(RwLock::new(None)),
+            notification_tx: tx,
+            notification_rx: Arc::new(Mutex::new(Some(rx))),
         }
     }
 
@@ -103,15 +118,75 @@ impl InsultServer {
     pub async fn set_runtime(&self, runtime: Arc<HyperRuntime>) {
         let mut guard = self.runtime.write().await;
         *guard = Some(runtime);
+
+        // Start the notification worker if it hasn't been started yet
+        let mut rx_opt = self.notification_rx.lock().await;
+        if let Some(rx) = rx_opt.take() {
+            let runtime_lock = self.runtime.clone();
+            tokio::spawn(Self::notification_worker(rx, runtime_lock));
+        }
+    }
+
+    /// Background worker that processes notifications with bounded concurrency.
+    async fn notification_worker(
+        mut rx: mpsc::Receiver<NotificationJob>,
+        runtime_lock: Arc<RwLock<Option<Arc<HyperRuntime>>>>,
+    ) {
+        // Concurrency limit for notification tasks
+        let semaphore = Arc::new(Semaphore::new(50));
+
+        info!("👷 Notification worker started");
+
+        while let Some(job) = rx.recv().await {
+            let NotificationJob {
+                sessions,
+                notification,
+            } = job;
+
+            // Get runtime
+            let runtime = {
+                let guard = runtime_lock.read().await;
+                guard.clone()
+            };
+
+            let Some(runtime) = runtime else {
+                warn!("⚠️  Worker cannot send notification: Runtime not initialized");
+                continue;
+            };
+
+            for session_id in sessions {
+                let Ok(permit) = semaphore.clone().acquire_owned().await else {
+                    break; // Semaphore closed
+                };
+
+                let runtime = runtime.clone();
+                let notification = notification.clone();
+
+                tokio::spawn(async move {
+                    // Task holds the permit until done
+                    let _permit = permit;
+                    info!("   → Sending to session: {:?}", session_id);
+                    if let Err(e) = runtime.notify_custom(&session_id, notification).await {
+                        warn!(
+                            "   ✗ Failed to send notification to {:?}: {:?}",
+                            session_id, e
+                        );
+                    } else {
+                        info!("   ✓ Notification sent to {:?}", session_id);
+                    }
+                });
+            }
+        }
+        info!("👷 Notification worker stopped");
     }
 
     /// Broadcasts a turn notification to all connected sessions.
     ///
     /// # Architecture
     ///
-    /// This method spawns a new Tokio task for each connected session to ensure
-    /// that a slow or unresponsive client does not block the entire server or
-    /// delay notifications to other players (`DoS` protection).
+    /// This method offloads notifications to a bounded background worker to ensure
+    /// that even with thousands of clients, we don't exhaust server resources.
+    /// If the notification queue is full, we shed load rather than crashing.
     async fn broadcast_turn_notification(&self, state: &DuelStateView) {
         let runtime_guard: tokio::sync::RwLockReadGuard<'_, Option<Arc<HyperRuntime>>> =
             self.runtime.read().await;
@@ -151,25 +226,18 @@ impl InsultServer {
             state.next_to_act.as_deref().unwrap_or("unknown")
         );
 
-        for session_id in sessions {
-            let runtime = runtime.clone();
-            let notification = notification.clone();
-            let session_id = session_id.clone();
+        // 🛡️ HARDENING: Use bounded channel for load shedding.
+        let job = NotificationJob {
+            sessions,
+            notification,
+        };
 
-            // 🛡️ HARDENING: Spawn a task for each notification to prevent
-            // a single slow client (Slowloris) from blocking the game loop
-            // or stalling other notifications.
-            tokio::spawn(async move {
-                info!("   → Sending to session: {:?}", session_id);
-                if let Err(e) = runtime.notify_custom(&session_id, notification).await {
-                    warn!(
-                        "   ✗ Failed to send notification to {:?}: {:?}",
-                        session_id, e
-                    );
-                } else {
-                    info!("   ✓ Notification sent to {:?}", session_id);
-                }
-            });
+        match self.notification_tx.try_send(job) {
+            Ok(()) => info!("   ✓ Notification job queued"),
+            Err(e) => warn!(
+                "⚠️  Notification DROPPED due to high load (channel full): {:?}",
+                e
+            ),
         }
     }
 }
