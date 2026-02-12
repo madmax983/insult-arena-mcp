@@ -138,9 +138,7 @@ impl Dojo {
                         });
 
                         // Capture audience reaction
-                        events.push(DojoEvent::AudienceReaction(
-                            self.audience.react(&exchange),
-                        ));
+                        events.push(DojoEvent::AudienceReaction(self.audience.react(&exchange)));
                     } else {
                         // Attacker is Defender (Sensei), so it's Challenger (Player)'s turn to respond.
                         break;
