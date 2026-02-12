@@ -27,3 +27,7 @@
 **2024-11-26 - DoS: Session ID Unbounded Allocation**
 **Threat:** `InsultServer::handle_call_tool_request` cloned the session ID string from `runtime.session_id()` *before* checking its length. An attacker could supply a massive session ID (via the `McpServer` implementation), causing a large heap allocation before the validation logic could reject it.
 **Defense:** Implemented a length check on the `Option<&String>` reference before cloning. If the session ID exceeds `MAX_SESSION_ID_LENGTH`, it returns an error immediately without allocation. Added a regression test `rejects_excessive_session_id_length`.
+
+**2025-05-24 - DoS: Unbounded Allocation in Tool Parsing**
+**Threat:** The `throw_insult` and `respond` tools in `src/server/tools.rs` converted input `serde_json::Value`s to `String` using `.to_string()` *before* checking `MAX_INPUT_LENGTH`. An attacker could cause memory exhaustion by sending a massive JSON string, which would be allocated on the heap before rejection.
+**Defense:** Moved the length check to inspect the `&str` slice (via `as_str()`) *before* allocation. Added unit test `rejects_excessive_input_length_efficiently` to verify.

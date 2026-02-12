@@ -130,13 +130,10 @@ impl TryFrom<CallToolRequestParams> for ToolAction {
             "list_insults" => Ok(Self::ListInsults),
             "throw_insult" => {
                 let args = params.arguments.unwrap_or_default();
-                let insult_str = args
-                    .get("insult")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
+                let insult_val = args.get("insult").and_then(|v| v.as_str()).unwrap_or("");
 
-                if insult_str.len() > crate::arena::MAX_INPUT_LENGTH {
+                // 🛡️ HARDENING: Check length BEFORE allocation to prevent DoS
+                if insult_val.len() > crate::arena::MAX_INPUT_LENGTH {
                     return Err(CallToolError::invalid_arguments(
                         &params.name,
                         Some(format!(
@@ -146,17 +143,16 @@ impl TryFrom<CallToolRequestParams> for ToolAction {
                     ));
                 }
 
-                Ok(Self::ThrowInsult { insult: insult_str })
+                Ok(Self::ThrowInsult {
+                    insult: insult_val.to_string(),
+                })
             }
             "respond" => {
                 let args = params.arguments.unwrap_or_default();
-                let comeback_str = args
-                    .get("comeback")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
+                let comeback_val = args.get("comeback").and_then(|v| v.as_str()).unwrap_or("");
 
-                if comeback_str.len() > crate::arena::MAX_INPUT_LENGTH {
+                // 🛡️ HARDENING: Check length BEFORE allocation to prevent DoS
+                if comeback_val.len() > crate::arena::MAX_INPUT_LENGTH {
                     return Err(CallToolError::invalid_arguments(
                         &params.name,
                         Some(format!(
@@ -167,7 +163,7 @@ impl TryFrom<CallToolRequestParams> for ToolAction {
                 }
 
                 Ok(Self::Respond {
-                    comeback: comeback_str,
+                    comeback: comeback_val.to_string(),
                 })
             }
             "get_hint" => Ok(Self::GetHint),
@@ -298,5 +294,30 @@ pub fn tool_get_hint() -> Tool {
         meta: None,
         output_schema: None,
         title: None,
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_excessive_input_length_efficiently() {
+        let long_string = "a".repeat(crate::arena::MAX_INPUT_LENGTH + 1);
+        let mut args = serde_json::Map::new();
+        args.insert("insult".to_string(), json!(long_string));
+
+        let params = CallToolRequestParams {
+            name: "throw_insult".to_string(),
+            arguments: Some(args),
+            meta: None,
+            task: None,
+        };
+
+        let result = ToolAction::try_from(params);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(format!("{err:?}").contains("Insult too long"));
     }
 }
