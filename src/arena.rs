@@ -26,7 +26,7 @@
 //! assert_eq!(view.defender_score, 1);
 //! ```
 
-use crate::duel::{Duel, DuelState, DuelStateView, Duelist, InsultError};
+use crate::duel::{Duel, DuelState, DuelStateView, Duelist, InsultCheckError, InsultError};
 
 /// Maximum length of any user input string (insults, comebacks).
 ///
@@ -298,7 +298,7 @@ impl Arena {
     pub fn throw_insult(
         &mut self,
         session_id: &str,
-        insult: String,
+        mut insult: String,
     ) -> Result<(ArenaOutcome, DuelStateView), ArenaError> {
         if insult.len() > MAX_INPUT_LENGTH {
             return Err(ArenaError::InputTooLong(MAX_INPUT_LENGTH));
@@ -313,24 +313,27 @@ impl Arena {
             self.sessions.validate_turn(attacker, session_id)?;
         }
 
-        // ⚡ Bolt Optimization: Avoid double allocation.
-        // We need 'insult' for both Duel (consumed) and ArenaOutcome (consumed).
-        // Clone once instead of creating two new Strings from &str.
-        let insult_clone = insult.clone();
+        // ⚡ Bolt Optimization: Zero allocation path!
+        // Using throw_insult_ref to avoid cloning the insult string.
+        match duel.throw_insult_ref(&insult) {
+            Ok(canonical) => {
+                // Reuse the existing allocation to store the canonical string.
+                insult.clear();
+                insult.push_str(canonical);
 
-        match duel.throw_insult(insult) {
-            Ok(()) => {
                 let view = DuelStateView::from(&*duel);
                 Ok((
                     ArenaOutcome::InsultThrown {
-                        insult: insult_clone,
+                        insult,
                     },
                     view,
                 ))
             }
-            // If it failed, we return the clone in the error
-            Err(InsultError::UnknownInsult(_)) => Err(ArenaError::UnknownInsult(insult_clone)),
-            Err(e) => Err(ArenaError::from(e)),
+            Err(e) => match e {
+                InsultCheckError::UnknownInsult => Err(ArenaError::UnknownInsult(insult)),
+                InsultCheckError::WaitingForComeback => Err(ArenaError::DuelError(InsultError::WaitingForComeback)),
+                InsultCheckError::DuelOver => Err(ArenaError::DuelError(InsultError::DuelOver)),
+            },
         }
     }
 

@@ -306,10 +306,25 @@ impl Duel {
     /// ));
     /// ```
     pub fn throw_insult(&mut self, insult: String) -> Result<(), InsultError> {
+        self.throw_insult_ref(&insult)
+            .map(|_| ())
+            .map_err(|e| match e {
+                InsultCheckError::UnknownInsult => InsultError::UnknownInsult(insult),
+                InsultCheckError::WaitingForComeback => InsultError::WaitingForComeback,
+                InsultCheckError::DuelOver => InsultError::DuelOver,
+            })
+    }
+
+    /// Internal version of `throw_insult` that takes a reference to avoid allocation.
+    /// Returns the canonical static string on success.
+    pub(crate) fn throw_insult_ref(
+        &mut self,
+        insult: &str,
+    ) -> Result<&'static str, InsultCheckError> {
         let DuelState::AwaitingInsult { attacker } = self.state else {
             return match self.state {
-                DuelState::AwaitingComeback { .. } => Err(InsultError::WaitingForComeback),
-                DuelState::Finished { .. } => Err(InsultError::DuelOver),
+                DuelState::AwaitingComeback { .. } => Err(InsultCheckError::WaitingForComeback),
+                DuelState::Finished { .. } => Err(InsultCheckError::DuelOver),
                 DuelState::AwaitingInsult { .. } => unreachable!(),
             };
         };
@@ -318,15 +333,14 @@ impl Duel {
         // ⚡ Bolt Optimization: Use 'find_pair' to get the canonical insult string
         // from the static bank. This allows us to store a reference (Cow::Borrowed)
         // instead of allocating a new string for the pending insult.
-        // If validation fails, we return the user's input string in the error.
         let pair = self
             .insult_bank
-            .find_pair(&insult)
-            .ok_or(InsultError::UnknownInsult(insult))?;
+            .find_pair(insult)
+            .ok_or(InsultCheckError::UnknownInsult)?;
 
         self.pending_insult = Some(Cow::Borrowed(pair.insult));
         self.state = DuelState::AwaitingComeback { attacker };
-        Ok(())
+        Ok(pair.insult)
     }
 
     /// Responds with a comeback. Returns the exchange result.
@@ -473,6 +487,14 @@ impl Default for Duel {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Internal error type for reference-based checks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InsultCheckError {
+    UnknownInsult,
+    WaitingForComeback,
+    DuelOver,
 }
 
 /// Errors that can occur during a duel.
