@@ -322,16 +322,13 @@ impl Arena {
                 insult.push_str(canonical);
 
                 let view = DuelStateView::from(&*duel);
-                Ok((
-                    ArenaOutcome::InsultThrown {
-                        insult,
-                    },
-                    view,
-                ))
+                Ok((ArenaOutcome::InsultThrown { insult }, view))
             }
             Err(e) => match e {
                 InsultCheckError::UnknownInsult => Err(ArenaError::UnknownInsult(insult)),
-                InsultCheckError::WaitingForComeback => Err(ArenaError::DuelError(InsultError::WaitingForComeback)),
+                InsultCheckError::WaitingForComeback => {
+                    Err(ArenaError::DuelError(InsultError::WaitingForComeback))
+                }
                 InsultCheckError::DuelOver => Err(ArenaError::DuelError(InsultError::DuelOver)),
             },
         }
