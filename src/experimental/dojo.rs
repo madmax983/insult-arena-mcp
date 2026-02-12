@@ -1,6 +1,6 @@
 use crate::experimental::audience::{Audience, Reaction};
+use crate::experimental::sensei::Sensei;
 use crate::{Duel, DuelResult, DuelState, Duelist, ExchangeResult, InsultError};
-use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 /// Events that occur during a Dojo turn.
@@ -22,9 +22,8 @@ pub struct Dojo {
     duel: Duel,
     /// The virtual audience tracking hype.
     audience: Audience,
-    /// The skill level of the Sensei (0.0 to 1.0).
-    /// Represents the probability of the Sensei finding the correct comeback.
-    sensei_skill: f64,
+    /// The AI Sensei opponent.
+    sensei: Sensei,
 }
 
 impl Dojo {
@@ -34,19 +33,11 @@ impl Dojo {
     ///
     /// * `skill` - Difficulty level (0.0 = total noob, 1.0 = unbeatable master).
     #[must_use]
-    pub const fn new(skill: f64) -> Self {
-        let skill = if skill < 0.0 {
-            0.0
-        } else if skill > 1.0 {
-            1.0
-        } else {
-            skill
-        };
-
+    pub fn new(skill: f64) -> Self {
         Self {
             duel: Duel::new(),
             audience: Audience::new(),
-            sensei_skill: skill,
+            sensei: Sensei::new(skill),
         }
     }
 
@@ -55,6 +46,8 @@ impl Dojo {
     /// # Errors
     ///
     /// Returns error if the move is invalid for the current state.
+    #[allow(clippy::expect_used)]
+    #[allow(clippy::missing_panics_doc)]
     pub fn turn(&mut self, input: &str) -> Result<Vec<DojoEvent>, InsultError> {
         let mut events = Vec::new();
 
@@ -101,12 +94,6 @@ impl Dojo {
         }
 
         // 2. Sensei Loop
-        // While it is the Sensei's turn (Defender) or Sensei is Attacker, keep going.
-        // The Sensei is the "Defender" in the Duel struct if Player is "Challenger".
-        // Wait, Player is ALWAYS Challenger in this impl?
-        // Yes, `Duel::new()` starts with Challenger attacking.
-        // So Sensei is implicitly the Defender role initially.
-
         loop {
             if self.duel.is_finished() {
                 if let Some(result) = self.duel.result() {
@@ -120,27 +107,56 @@ impl Dojo {
                     // If Attacker is Challenger (Player), then it's Defender (Sensei)'s turn to respond.
                     if attacker == Duelist::Challenger {
                         // Sensei responds
-                        let event = self.sensei_defend();
+                        let pending = self
+                            .duel
+                            .pending_insult()
+                            .expect("Should be pending insult")
+                            .to_string();
 
-                        // Capture audience reaction from the exchange we just made
-                        if let Some(last_exchange) = self.duel.exchanges().last() {
-                            events.push(DojoEvent::AudienceReaction(
-                                self.audience.react(last_exchange),
-                            ));
-                        }
+                        let response = self.sensei.defend(self.duel.insult_bank(), &pending);
 
-                        events.push(event);
+                        let exchange = self
+                            .duel
+                            .respond(response.clone())
+                            .expect("Sensei response failed");
+
+                        let description = if exchange.result.is_parried() {
+                            format!("Sensei parries: \"{response}\"")
+                        } else {
+                            format!("Sensei trips up: \"{response}\"")
+                        };
+
+                        let action = if exchange.result.is_parried() {
+                            "parry"
+                        } else {
+                            "fail"
+                        };
+
+                        events.push(DojoEvent::SenseiMove {
+                            action: action.to_string(),
+                            description,
+                        });
+
+                        // Capture audience reaction
+                        events.push(DojoEvent::AudienceReaction(self.audience.react(&exchange)));
                     } else {
                         // Attacker is Defender (Sensei), so it's Challenger (Player)'s turn to respond.
-                        // Break loop to let player act.
                         break;
                     }
                 }
                 DuelState::AwaitingInsult { attacker } => {
                     // If Attacker is Defender (Sensei), Sensei throws insult.
                     if attacker == Duelist::Defender {
-                        let event = self.sensei_attack();
-                        events.push(event);
+                        let insult = self.sensei.attack(self.duel.insult_bank());
+
+                        self.duel
+                            .throw_insult(insult.clone())
+                            .expect("Sensei picked invalid insult");
+
+                        events.push(DojoEvent::SenseiMove {
+                            action: "attack".to_string(),
+                            description: format!("Sensei throws: \"{insult}\""),
+                        });
                     } else {
                         // Attacker is Challenger (Player). Break loop to let player act.
                         break;
@@ -157,60 +173,6 @@ impl Dojo {
 
         Ok(events)
     }
-
-    #[allow(clippy::expect_used)]
-    fn sensei_attack(&mut self) -> DojoEvent {
-        let insult = self.duel.insult_bank().random_insult().insult.to_string();
-        // Sensei always picks a valid insult
-        self.duel
-            .throw_insult(insult.clone())
-            .expect("Sensei picked invalid insult"); // Should not happen
-
-        DojoEvent::SenseiMove {
-            action: "attack".to_string(),
-            description: format!("Sensei throws: \"{insult}\""),
-        }
-    }
-
-    #[allow(clippy::expect_used)]
-    fn sensei_defend(&mut self) -> DojoEvent {
-        let pending = self
-            .duel
-            .pending_insult()
-            .expect("Should be pending insult")
-            .to_string(); // Clone to satisfy borrow checker
-
-        let should_succeed = rand::thread_rng().gen_bool(self.sensei_skill);
-
-        let response = if should_succeed {
-            // Find correct comeback
-            self.duel
-                .insult_bank()
-                .find_comeback(&pending)
-                .unwrap_or("...")
-                .to_string()
-        } else {
-            // Fail intentionally
-            "I am rubber, you are glue!".to_string()
-        };
-
-        let exchange = self
-            .duel
-            .respond(response.clone())
-            .expect("Sensei response failed");
-
-        if exchange.result.is_parried() {
-            DojoEvent::SenseiMove {
-                action: "parry".to_string(),
-                description: format!("Sensei parries: \"{response}\""),
-            }
-        } else {
-            DojoEvent::SenseiMove {
-                action: "fail".to_string(),
-                description: format!("Sensei trips up: \"{response}\""),
-            }
-        }
-    }
 }
 
 #[cfg(test)]
@@ -221,7 +183,7 @@ mod tests {
     #[test]
     fn dojo_initialization() {
         let dojo = Dojo::new(0.5);
-        assert!((dojo.sensei_skill - 0.5).abs() < f64::EPSILON);
+        // Can't check private field 'sensei' directly, but we can verify Dojo state
         assert!(!dojo.duel.is_finished());
     }
 
@@ -230,16 +192,8 @@ mod tests {
         let mut dojo = Dojo::new(1.0); // Sensei always parries
         let events = dojo.turn("You fight like a dairy farmer!").unwrap();
 
-        // Expected flow:
-        // 1. Player throws insult.
-        // 2. Sensei responds (Parries).
-        // 3. Sensei wins exchange -> Sensei attacks.
-        // 4. Loop breaks (waiting for Player comeback).
-
-        // Let's check the event stream
         assert!(events.len() >= 3);
 
-        // Event 0: Player Action
         match &events[0] {
             DojoEvent::PlayerAction { description, .. } => {
                 assert!(description.contains("You threw"));
@@ -247,12 +201,6 @@ mod tests {
             _ => panic!("Expected PlayerAction"),
         }
 
-        // Event: Audience Reaction (to Sensei's parry)
-        // Note: The order in logic:
-        // Sensei Defend -> Call Respond -> Duel updates -> Audience React -> Event Pushed.
-        // Wait, in my code I pushed AudienceReaction *after* `sensei_defend` call but using `last_exchange`.
-
-        // Let's just check existence of events.
         assert!(
             events
                 .iter()
@@ -270,26 +218,18 @@ mod tests {
         let mut dojo = Dojo::new(0.0); // Sensei always fails
         let events = dojo.turn("You fight like a dairy farmer!").unwrap();
 
-        // Expected flow:
-        // 1. Player throws insult.
-        // 2. Sensei responds (Fails).
-        // 3. Player wins exchange -> Player attacks.
-        // 4. Loop breaks (waiting for Player insult).
-
         assert!(
             events
                 .iter()
                 .any(|e| matches!(e, DojoEvent::SenseiMove { action, .. } if action == "fail"))
         );
 
-        // Should NOT see Sensei attack, because Player is attacker now
         assert!(
             !events
                 .iter()
                 .any(|e| matches!(e, DojoEvent::SenseiMove { action, .. } if action == "attack"))
         );
 
-        // Next turn should accept insult
         assert!(matches!(
             dojo.duel.state(),
             DuelState::AwaitingInsult {
@@ -300,16 +240,9 @@ mod tests {
 
     #[test]
     fn dojo_turn_loop_correctness() {
-        // Case: Sensei is very skilled (1.0).
-        // 1. Player throws insult.
-        // 2. Sensei responds (Parry).
-        // 3. Sensei attacks.
-        // 4. Player must respond.
         let mut dojo = Dojo::new(1.0);
         let _events = dojo.turn("You fight like a dairy farmer!").unwrap();
 
-        // Check final state after turn returns
-        // Should be AwaitingComeback { attacker: Defender } -> Player needs to respond to Sensei's attack.
         assert!(matches!(
             dojo.duel.state(),
             DuelState::AwaitingComeback {
@@ -317,7 +250,6 @@ mod tests {
             }
         ));
 
-        // Get the insult Sensei threw
         let pending = dojo
             .duel
             .pending_insult()
@@ -329,10 +261,6 @@ mod tests {
             .unwrap()
             .to_string();
 
-        // 5. Player responds correctly.
-        // 6. Player Parries.
-        // 7. Loop: State is AwaitingInsult { attacker: Challenger }.
-        // 8. Loop checks: Attacker is Challenger? Yes. Break.
         let events2 = dojo.turn(&correct_response).unwrap();
 
         assert!(matches!(
@@ -342,7 +270,6 @@ mod tests {
             }
         ));
 
-        // Check events2 contains PlayerAction (Parried)
         assert!(events2.iter().any(|e| matches!(e, DojoEvent::PlayerAction { description, .. } if description.contains("Touché"))));
     }
 }

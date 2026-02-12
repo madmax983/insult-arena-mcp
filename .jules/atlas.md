@@ -12,3 +12,7 @@
 **[Standardizing Arena Logic]**
 **Tangle:** `Arena` methods returned `Result<(String, View), String>`, mixing game logic with presentation strings and making error handling fragile (Stringly Typed).
 **Blueprint:** Introduced `ArenaError` (using `thiserror`) and `ArenaOutcome` enums in `src/arena.rs`. `Arena` now returns structured data, and `Display` implementations handle the text generation, strictly separating logic from presentation.
+
+**[Decoupling Dojo AI Logic]**
+**Tangle:** `Dojo` (in `experimental/dojo.rs`) was a "God Struct" handling game session orchestration, audience management, AND the specific AI logic for the opponent ("Sensei"). This violated Single Responsibility Principle.
+**Blueprint:** Extracted `Sensei` into `experimental/sensei.rs`. `Dojo` now delegates AI decisions (attack/defend) to `Sensei`, keeping the orchestration logic clean and allowing for potentially different AI implementations in the future.
