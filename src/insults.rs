@@ -660,4 +660,18 @@ mod sentry_robustness_tests {
         let results = bank.search_insults(&long_query);
         assert!(results.is_empty());
     }
+
+    #[test]
+    fn search_insults_truncation_safety() {
+        let bank = InsultBank::new();
+        // Create a query that expands significantly.
+        // 'ß' expands to "ss".
+        // 130 'ß' chars -> 260 's' chars.
+        // BUFFER_SIZE is 256.
+        // This should not panic.
+        let query = "ß".repeat(130);
+        let results = bank.search_insults(&query);
+        // It shouldn't match anything, but most importantly it shouldn't panic.
+        assert!(results.is_empty());
+    }
 }
