@@ -339,10 +339,10 @@ impl InsultServer {
         }
     }
 
-    async fn handle_get_hint(&self) -> DuelResponse {
+    async fn handle_get_hint(&self, session_id: String) -> DuelResponse {
         let arena = self.arena.lock().await;
 
-        match arena.get_hint() {
+        match arena.get_hint(&session_id) {
             Ok((hint, insult)) => {
                 DuelResponse::with_hint("Here's a hint for the comeback:", hint, insult)
             }
@@ -420,7 +420,7 @@ impl ServerHandler for InsultServer {
                 self.handle_throw_insult(session_id_str, insult).await
             }
             ToolAction::Respond { comeback } => self.handle_respond(session_id_str, comeback).await,
-            ToolAction::GetHint => self.handle_get_hint().await,
+            ToolAction::GetHint => self.handle_get_hint(session_id_str).await,
         };
 
         Ok(CallToolResult {

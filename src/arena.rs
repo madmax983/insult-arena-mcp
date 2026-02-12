@@ -395,11 +395,22 @@ impl Arena {
     /// Get a hint for the current pending insult.
     ///
     /// # Errors
-    /// Returns error if no duel is in progress or no insult is pending.
-    pub fn get_hint(&self) -> Result<(String, String), ArenaError> {
+    /// Returns error if:
+    /// - No duel is in progress or no insult is pending.
+    /// - It is not the session's turn to respond.
+    pub fn get_hint(&self, session_id: &str) -> Result<(String, String), ArenaError> {
         let Some(duel) = self.duel.as_ref() else {
             return Err(ArenaError::NoDuel);
         };
+
+        // Ensure it is the correct turn (Defender's turn to respond)
+        if let DuelState::AwaitingComeback { attacker } = duel.state() {
+            let defender = attacker.opponent();
+            self.sessions.validate_turn(defender, session_id)?;
+        } else {
+            // If we are not waiting for a comeback, we can't give a hint
+            return Err(ArenaError::NoPendingInsult);
+        }
 
         let Some(insult) = duel.pending_insult() else {
             return Err(ArenaError::NoPendingInsult);
@@ -702,6 +713,43 @@ mod tests {
             result,
             Err(ArenaError::DuelError(InsultError::DuelOver))
         ));
+    }
+
+    #[test]
+    fn hint_security_check() {
+        let mut arena = Arena::new();
+        arena.start_duel().unwrap();
+        arena.register_challenger("attacker".to_string()).unwrap();
+        arena.register_defender("defender".to_string()).unwrap();
+
+        // 1. No one can get hint before insult thrown (NoPendingInsult)
+        assert!(matches!(
+            arena.get_hint("attacker"),
+            Err(ArenaError::NoPendingInsult)
+        ));
+
+        // Throw insult
+        arena
+            .throw_insult("attacker", "You fight like a dairy farmer!".to_string())
+            .unwrap();
+
+        // 2. Attacker cannot get hint (NotYourTurn) - Preventing info leak
+        assert!(matches!(
+            arena.get_hint("attacker"),
+            Err(ArenaError::NotYourTurn(_))
+        ));
+
+        // 3. Observer cannot get hint
+        assert!(matches!(
+            arena.get_hint("observer"),
+            Err(ArenaError::NotYourTurn(_))
+        ));
+
+        // 4. Defender CAN get hint
+        let result = arena.get_hint("defender");
+        assert!(result.is_ok());
+        let (hint, _) = result.unwrap();
+        assert!(!hint.is_empty());
     }
 
     #[test]
