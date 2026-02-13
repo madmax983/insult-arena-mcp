@@ -24,7 +24,7 @@ pub struct NotificationManager {
 }
 
 impl NotificationManager {
-    /// Creates a new NotificationManager.
+    /// Creates a new [`NotificationManager`].
     #[must_use]
     pub fn new() -> Self {
         // Create a bounded channel for notifications (load shedding)
