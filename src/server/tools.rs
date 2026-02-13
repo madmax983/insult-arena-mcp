@@ -135,6 +135,29 @@ pub enum ToolAction {
     GetHint,
 }
 
+impl ToolAction {
+    fn extract_string(
+        args: &serde_json::Map<String, serde_json::Value>,
+        key: &str,
+        tool_name: &str,
+        error_label: &str,
+    ) -> Result<String, CallToolError> {
+        let val = args.get(key).and_then(|v| v.as_str()).unwrap_or("");
+        // 🛡️ HARDENING: Check length BEFORE allocation to prevent DoS
+        if val.len() > crate::arena::MAX_INPUT_LENGTH {
+            return Err(CallToolError::invalid_arguments(
+                tool_name,
+                Some(format!(
+                    "{} too long (max {} chars)",
+                    error_label,
+                    crate::arena::MAX_INPUT_LENGTH
+                )),
+            ));
+        }
+        Ok(val.to_string())
+    }
+}
+
 impl TryFrom<CallToolRequestParams> for ToolAction {
     type Error = CallToolError;
 
@@ -145,44 +168,22 @@ impl TryFrom<CallToolRequestParams> for ToolAction {
             "register_as_defender" => Ok(Self::RegisterDefender),
             "get_duel_state" => Ok(Self::GetDuelState),
             "list_insults" => Ok(Self::ListInsults),
-            "throw_insult" => {
-                let args = params.arguments.unwrap_or_default();
-                let insult_val = args.get("insult").and_then(|v| v.as_str()).unwrap_or("");
-
-                // 🛡️ HARDENING: Check length BEFORE allocation to prevent DoS
-                if insult_val.len() > crate::arena::MAX_INPUT_LENGTH {
-                    return Err(CallToolError::invalid_arguments(
-                        &params.name,
-                        Some(format!(
-                            "Insult too long (max {} chars)",
-                            crate::arena::MAX_INPUT_LENGTH
-                        )),
-                    ));
-                }
-
-                Ok(Self::ThrowInsult {
-                    insult: insult_val.to_string(),
-                })
-            }
-            "respond" => {
-                let args = params.arguments.unwrap_or_default();
-                let comeback_val = args.get("comeback").and_then(|v| v.as_str()).unwrap_or("");
-
-                // 🛡️ HARDENING: Check length BEFORE allocation to prevent DoS
-                if comeback_val.len() > crate::arena::MAX_INPUT_LENGTH {
-                    return Err(CallToolError::invalid_arguments(
-                        &params.name,
-                        Some(format!(
-                            "Comeback too long (max {} chars)",
-                            crate::arena::MAX_INPUT_LENGTH
-                        )),
-                    ));
-                }
-
-                Ok(Self::Respond {
-                    comeback: comeback_val.to_string(),
-                })
-            }
+            "throw_insult" => Ok(Self::ThrowInsult {
+                insult: Self::extract_string(
+                    &params.arguments.unwrap_or_default(),
+                    "insult",
+                    &params.name,
+                    "Insult",
+                )?,
+            }),
+            "respond" => Ok(Self::Respond {
+                comeback: Self::extract_string(
+                    &params.arguments.unwrap_or_default(),
+                    "comeback",
+                    &params.name,
+                    "Comeback",
+                )?,
+            }),
             "get_hint" => Ok(Self::GetHint),
             _ => Err(CallToolError::unknown_tool(&params.name)),
         }
