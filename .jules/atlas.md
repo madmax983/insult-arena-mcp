@@ -16,3 +16,7 @@
 **[Decoupling Dojo AI Logic]**
 **Tangle:** `Dojo` (in `experimental/dojo.rs`) was a "God Struct" handling game session orchestration, audience management, AND the specific AI logic for the opponent ("Sensei"). This violated Single Responsibility Principle.
 **Blueprint:** Extracted `Sensei` into `experimental/sensei.rs`. `Dojo` now delegates AI decisions (attack/defend) to `Sensei`, keeping the orchestration logic clean and allowing for potentially different AI implementations in the future.
+
+**[Extract NotificationManager from InsultServer]**
+**Tangle:** `InsultServer` (in `src/server/mod.rs`) was responsible for both request handling (tools) and the low-level mechanics of broadcasting turn notifications (SSE channels, worker loops, load shedding). This violated the Single Responsibility Principle and made the server logic cluttered.
+**Blueprint:** Extracted `NotificationManager` into `src/server/notifications.rs`. `InsultServer` now delegates notification duties to `NotificationManager`, which encapsulates the `HyperRuntime`, channels, and worker logic. This separates "Game Logic Orchestration" from "Network Notification Mechanics".
