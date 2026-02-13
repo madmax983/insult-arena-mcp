@@ -118,6 +118,24 @@ Challenger             Server              Defender
     |                    |                    |
 ```
 
+## Experimental Features (Nova)
+
+The `nova` feature flag unlocks additional game mechanics and modes. These are experimental and subject to change.
+
+To enable them, run the server with:
+```bash
+cargo run --features nova
+```
+
+### Available Modules
+
+- **Dojo**: A single-player training mode against an AI "Sensei".
+- **Audience**: Tracks "hype" and crowd reactions (cheers, boos) to exchanges.
+- **Weather**: Simulates environmental conditions (Fog, Storm, Heatwave) that affect gameplay.
+- **Achievements**: Awards badges for feats like "Untouchable" or "Comeback Kid".
+- **Parrot**: A helper system that provides masked hints for comebacks.
+- **Reporter**: Generates a narrative chronicle of the duel.
+
 ## Example Duel
 
 ```

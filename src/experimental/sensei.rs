@@ -2,6 +2,25 @@ use crate::InsultBank;
 use rand::Rng;
 
 /// The Sensei (AI) opponent in the Dojo.
+///
+/// # Hero's Journey
+///
+/// ```
+/// use insult_arena_mcp::experimental::sensei::Sensei;
+/// use insult_arena_mcp::InsultBank;
+///
+/// // 1. Create a Sensei (Skill 0.5 = 50% chance to defend)
+/// let sensei = Sensei::new(0.5);
+/// let bank = InsultBank::new();
+///
+/// // 2. Sensei attacks
+/// let insult = sensei.attack(&bank);
+/// println!("Sensei says: {}", insult);
+///
+/// // 3. Sensei defends
+/// let comeback = sensei.defend(&bank, &insult);
+/// println!("Sensei responds: {}", comeback);
+/// ```
 #[derive(Debug, Clone)]
 pub struct Sensei {
     /// Skill level (0.0 to 1.0).

@@ -16,6 +16,25 @@ pub enum WeatherCondition {
 }
 
 /// Manages the arena's weather and its effects on gameplay/audience.
+///
+/// # Hero's Journey
+///
+/// ```
+/// use insult_arena_mcp::experimental::weather::{WeatherSystem, WeatherCondition};
+///
+/// // 1. Create a weather system
+/// let mut weather = WeatherSystem::new();
+///
+/// // 2. Randomize weather
+/// weather.randomize();
+///
+/// // 3. Check effects
+/// if weather.current == WeatherCondition::Storm {
+///     println!("🌩️ Thunder crashes!");
+///     // Storm amplifies hype
+///     assert_eq!(weather.apply_hype_modifier(10), 15);
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub struct WeatherSystem {
     pub current: WeatherCondition,

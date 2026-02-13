@@ -16,6 +16,27 @@ pub struct MatchStats {
 }
 
 /// A reporter that generates narratives and stats for a duel.
+///
+/// # Hero's Journey
+///
+/// ```
+/// use insult_arena_mcp::Duel;
+/// use insult_arena_mcp::experimental::reporter::Reporter;
+///
+/// // 1. Play a duel
+/// let mut duel = Duel::new();
+/// duel.throw_insult("You fight like a dairy farmer!".to_string()).unwrap();
+/// duel.respond("How appropriate. You fight like a cow!".to_string()).unwrap();
+///
+/// // 2. Generate the chronicle
+/// let story = Reporter::chronicle(&duel);
+/// println!("{}", story);
+///
+/// // 3. Analyze stats
+/// let stats = Reporter::analyze(&duel);
+/// assert!(stats.total_rounds > 0);
+/// assert_eq!(stats.parry_rate, 1.0);
+/// ```
 pub struct Reporter;
 
 impl Reporter {
