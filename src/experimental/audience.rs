@@ -16,6 +16,15 @@ pub enum Reaction {
 
 /// A virtual audience that tracks the "hype" of the duel.
 ///
+/// # Rules of the Crowd
+///
+/// The audience has a short attention span and loves novelty.
+///
+/// - **Hype**: Starts at 50. Max 100, Min 0.
+/// - **Parry**: **+10 Hype** (They love a witty comeback).
+/// - **Fail**: **-10 Hype** (They cringe at failure).
+/// - **Repetition**: **-20 Hype** (They boo unoriginal insults).
+///
 /// # Hero's Journey
 ///
 /// ```
