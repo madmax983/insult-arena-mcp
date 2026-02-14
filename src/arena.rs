@@ -26,6 +26,10 @@
 //! assert_eq!(view.defender_score, 1);
 //! ```
 
+use std::time::{Duration, Instant};
+
+use tracing::warn;
+
 use crate::duel::{Duel, DuelState, DuelStateView, Duelist, InsultCheckError, InsultError};
 
 /// Maximum length of any user input string (insults, comebacks).
@@ -129,6 +133,10 @@ impl DuelSessions {
 pub struct Arena {
     duel: Option<Duel>,
     sessions: DuelSessions,
+    /// Timestamp of the last successful action.
+    last_active: Instant,
+    /// Duration after which an active duel is considered stale and can be reset.
+    timeout: Duration,
 }
 
 impl Arena {
@@ -137,7 +145,16 @@ impl Arena {
         Self {
             duel: None,
             sessions: DuelSessions::default(),
+            last_active: Instant::now(),
+            timeout: Duration::from_secs(300), // 5 minutes default
         }
+    }
+
+    /// Set a custom timeout for the duel.
+    ///
+    /// Useful for testing or adjusting game pace.
+    pub const fn set_timeout(&mut self, timeout: Duration) {
+        self.timeout = timeout;
     }
 
     /// Starts a new duel, resetting any existing state.
@@ -158,12 +175,18 @@ impl Arena {
     /// Returns error if a duel is already in progress and not finished.
     pub fn start_duel(&mut self) -> Result<(ArenaOutcome, DuelStateView), ArenaError> {
         if self.duel.as_ref().is_some_and(|duel| !duel.is_finished()) {
-            return Err(ArenaError::DuelInProgress);
+            // Check if the duel is stale (DoS protection)
+            if self.last_active.elapsed() > self.timeout {
+                warn!("⚠️  Resetting stale duel due to inactivity.");
+            } else {
+                return Err(ArenaError::DuelInProgress);
+            }
         }
 
         let duel = Duel::new();
         let view = DuelStateView::from(&duel);
         self.duel = Some(duel);
+        self.last_active = Instant::now();
 
         // Clear session registrations for new duel
         self.sessions = DuelSessions::default();
@@ -181,6 +204,7 @@ impl Arena {
         session_id: String,
     ) -> Result<(ArenaOutcome, Option<DuelStateView>), ArenaError> {
         self.sessions.register(role, session_id)?;
+        self.last_active = Instant::now();
         let state = self.duel.as_ref().map(DuelStateView::from);
 
         Ok((ArenaOutcome::RoleRegistered { role }, state))
@@ -324,6 +348,7 @@ impl Arena {
         // Using throw_insult_ref to avoid cloning the insult string.
         match duel.throw_insult_ref(&insult) {
             Ok(canonical) => {
+                self.last_active = Instant::now();
                 // Reuse the existing allocation to store the canonical string.
                 insult.clear();
                 insult.push_str(canonical);
@@ -395,6 +420,7 @@ impl Arena {
         // Zero allocations here (was 1 from &str).
         match duel.respond(comeback) {
             Ok(exchange) => {
+                self.last_active = Instant::now();
                 let view = DuelStateView::from(&*duel);
                 let outcome = ArenaOutcome::ExchangeProcessed { exchange };
                 Ok((outcome, view))

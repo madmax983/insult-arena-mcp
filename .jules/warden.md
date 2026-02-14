@@ -35,3 +35,7 @@
 **2025-05-24 - DoS: Unbounded Notification Concurrency**
 **Threat:** `InsultServer::broadcast_turn_notification` spawned a `tokio::task` for every connected session in an unbounded loop. An attacker controlling many connections could trigger thousands of concurrent tasks, leading to resource exhaustion (OOM/CPU).
 **Defense:** Implemented a bounded `mpsc` channel (capacity 100) and a background worker with a `Semaphore` (limit 50) to process notifications. Notifications are dropped (load shedding) if the channel is full.
+
+**2026-02-13 - DoS: Stale Duel Reset**
+**Threat:** The `Arena` enforces a singleton game state where one active duel blocks all other potential players. If a player starts a duel and abandons it (e.g., disconnects or crashes), no new duel can be started until the server restarts, creating a Denial of Service (DoS) condition.
+**Defense:** Implemented a timeout mechanism in `src/arena.rs`. An active duel that has been inactive for more than `timeout` (default 5 minutes) is automatically reset when `start_duel` is called. Added `last_active` timestamp tracking to all state-mutating methods.
