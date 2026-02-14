@@ -95,7 +95,9 @@ impl Announcer {
                 }
             },
             ArenaOutcome::InsultThrown { insult } => {
-                let _ = write!(f, "🗣️ You bellow: \"{insult}\" ... awaiting comeback!");
+                // Using unwrap() as writing to String is infallible (barring OOM).
+                #[allow(clippy::unwrap_used)]
+                write!(f, "🗣️ You bellow: \"{insult}\" ... awaiting comeback!").unwrap();
             }
             ArenaOutcome::ExchangeProcessed { exchange } => {
                 Self::format_exchange(&mut f, exchange, view);
@@ -134,34 +136,39 @@ impl Announcer {
         // ⚡ Bolt Optimization:
         // Removed intermediate `score_display` string allocation (via `format!`).
         // Now writes scores directly to the result buffer.
+        // Used unwrap() as writing to String is infallible (barring OOM).
+        #[allow(clippy::unwrap_used)]
         if exchange.result.is_parried() {
             if is_finished {
-                let _ = write!(f, "🏆 VICTORY! {} has won the duel! ", exchange.winner);
+                write!(f, "🏆 VICTORY! {} has won the duel! ", exchange.winner).unwrap();
             } else {
-                let _ = write!(
+                write!(
                     f,
                     "⚔️ TOUCHÉ! A sharp wit! {} wins the exchange and attacks next! ",
                     exchange.winner
-                );
+                )
+                .unwrap();
             }
         } else {
-            let _ = write!(f, "💥 OOF! That didn't land! ");
+            f.push_str("💥 OOF! That didn't land! ");
             if is_finished {
-                let _ = write!(f, "{} wins the duel! ", exchange.winner);
+                write!(f, "{} wins the duel! ", exchange.winner).unwrap();
             } else {
-                let _ = write!(
+                write!(
                     f,
                     "{} wins the exchange and attacks again! ",
                     exchange.winner
-                );
+                )
+                .unwrap();
             }
         }
 
         // Append score directly
         if let Some((challenger, defender)) = scores {
-            let _ = write!(f, "(Score: {challenger}-{defender})");
+            #[allow(clippy::unwrap_used)]
+            write!(f, "(Score: {challenger}-{defender})").unwrap();
         } else {
-            let _ = write!(f, "(Score: ?-?)");
+            f.push_str("(Score: ?-?)");
         }
 
         // Append match point text
@@ -169,7 +176,8 @@ impl Announcer {
 
         // Append expected comeback if failed
         if let ExchangeResult::Failed { ref correct, .. } = exchange.result {
-            let _ = write!(f, "\n\nExpected comeback: \"{correct}\"");
+            #[allow(clippy::unwrap_used)]
+            write!(f, "\n\nExpected comeback: \"{correct}\"").unwrap();
         }
     }
 }

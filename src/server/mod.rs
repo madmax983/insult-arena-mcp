@@ -25,8 +25,8 @@ use tokio::sync::Mutex;
 use tracing::{info, warn};
 
 use crate::announcer::Announcer;
-use crate::arena::Arena;
-use crate::duel::Duelist;
+use crate::arena::{Arena, ArenaError, ArenaOutcome};
+use crate::duel::{DuelStateView, Duelist};
 
 pub mod notifications;
 pub mod response;
@@ -105,6 +105,45 @@ impl InsultServer {
     pub async fn set_runtime(&self, runtime: Arc<HyperRuntime>) {
         self.notifications.set_runtime(runtime).await;
     }
+
+    /// Helper to execute a state-changing action on the arena.
+    ///
+    /// Handles locking, error mapping, logging, turn notifications, and response formatting.
+    async fn execute_turn_action<F>(&self, context: &str, action: F) -> DuelResponse
+    where
+        F: FnOnce(&mut Arena) -> Result<(ArenaOutcome, DuelStateView), ArenaError>,
+    {
+        let mut arena = self.arena.lock().await;
+        match action(&mut arena) {
+            Ok((outcome, view)) => {
+                // Specialized logging based on outcome
+                if let ArenaOutcome::InsultThrown { ref insult } = outcome {
+                    info!("🗣️  INSULT: {:?}", insult);
+                }
+
+                let message = Announcer::announce(&outcome, Some(&view));
+
+                // Log result for completed exchanges
+                if let ArenaOutcome::ExchangeProcessed { .. } = outcome {
+                    info!("   Result: {:?}", message);
+                }
+
+                // Release lock before broadcasting to avoid holding it during network IO
+                drop(arena);
+
+                // Only notify if the game is still active
+                if view.phase != "finished" {
+                    self.notifications.notify_turn(&view).await;
+                }
+
+                DuelResponse::success(message, view)
+            }
+            Err(e) => {
+                warn!("❌ {} error: {:?}", context, e);
+                DuelResponse::error(e.to_string())
+            }
+        }
+    }
 }
 
 impl Default for InsultServer {
@@ -125,20 +164,8 @@ impl InsultServer {
         info!("   Challenger vs Defender - First to 3 wins!");
         info!("   Challenger attacks first...");
 
-        let mut arena = self.arena.lock().await;
-        match arena.start_duel() {
-            Ok((outcome, view)) => {
-                // Broadcast initial state
-                drop(arena);
-                self.notifications.notify_turn(&view).await;
-
-                DuelResponse::success(Announcer::announce(&outcome, Some(&view)), view)
-            }
-            Err(e) => {
-                warn!("❌ Start duel error: {:?}", e);
-                DuelResponse::error(e.to_string())
-            }
-        }
+        self.execute_turn_action("Start duel", Arena::start_duel)
+            .await
     }
 
     async fn handle_register(&self, role: Duelist, session_id: Option<String>) -> DuelResponse {
@@ -206,48 +233,17 @@ impl InsultServer {
     }
 
     async fn handle_throw_insult(&self, session_id: String, insult: String) -> DuelResponse {
-        let mut arena = self.arena.lock().await;
-
         // ⚡ Bolt Optimization: Pass ownership of 'insult' to Arena to avoid allocation.
-        match arena.throw_insult(&session_id, insult) {
-            Ok((outcome, view)) => {
-                if let crate::arena::ArenaOutcome::InsultThrown { ref insult } = outcome {
-                    info!("🗣️  INSULT: {:?}", insult);
-                }
-                drop(arena); // Release lock before broadcast
-                self.notifications.notify_turn(&view).await;
-
-                DuelResponse::success(Announcer::announce(&outcome, Some(&view)), view)
-            }
-            Err(e) => {
-                warn!("❌ Insult error: {:?}", e);
-                DuelResponse::error(e.to_string())
-            }
-        }
+        self.execute_turn_action("Insult", |arena| arena.throw_insult(&session_id, insult))
+            .await
     }
 
     async fn handle_respond(&self, session_id: String, comeback: String) -> DuelResponse {
-        let mut arena = self.arena.lock().await;
-
         info!("💬 COMEBACK ATTEMPT: {:?}", comeback);
 
         // ⚡ Bolt Optimization: Pass ownership of 'comeback' to Arena to avoid allocation.
-        match arena.respond(&session_id, comeback) {
-            Ok((outcome, view)) => {
-                let message = Announcer::announce(&outcome, Some(&view));
-                info!("   Result: {:?}", message);
-                let is_finished = view.phase == "finished";
-
-                // Broadcast turn notification (unless duel is over)
-                if !is_finished {
-                    drop(arena); // Release lock before broadcast
-                    self.notifications.notify_turn(&view).await;
-                }
-
-                DuelResponse::success(message, view)
-            }
-            Err(e) => DuelResponse::error(e.to_string()),
-        }
+        self.execute_turn_action("Respond", |arena| arena.respond(&session_id, comeback))
+            .await
     }
 
     async fn handle_get_hint(&self, session_id: String) -> DuelResponse {
