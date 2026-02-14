@@ -20,3 +20,7 @@
 **[Extract NotificationManager from InsultServer]**
 **Tangle:** `InsultServer` (in `src/server/mod.rs`) was responsible for both request handling (tools) and the low-level mechanics of broadcasting turn notifications (SSE channels, worker loops, load shedding). This violated the Single Responsibility Principle and made the server logic cluttered.
 **Blueprint:** Extracted `NotificationManager` into `src/server/notifications.rs`. `InsultServer` now delegates notification duties to `NotificationManager`, which encapsulates the `HyperRuntime`, channels, and worker logic. This separates "Game Logic Orchestration" from "Network Notification Mechanics".
+
+**[Extracted ToolAction to server/action.rs]**
+**Tangle:** `src/server/tools.rs` mixed schema definitions (API Contract) with request parsing logic (Implementation), coupling "what" with "how".
+**Blueprint:** Extracted `ToolAction` and its parsing logic into `src/server/action.rs`. Now `tools.rs` is pure definition, and `action.rs` is pure parsing/validation.
