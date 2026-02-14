@@ -50,6 +50,17 @@ impl Duelist {
             Self::Defender => Self::Challenger,
         }
     }
+
+    /// Returns the string representation of the duelist.
+    ///
+    /// Faster than `to_string()` as it avoids formatting machinery.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Challenger => "Challenger",
+            Self::Defender => "Defender",
+        }
+    }
 }
 
 impl std::fmt::Display for Duelist {
@@ -170,17 +181,19 @@ impl From<&Duel> for DuelStateView {
         let (phase, next_to_act, winner) = match duel.state() {
             DuelState::AwaitingInsult { attacker } => (
                 "awaiting_insult".to_string(),
-                Some(attacker.to_string()),
+                Some(attacker.as_str().to_string()),
                 None,
             ),
             DuelState::AwaitingComeback { attacker } => (
                 "awaiting_comeback".to_string(),
-                Some(attacker.opponent().to_string()),
+                Some(attacker.opponent().as_str().to_string()),
                 None,
             ),
-            DuelState::Finished { winner } => {
-                ("finished".to_string(), None, Some(winner.to_string()))
-            }
+            DuelState::Finished { winner } => (
+                "finished".to_string(),
+                None,
+                Some(winner.as_str().to_string()),
+            ),
         };
 
         let (challenger_score, defender_score) = duel.scores();

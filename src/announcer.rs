@@ -76,27 +76,22 @@ impl Announcer {
     /// ```
     #[must_use]
     pub fn announce(outcome: &ArenaOutcome, view: Option<&DuelStateView>) -> String {
-        let mut f = String::new();
+        // ⚡ Bolt Optimization: Pre-allocate buffer to avoid reallocations.
+        // Average message size is ~100-200 bytes.
+        let mut f = String::with_capacity(256);
 
         match outcome {
             ArenaOutcome::DuelStarted => {
-                let _ = write!(
-                    f,
-                    "⚔️ En garde! A new duel begins. Challenger, throw the first insult! 🏴‍☠️"
+                f.push_str(
+                    "⚔️ En garde! A new duel begins. Challenger, throw the first insult! 🏴‍☠️",
                 );
             }
             ArenaOutcome::RoleRegistered { role } => match role {
                 Duelist::Challenger => {
-                    let _ = write!(
-                        f,
-                        "🏴‍☠️ You are the CHALLENGER! Sharpen your tongue and throw the first insult!"
-                    );
+                    f.push_str("🏴‍☠️ You are the CHALLENGER! Sharpen your tongue and throw the first insult!");
                 }
                 Duelist::Defender => {
-                    let _ = write!(
-                        f,
-                        "🛡️ You are the DEFENDER! Brace yourself for insults and retort with a comeback!"
-                    );
+                    f.push_str("🛡️ You are the DEFENDER! Brace yourself for insults and retort with a comeback!");
                 }
             },
             ArenaOutcome::InsultThrown { insult } => {
@@ -170,7 +165,7 @@ impl Announcer {
         }
 
         // Append match point text
-        let _ = write!(f, "{match_point_text}");
+        f.push_str(match_point_text);
 
         // Append expected comeback if failed
         if let ExchangeResult::Failed { ref correct, .. } = exchange.result {
