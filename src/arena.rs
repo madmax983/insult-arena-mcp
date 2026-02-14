@@ -3,7 +3,7 @@
 //! # Hero's Journey
 //!
 //! ```
-//! use insult_arena_mcp::Arena;
+//! use insult_arena_mcp::{Arena, SessionId, PlayerInput};
 //!
 //! // 1. Create the Arena
 //! let mut arena = Arena::new();
@@ -13,14 +13,18 @@
 //! assert_eq!(view.phase, "awaiting_insult");
 //!
 //! // 3. Register players
-//! arena.register_challenger("session_A".to_string()).unwrap();
-//! arena.register_defender("session_B".to_string()).unwrap();
+//! let session_a = SessionId::new("session_A").unwrap();
+//! let session_b = SessionId::new("session_B").unwrap();
+//! arena.register_challenger(session_a.clone()).unwrap();
+//! arena.register_defender(session_b.clone()).unwrap();
 //!
 //! // 4. Challenger throws an insult
-//! let (outcome, view) = arena.throw_insult("session_A", "You fight like a dairy farmer!".to_string()).unwrap();
+//! let insult = PlayerInput::new("You fight like a dairy farmer!").unwrap();
+//! let (outcome, view) = arena.throw_insult(&session_a, insult).unwrap();
 //!
 //! // 5. Defender responds
-//! let (outcome, view) = arena.respond("session_B", "How appropriate. You fight like a cow!".to_string()).unwrap();
+//! let comeback = PlayerInput::new("How appropriate. You fight like a cow!").unwrap();
+//! let (outcome, view) = arena.respond(&session_b, comeback).unwrap();
 //!
 //! // Defender won the exchange!
 //! assert_eq!(view.defender_score, 1);
@@ -38,6 +42,112 @@ pub const MAX_INPUT_LENGTH: usize = 1024;
 /// This limit prevents Denial of Service (`DoS`) attacks where malicious clients
 /// send excessively long session IDs.
 pub const MAX_SESSION_ID_LENGTH: usize = 128;
+
+/// A validated session ID string.
+///
+/// Enforces `MAX_SESSION_ID_LENGTH`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SessionId(String);
+
+impl SessionId {
+    /// Creates a new `SessionId` from a string if it meets length requirements.
+    ///
+    /// # Errors
+    /// Returns `ArenaError::SessionIdTooLong` if the string exceeds `MAX_SESSION_ID_LENGTH`.
+    pub fn new(id: impl Into<String>) -> Result<Self, ArenaError> {
+        let id = id.into();
+        if id.len() > MAX_SESSION_ID_LENGTH {
+            Err(ArenaError::SessionIdTooLong(MAX_SESSION_ID_LENGTH))
+        } else {
+            Ok(Self(id))
+        }
+    }
+
+    /// Returns the inner string.
+    #[must_use]
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+
+    /// Returns a string slice of the ID.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl AsRef<str> for SessionId {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for SessionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl TryFrom<String> for SessionId {
+    type Error = ArenaError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
+/// A validated player input string (insult or comeback).
+///
+/// Enforces `MAX_INPUT_LENGTH`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlayerInput(String);
+
+impl PlayerInput {
+    /// Creates a new `PlayerInput` from a string if it meets length requirements.
+    ///
+    /// # Errors
+    /// Returns `ArenaError::InputTooLong` if the string exceeds `MAX_INPUT_LENGTH`.
+    pub fn new(input: impl Into<String>) -> Result<Self, ArenaError> {
+        let input = input.into();
+        if input.len() > MAX_INPUT_LENGTH {
+            Err(ArenaError::InputTooLong(MAX_INPUT_LENGTH))
+        } else {
+            Ok(Self(input))
+        }
+    }
+
+    /// Returns the inner string.
+    #[must_use]
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+
+    /// Returns a string slice of the input.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl AsRef<str> for PlayerInput {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for PlayerInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl TryFrom<String> for PlayerInput {
+    type Error = ArenaError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
 
 /// Errors that can occur in the Arena.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -79,16 +189,12 @@ pub enum ArenaOutcome {
 /// to concrete session IDs provided by the MCP runtime.
 #[derive(Debug, Default)]
 struct DuelSessions {
-    challenger: Option<String>,
-    defender: Option<String>,
+    challenger: Option<SessionId>,
+    defender: Option<SessionId>,
 }
 
 impl DuelSessions {
-    fn register(&mut self, role: Duelist, session_id: String) -> Result<(), ArenaError> {
-        if session_id.len() > MAX_SESSION_ID_LENGTH {
-            return Err(ArenaError::SessionIdTooLong(MAX_SESSION_ID_LENGTH));
-        }
-
+    fn register(&mut self, role: Duelist, session_id: SessionId) -> Result<(), ArenaError> {
         let slot = match role {
             Duelist::Challenger => &mut self.challenger,
             Duelist::Defender => &mut self.defender,
@@ -102,20 +208,20 @@ impl DuelSessions {
         Ok(())
     }
 
-    fn get_role(&self, session_id: &str) -> Option<Duelist> {
-        if self.challenger.as_deref() == Some(session_id) {
+    fn get_role(&self, session_id: &SessionId) -> Option<Duelist> {
+        if self.challenger.as_ref() == Some(session_id) {
             Some(Duelist::Challenger)
-        } else if self.defender.as_deref() == Some(session_id) {
+        } else if self.defender.as_ref() == Some(session_id) {
             Some(Duelist::Defender)
         } else {
             None
         }
     }
 
-    fn validate_turn(&self, actor: Duelist, session_id: &str) -> Result<(), ArenaError> {
+    fn validate_turn(&self, actor: Duelist, session_id: &SessionId) -> Result<(), ArenaError> {
         let expected_session = match actor {
-            Duelist::Challenger => self.challenger.as_deref(),
-            Duelist::Defender => self.defender.as_deref(),
+            Duelist::Challenger => self.challenger.as_ref(),
+            Duelist::Defender => self.defender.as_ref(),
         };
 
         if expected_session.is_some_and(|expected| expected != session_id) {
@@ -178,7 +284,7 @@ impl Arena {
     pub fn register(
         &mut self,
         role: Duelist,
-        session_id: String,
+        session_id: SessionId,
     ) -> Result<(ArenaOutcome, Option<DuelStateView>), ArenaError> {
         self.sessions.register(role, session_id)?;
         let state = self.duel.as_ref().map(DuelStateView::from);
@@ -194,21 +300,21 @@ impl Arena {
     /// # Examples
     ///
     /// ```
-    /// use insult_arena_mcp::Arena;
+    /// use insult_arena_mcp::{Arena, SessionId};
     ///
     /// let mut arena = Arena::new();
     /// arena.start_duel();
     ///
-    /// let result = arena.register_challenger("session_123".to_string());
+    /// let result = arena.register_challenger(SessionId::new("session_123").unwrap());
     /// assert!(result.is_ok());
     ///
     /// // Cannot register if already taken
-    /// let result = arena.register_challenger("other_session".to_string());
+    /// let result = arena.register_challenger(SessionId::new("other_session").unwrap());
     /// assert!(result.is_err());
     /// ```
     pub fn register_challenger(
         &mut self,
-        session_id: String,
+        session_id: SessionId,
     ) -> Result<(ArenaOutcome, Option<DuelStateView>), ArenaError> {
         self.register(Duelist::Challenger, session_id)
     }
@@ -221,23 +327,23 @@ impl Arena {
     /// # Examples
     ///
     /// ```
-    /// use insult_arena_mcp::Arena;
+    /// use insult_arena_mcp::{Arena, SessionId};
     ///
     /// let mut arena = Arena::new();
     /// arena.start_duel();
     ///
-    /// let result = arena.register_defender("session_456".to_string());
+    /// let result = arena.register_defender(SessionId::new("session_456").unwrap());
     /// assert!(result.is_ok());
     /// ```
     pub fn register_defender(
         &mut self,
-        session_id: String,
+        session_id: SessionId,
     ) -> Result<(ArenaOutcome, Option<DuelStateView>), ArenaError> {
         self.register(Duelist::Defender, session_id)
     }
 
     #[must_use]
-    pub fn get_role_for_session(&self, session_id: &str) -> Option<Duelist> {
+    pub fn get_role_for_session(&self, session_id: &SessionId) -> Option<Duelist> {
         self.sessions.get_role(session_id)
     }
 
@@ -247,7 +353,7 @@ impl Arena {
     /// Returns error if no duel is in progress.
     pub fn get_duel_state(
         &self,
-        session_id: Option<&str>,
+        session_id: Option<&SessionId>,
     ) -> Result<(DuelStateView, Option<String>), ArenaError> {
         let Some(duel) = self.duel.as_ref() else {
             return Err(ArenaError::NoDuel);
@@ -288,28 +394,29 @@ impl Arena {
     /// # Examples
     ///
     /// ```
-    /// use insult_arena_mcp::Arena;
+    /// use insult_arena_mcp::{Arena, SessionId, PlayerInput};
     ///
     /// let mut arena = Arena::new();
     /// arena.start_duel();
-    /// arena.register_challenger("alice".to_string()).unwrap();
+    /// let alice = SessionId::new("alice").unwrap();
+    /// arena.register_challenger(alice.clone()).unwrap();
     ///
     /// // Alice throws a valid insult
-    /// let result = arena.throw_insult("alice", "You fight like a dairy farmer!".to_string());
+    /// let insult = PlayerInput::new("You fight like a dairy farmer!").unwrap();
+    /// let result = arena.throw_insult(&alice, insult);
     /// assert!(result.is_ok());
     ///
     /// // Alice cannot throw again (now waiting for comeback)
-    /// let result = arena.throw_insult("alice", "Another insult".to_string());
+    /// let insult2 = PlayerInput::new("Another insult").unwrap();
+    /// let result = arena.throw_insult(&alice, insult2);
     /// assert!(result.is_err());
     /// ```
     pub fn throw_insult(
         &mut self,
-        session_id: &str,
-        mut insult: String,
+        session_id: &SessionId,
+        insult: PlayerInput,
     ) -> Result<(ArenaOutcome, DuelStateView), ArenaError> {
-        if insult.len() > MAX_INPUT_LENGTH {
-            return Err(ArenaError::InputTooLong(MAX_INPUT_LENGTH));
-        }
+        let mut insult_str = insult.0;
 
         let Some(duel) = self.duel.as_mut() else {
             return Err(ArenaError::NoDuel);
@@ -322,17 +429,17 @@ impl Arena {
 
         // ⚡ Bolt Optimization: Zero allocation path!
         // Using throw_insult_ref to avoid cloning the insult string.
-        match duel.throw_insult_ref(&insult) {
+        match duel.throw_insult_ref(&insult_str) {
             Ok(canonical) => {
                 // Reuse the existing allocation to store the canonical string.
-                insult.clear();
-                insult.push_str(canonical);
+                insult_str.clear();
+                insult_str.push_str(canonical);
 
                 let view = DuelStateView::from(&*duel);
-                Ok((ArenaOutcome::InsultThrown { insult }, view))
+                Ok((ArenaOutcome::InsultThrown { insult: insult_str }, view))
             }
             Err(e) => match e {
-                InsultCheckError::UnknownInsult => Err(ArenaError::UnknownInsult(insult)),
+                InsultCheckError::UnknownInsult => Err(ArenaError::UnknownInsult(insult_str)),
                 InsultCheckError::WaitingForComeback => {
                     Err(ArenaError::DuelError(InsultError::WaitingForComeback))
                 }
@@ -353,29 +460,32 @@ impl Arena {
     /// # Examples
     ///
     /// ```
-    /// use insult_arena_mcp::Arena;
+    /// use insult_arena_mcp::{Arena, SessionId, PlayerInput};
     ///
     /// let mut arena = Arena::new();
     /// arena.start_duel();
-    /// arena.register_challenger("alice".to_string()).unwrap();
-    /// arena.register_defender("bob".to_string()).unwrap();
+    /// let alice = SessionId::new("alice").unwrap();
+    /// let bob = SessionId::new("bob").unwrap();
     ///
-    /// arena.throw_insult("alice", "You fight like a dairy farmer!".to_string()).unwrap();
+    /// arena.register_challenger(alice.clone()).unwrap();
+    /// arena.register_defender(bob.clone()).unwrap();
+    ///
+    /// let insult = PlayerInput::new("You fight like a dairy farmer!").unwrap();
+    /// arena.throw_insult(&alice, insult).unwrap();
     ///
     /// // Bob responds
-    /// let (outcome, view) = arena.respond("bob", "How appropriate. You fight like a cow!".to_string()).unwrap();
+    /// let comeback = PlayerInput::new("How appropriate. You fight like a cow!").unwrap();
+    /// let (outcome, view) = arena.respond(&bob, comeback).unwrap();
     ///
     /// // Bob won the exchange!
     /// assert_eq!(view.defender_score, 1);
     /// ```
     pub fn respond(
         &mut self,
-        session_id: &str,
-        comeback: String,
+        session_id: &SessionId,
+        comeback: PlayerInput,
     ) -> Result<(ArenaOutcome, DuelStateView), ArenaError> {
-        if comeback.len() > MAX_INPUT_LENGTH {
-            return Err(ArenaError::InputTooLong(MAX_INPUT_LENGTH));
-        }
+        let comeback_str = comeback.0;
 
         let Some(duel) = self.duel.as_mut() else {
             return Err(ArenaError::NoDuel);
@@ -389,7 +499,7 @@ impl Arena {
 
         // ⚡ Bolt Optimization: Move 'comeback' directly to Duel.
         // Zero allocations here (was 1 from &str).
-        match duel.respond(comeback) {
+        match duel.respond(comeback_str) {
             Ok(exchange) => {
                 let view = DuelStateView::from(&*duel);
                 let outcome = ArenaOutcome::ExchangeProcessed { exchange };
@@ -405,7 +515,7 @@ impl Arena {
     /// Returns error if:
     /// - No duel is in progress or no insult is pending.
     /// - It is not the session's turn to respond.
-    pub fn get_hint(&self, session_id: &str) -> Result<(String, String), ArenaError> {
+    pub fn get_hint(&self, session_id: &SessionId) -> Result<(String, String), ArenaError> {
         let Some(duel) = self.duel.as_ref() else {
             return Err(ArenaError::NoDuel);
         };
@@ -472,16 +582,25 @@ mod tests {
         let mut arena = Arena::new();
         arena.start_duel().unwrap();
 
+        let s_p1 = SessionId::new("p1").unwrap();
+        let s_p2 = SessionId::new("p2").unwrap();
+
         // Throw insult
         let (outcome, view) = arena
-            .throw_insult("p1", "You fight like a dairy farmer!".to_string())
+            .throw_insult(
+                &s_p1,
+                PlayerInput::new("You fight like a dairy farmer!").unwrap(),
+            )
             .unwrap();
         assert!(matches!(outcome, ArenaOutcome::InsultThrown { .. }));
         assert_eq!(view.phase, "awaiting_comeback");
 
         // Correct comeback
         let (outcome, view) = arena
-            .respond("p2", "How appropriate. You fight like a cow!".to_string())
+            .respond(
+                &s_p2,
+                PlayerInput::new("How appropriate. You fight like a cow!").unwrap(),
+            )
             .unwrap();
         assert!(matches!(outcome, ArenaOutcome::ExchangeProcessed { .. }));
         assert_eq!(view.phase, "awaiting_insult"); // Defender attacks next
@@ -490,8 +609,11 @@ mod tests {
     #[test]
     fn register_roles() {
         let mut arena = Arena::new();
+        let s1 = SessionId::new("session1").unwrap();
+        let s2 = SessionId::new("session2").unwrap();
+        let s3 = SessionId::new("session3").unwrap();
 
-        let (outcome, _) = arena.register_challenger("session1".to_string()).unwrap();
+        let (outcome, _) = arena.register_challenger(s1).unwrap();
         assert!(matches!(
             outcome,
             ArenaOutcome::RoleRegistered {
@@ -499,7 +621,7 @@ mod tests {
             }
         ));
 
-        let (outcome, _) = arena.register_defender("session2".to_string()).unwrap();
+        let (outcome, _) = arena.register_defender(s2).unwrap();
         assert!(matches!(
             outcome,
             ArenaOutcome::RoleRegistered {
@@ -508,80 +630,49 @@ mod tests {
         ));
 
         // Can't register twice
-        let result = arena.register_challenger("session3".to_string());
+        let result = arena.register_challenger(s3);
         assert!(matches!(result, Err(ArenaError::RoleTaken(_))));
     }
 
     #[test]
     fn rejects_excessive_input_length() {
-        let mut arena = Arena::new();
-        arena.start_duel().unwrap();
-
+        // Now enforced by PlayerInput::new
         let long_string = "a".repeat(5000);
-        let result = arena.throw_insult("p1", long_string.clone());
+        let result = PlayerInput::new(long_string);
 
-        assert!(matches!(result, Err(ArenaError::InputTooLong(_))));
-
-        let result = arena.respond("p1", long_string);
         assert!(matches!(result, Err(ArenaError::InputTooLong(_))));
     }
 
     #[test]
     fn rejects_excessive_session_id_length() {
-        let mut arena = Arena::new();
+        // Now enforced by SessionId::new
         let long_id = "s".repeat(200);
 
-        let result = arena.register_challenger(long_id.clone());
-        assert!(matches!(result, Err(ArenaError::SessionIdTooLong(_))));
-
-        let result = arena.register_defender(long_id);
+        let result = SessionId::new(long_id);
         assert!(matches!(result, Err(ArenaError::SessionIdTooLong(_))));
     }
 
     #[test]
     fn boundary_check_limits() {
-        let mut arena = Arena::new();
-        arena.start_duel().unwrap();
-
-        // Exact limit should pass (Session ID)
+        // Check SessionId
         let max_id = "s".repeat(MAX_SESSION_ID_LENGTH);
-        assert!(arena.register_challenger(max_id).is_ok());
+        assert!(SessionId::new(max_id).is_ok());
 
-        // Limit + 1 should fail
         let too_long_id = "s".repeat(MAX_SESSION_ID_LENGTH + 1);
         assert!(matches!(
-            arena.register_defender(too_long_id),
+            SessionId::new(too_long_id),
             Err(ArenaError::SessionIdTooLong(_))
         ));
 
-        // Exact limit should pass (Input)
-        // We need a valid session to throw insult
-        // Padding to reach exactly MAX_INPUT_LENGTH is tricky because it must match a valid insult?
-        // No, throw_insult checks length BEFORE checking if insult is valid.
-        // So we can test length check with invalid insult.
-
+        // Check PlayerInput
         let max_input = "a".repeat(MAX_INPUT_LENGTH);
-        // It will fail with UnknownInsult, but NOT InputTooLong
-        let result = arena.throw_insult("p1", max_input);
-        assert!(matches!(
-            result,
-            Err(ArenaError::UnknownInsult(_) | ArenaError::NotYourTurn(_) | ArenaError::NoDuel)
-        ));
-        // Wait, start_duel was called. And no sessions registered (except the one we just did).
-        // Let's reset arena to be clean.
-        let mut arena = Arena::new();
-        arena.start_duel().unwrap();
-
-        let max_input = "a".repeat(MAX_INPUT_LENGTH);
-        let result = arena.throw_insult("any", max_input);
-        // Should NOT be InputTooLong.
-        if let Err(ArenaError::InputTooLong(_)) = result {
-            panic!("Exact limit should be allowed");
-        }
+        assert!(PlayerInput::new(max_input).is_ok());
 
         let too_long_input = "a".repeat(MAX_INPUT_LENGTH + 1);
-        let result = arena.throw_insult("any", too_long_input);
-        assert!(matches!(result, Err(ArenaError::InputTooLong(_))));
+        assert!(matches!(
+            PlayerInput::new(too_long_input),
+            Err(ArenaError::InputTooLong(_))
+        ));
     }
 
     #[test]
@@ -589,37 +680,31 @@ mod tests {
         // Verify one session can play both roles
         let mut arena = Arena::new();
 
-        let session = "solo_player";
-        assert!(arena.register_challenger(session.to_string()).is_ok());
-        assert!(arena.register_defender(session.to_string()).is_ok());
+        let session = SessionId::new("solo_player").unwrap();
+        assert!(arena.register_challenger(session.clone()).is_ok());
+        assert!(arena.register_defender(session.clone()).is_ok());
 
         assert_eq!(
-            arena.get_role_for_session(session),
+            arena.get_role_for_session(&session),
             Some(Duelist::Challenger)
         );
-        // Logic: if session matches challenger, return challenger.
-        // If it matches BOTH, it returns Challenger (first check).
-        // This is fine, but ambiguous.
-        // Arena::get_role_for_session implementation:
-        // if challenger == session { Challenger } else if defender == session { Defender }
-
-        // This means "get_role" returns the *primary* role.
-        // But turn enforcement uses:
-        // match attacker { Challenger => self.sessions.challenger == session, ... }
 
         arena.start_duel().unwrap();
 
         // 1. Throw insult as Challenger (should work)
         let (outcome, _) = arena
-            .throw_insult(session, "You fight like a dairy farmer!".to_string())
+            .throw_insult(
+                &session,
+                PlayerInput::new("You fight like a dairy farmer!").unwrap(),
+            )
             .unwrap();
         assert!(matches!(outcome, ArenaOutcome::InsultThrown { .. }));
 
         // 2. Respond as Defender (should work)
         let (outcome, _) = arena
             .respond(
-                session,
-                "How appropriate. You fight like a cow!".to_string(),
+                &session,
+                PlayerInput::new("How appropriate. You fight like a cow!").unwrap(),
             )
             .unwrap();
         assert!(matches!(outcome, ArenaOutcome::ExchangeProcessed { .. }));
@@ -630,17 +715,23 @@ mod tests {
         let mut arena = Arena::new();
         arena.start_duel().unwrap();
 
+        let p1 = SessionId::new("p1").unwrap();
+        let p2 = SessionId::new("p2").unwrap();
+
         // Throw "beggar manners" insult
         let (_, view) = arena
-            .throw_insult("p1", "You have the manners of a beggar.".to_string())
+            .throw_insult(
+                &p1,
+                PlayerInput::new("You have the manners of a beggar.").unwrap(),
+            )
             .unwrap();
         assert_eq!(view.phase, "awaiting_comeback");
 
         // Respond with correct comeback
         let (_, view) = arena
             .respond(
-                "p2",
-                "I wanted to make sure you'd feel comfortable with me.".to_string(),
+                &p2,
+                PlayerInput::new("I wanted to make sure you'd feel comfortable with me.").unwrap(),
             )
             .unwrap();
         assert_eq!(view.phase, "awaiting_insult"); // Defender attacks next
@@ -649,14 +740,18 @@ mod tests {
     #[test]
     fn throw_insult_without_duel_returns_error() {
         let mut arena = Arena::new();
-        let result = arena.throw_insult("p1", "foo".to_string());
+        let p1 = SessionId::new("p1").unwrap();
+        let input = PlayerInput::new("foo").unwrap();
+        let result = arena.throw_insult(&p1, input);
         assert_eq!(result.unwrap_err(), ArenaError::NoDuel);
     }
 
     #[test]
     fn respond_without_duel_returns_error() {
         let mut arena = Arena::new();
-        let result = arena.respond("p1", "bar".to_string());
+        let p1 = SessionId::new("p1").unwrap();
+        let input = PlayerInput::new("bar").unwrap();
+        let result = arena.respond(&p1, input);
         assert_eq!(result.unwrap_err(), ArenaError::NoDuel);
     }
 
@@ -665,13 +760,19 @@ mod tests {
         let mut arena = Arena::new();
         arena.start_duel().unwrap();
 
+        let p1 = SessionId::new("p1").unwrap();
+        let p2 = SessionId::new("p2").unwrap();
+
+        let insult_txt = "You fight like a dairy farmer!";
+        let comeback_txt = "How appropriate. You fight like a cow!";
+
         // 1. Throw insult -> OK
         arena
-            .throw_insult("p1", "You fight like a dairy farmer!".to_string())
+            .throw_insult(&p1, PlayerInput::new(insult_txt).unwrap())
             .unwrap();
 
         // 2. Throw insult AGAIN -> Error (Waiting for comeback)
-        let result = arena.throw_insult("p1", "You fight like a dairy farmer!".to_string());
+        let result = arena.throw_insult(&p1, PlayerInput::new(insult_txt).unwrap());
         assert!(matches!(
             result,
             Err(ArenaError::DuelError(InsultError::WaitingForComeback))
@@ -679,11 +780,11 @@ mod tests {
 
         // 3. Respond -> OK (Parried, Defender becomes attacker)
         arena
-            .respond("p2", "How appropriate. You fight like a cow!".to_string())
+            .respond(&p2, PlayerInput::new(comeback_txt).unwrap())
             .unwrap();
 
         // 4. Respond AGAIN -> Error (Waiting for insult)
-        let result = arena.respond("p2", "Too late".to_string());
+        let result = arena.respond(&p2, PlayerInput::new("Too late").unwrap());
         assert!(matches!(
             result,
             Err(ArenaError::DuelError(InsultError::WaitingForInsult))
@@ -695,12 +796,15 @@ mod tests {
         let mut arena = Arena::new();
         arena.start_duel().unwrap();
 
+        let p1 = SessionId::new("p1").unwrap();
+        let p2 = SessionId::new("p2").unwrap();
+
         // Win the duel (Challenger wins 3 times)
         for _ in 0..3 {
             arena
-                .throw_insult("p1", "You fight like a dairy farmer!".to_string())
+                .throw_insult(&p1, PlayerInput::new("You fight like a dairy farmer!").unwrap())
                 .unwrap();
-            arena.respond("p2", "wrong".to_string()).unwrap();
+            arena.respond(&p2, PlayerInput::new("wrong").unwrap()).unwrap();
         }
 
         // Duel should be finished
@@ -708,14 +812,17 @@ mod tests {
         assert_eq!(view.phase, "finished");
 
         // Throw insult -> Error
-        let result = arena.throw_insult("p1", "You fight like a dairy farmer!".to_string());
+        let result = arena.throw_insult(
+            &p1,
+            PlayerInput::new("You fight like a dairy farmer!").unwrap(),
+        );
         assert!(matches!(
             result,
             Err(ArenaError::DuelError(InsultError::DuelOver))
         ));
 
         // Respond -> Error
-        let result = arena.respond("p2", "wrong".to_string());
+        let result = arena.respond(&p2, PlayerInput::new("wrong").unwrap());
         assert!(matches!(
             result,
             Err(ArenaError::DuelError(InsultError::DuelOver))
@@ -726,34 +833,41 @@ mod tests {
     fn hint_security_check() {
         let mut arena = Arena::new();
         arena.start_duel().unwrap();
-        arena.register_challenger("attacker".to_string()).unwrap();
-        arena.register_defender("defender".to_string()).unwrap();
+        let attacker = SessionId::new("attacker").unwrap();
+        let defender = SessionId::new("defender").unwrap();
+        let observer = SessionId::new("observer").unwrap();
+
+        arena.register_challenger(attacker.clone()).unwrap();
+        arena.register_defender(defender.clone()).unwrap();
 
         // 1. No one can get hint before insult thrown (NoPendingInsult)
         assert!(matches!(
-            arena.get_hint("attacker"),
+            arena.get_hint(&attacker),
             Err(ArenaError::NoPendingInsult)
         ));
 
         // Throw insult
         arena
-            .throw_insult("attacker", "You fight like a dairy farmer!".to_string())
+            .throw_insult(
+                &attacker,
+                PlayerInput::new("You fight like a dairy farmer!").unwrap(),
+            )
             .unwrap();
 
         // 2. Attacker cannot get hint (NotYourTurn) - Preventing info leak
         assert!(matches!(
-            arena.get_hint("attacker"),
+            arena.get_hint(&attacker),
             Err(ArenaError::NotYourTurn(_))
         ));
 
         // 3. Observer cannot get hint
         assert!(matches!(
-            arena.get_hint("observer"),
+            arena.get_hint(&observer),
             Err(ArenaError::NotYourTurn(_))
         ));
 
         // 4. Defender CAN get hint
-        let result = arena.get_hint("defender");
+        let result = arena.get_hint(&defender);
         assert!(result.is_ok());
         let (hint, _) = result.unwrap();
         assert!(!hint.is_empty());
@@ -764,51 +878,49 @@ mod tests {
         let mut arena = Arena::new();
         arena.start_duel().unwrap();
 
+        let alice = SessionId::new("alice").unwrap();
+        let bob = SessionId::new("bob").unwrap();
+        let eve = SessionId::new("eve").unwrap();
+
         // Register roles
-        arena.register_challenger("alice".to_string()).unwrap();
-        arena.register_defender("bob".to_string()).unwrap();
+        arena.register_challenger(alice.clone()).unwrap();
+        arena.register_defender(bob.clone()).unwrap();
+
+        let insult = PlayerInput::new("You fight like a dairy farmer!").unwrap();
+        let comeback = PlayerInput::new("How appropriate. You fight like a cow!").unwrap();
 
         // 1. Intruder cannot throw insult
-        let result = arena.throw_insult("eve", "You fight like a dairy farmer!".to_string());
+        let result = arena.throw_insult(&eve, insult.clone());
         assert!(matches!(result, Err(ArenaError::NotYourTurn(_))));
 
         // 2. Defender cannot throw insult (it's Challenger's turn)
-        let result = arena.throw_insult("bob", "You fight like a dairy farmer!".to_string());
+        let result = arena.throw_insult(&bob, insult.clone());
         assert!(matches!(result, Err(ArenaError::NotYourTurn(_))));
 
         // 3. Challenger CAN throw insult
-        let (_, view) = arena
-            .throw_insult("alice", "You fight like a dairy farmer!".to_string())
-            .unwrap();
+        let (_, view) = arena.throw_insult(&alice, insult.clone()).unwrap();
         assert_eq!(view.phase, "awaiting_comeback");
 
         // 4. Intruder cannot respond
-        let result = arena.respond("eve", "How appropriate. You fight like a cow!".to_string());
+        let result = arena.respond(&eve, comeback.clone());
         assert!(matches!(result, Err(ArenaError::NotYourTurn(_))));
 
         // 5. Challenger cannot respond (it's Defender's turn)
-        let result = arena.respond(
-            "alice",
-            "How appropriate. You fight like a cow!".to_string(),
-        );
+        let result = arena.respond(&alice, comeback.clone());
         assert!(matches!(result, Err(ArenaError::NotYourTurn(_))));
 
         // 6. Defender CAN respond
-        let (_, view) = arena
-            .respond("bob", "How appropriate. You fight like a cow!".to_string())
-            .unwrap();
+        let (_, view) = arena.respond(&bob, comeback).unwrap();
         assert_eq!(view.phase, "awaiting_insult");
 
         // Now Defender is attacker.
 
         // 7. Challenger cannot throw insult (now Defender's turn)
-        let result = arena.throw_insult("alice", "You fight like a dairy farmer!".to_string());
+        let result = arena.throw_insult(&alice, insult.clone());
         assert!(matches!(result, Err(ArenaError::NotYourTurn(_))));
 
         // 8. Defender CAN throw insult
-        let (outcome, _) = arena
-            .throw_insult("bob", "You fight like a dairy farmer!".to_string())
-            .unwrap();
+        let (outcome, _) = arena.throw_insult(&bob, insult).unwrap();
         assert!(matches!(outcome, ArenaOutcome::InsultThrown { .. }));
     }
 }

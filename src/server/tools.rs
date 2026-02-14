@@ -84,6 +84,7 @@
 //! }
 //! ```
 
+use crate::arena::PlayerInput;
 use rust_mcp_sdk::schema::schema_utils::CallToolError;
 use rust_mcp_sdk::schema::{CallToolRequestParams, Tool, ToolInputSchema};
 use serde_json::json;
@@ -124,12 +125,12 @@ pub enum ToolAction {
     /// Throw a specific insult.
     ThrowInsult {
         /// The insult string to throw.
-        insult: String,
+        insult: PlayerInput,
     },
     /// Respond with a comeback.
     Respond {
         /// The comeback string to use.
-        comeback: String,
+        comeback: PlayerInput,
     },
     /// Get a hint for the current pending insult.
     GetHint,
@@ -149,39 +150,33 @@ impl TryFrom<CallToolRequestParams> for ToolAction {
                 let args = params.arguments.unwrap_or_default();
                 let insult_val = args.get("insult").and_then(|v| v.as_str()).unwrap_or("");
 
-                // 🛡️ HARDENING: Check length BEFORE allocation to prevent DoS
-                if insult_val.len() > crate::arena::MAX_INPUT_LENGTH {
-                    return Err(CallToolError::invalid_arguments(
+                let insult = PlayerInput::new(insult_val).map_err(|_| {
+                    CallToolError::invalid_arguments(
                         &params.name,
                         Some(format!(
                             "Insult too long (max {} chars)",
                             crate::arena::MAX_INPUT_LENGTH
                         )),
-                    ));
-                }
+                    )
+                })?;
 
-                Ok(Self::ThrowInsult {
-                    insult: insult_val.to_string(),
-                })
+                Ok(Self::ThrowInsult { insult })
             }
             "respond" => {
                 let args = params.arguments.unwrap_or_default();
                 let comeback_val = args.get("comeback").and_then(|v| v.as_str()).unwrap_or("");
 
-                // 🛡️ HARDENING: Check length BEFORE allocation to prevent DoS
-                if comeback_val.len() > crate::arena::MAX_INPUT_LENGTH {
-                    return Err(CallToolError::invalid_arguments(
+                let comeback = PlayerInput::new(comeback_val).map_err(|_| {
+                    CallToolError::invalid_arguments(
                         &params.name,
                         Some(format!(
                             "Comeback too long (max {} chars)",
                             crate::arena::MAX_INPUT_LENGTH
                         )),
-                    ));
-                }
+                    )
+                })?;
 
-                Ok(Self::Respond {
-                    comeback: comeback_val.to_string(),
-                })
+                Ok(Self::Respond { comeback })
             }
             "get_hint" => Ok(Self::GetHint),
             _ => Err(CallToolError::unknown_tool(&params.name)),

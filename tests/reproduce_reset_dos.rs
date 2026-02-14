@@ -1,4 +1,4 @@
-use insult_arena_mcp::arena::ArenaError;
+use insult_arena_mcp::arena::{ArenaError, PlayerInput, SessionId};
 use insult_arena_mcp::{Arena, ArenaOutcome, Duelist};
 
 #[test]
@@ -11,11 +11,16 @@ fn test_unrestricted_game_reset_dos() {
     assert!(matches!(outcome, ArenaOutcome::DuelStarted));
 
     // 2. Register players and make progress
-    arena.register_challenger("alice".to_string()).unwrap();
-    arena.register_defender("bob".to_string()).unwrap();
+    let alice = SessionId::new("alice").unwrap();
+    let bob = SessionId::new("bob").unwrap();
+    arena.register_challenger(alice.clone()).unwrap();
+    arena.register_defender(bob).unwrap();
 
     arena
-        .throw_insult("alice", "You fight like a dairy farmer!".to_string())
+        .throw_insult(
+            &alice,
+            PlayerInput::new("You fight like a dairy farmer!").unwrap(),
+        )
         .unwrap();
 
     // Verify state is "mid-game"
@@ -38,9 +43,9 @@ fn test_unrestricted_game_reset_dos() {
     assert_eq!(view.phase, "awaiting_comeback");
 
     // 6. Verify players are NOT kicked
-    let (_, _role) = arena.get_duel_state(Some("alice")).unwrap();
+    let (_, _role) = arena.get_duel_state(Some(&alice)).unwrap();
     assert!(matches!(
-        arena.get_role_for_session("alice"),
+        arena.get_role_for_session(&alice),
         Some(Duelist::Challenger)
     ));
 }
