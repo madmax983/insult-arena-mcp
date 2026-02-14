@@ -136,15 +136,21 @@ pub enum ToolAction {
 }
 
 impl ToolAction {
-    fn extract_string(
-        args: &serde_json::Map<String, serde_json::Value>,
+    fn take_string(
+        args: &mut serde_json::Map<String, serde_json::Value>,
         key: &str,
         tool_name: &str,
         error_label: &str,
     ) -> Result<String, CallToolError> {
-        let val = args.get(key).and_then(|v| v.as_str()).unwrap_or("");
+        let val_str = match args.remove(key) {
+            Some(serde_json::Value::String(s)) => s,
+            _ => String::new(),
+        };
+
         // 🛡️ HARDENING: Check length BEFORE allocation to prevent DoS
-        if val.len() > crate::arena::MAX_INPUT_LENGTH {
+        // Note: The allocation happened when serde parsed the JSON request,
+        // but we prevent further cloning/allocation here.
+        if val_str.len() > crate::arena::MAX_INPUT_LENGTH {
             return Err(CallToolError::invalid_arguments(
                 tool_name,
                 Some(format!(
@@ -154,7 +160,7 @@ impl ToolAction {
                 )),
             ));
         }
-        Ok(val.to_string())
+        Ok(val_str)
     }
 }
 
@@ -162,30 +168,24 @@ impl TryFrom<CallToolRequestParams> for ToolAction {
     type Error = CallToolError;
 
     fn try_from(params: CallToolRequestParams) -> Result<Self, Self::Error> {
-        match params.name.as_str() {
+        // ⚡ Bolt Optimization: Take ownership of arguments to avoid string cloning.
+        let mut args = params.arguments.unwrap_or_default();
+        let tool_name = params.name;
+
+        match tool_name.as_str() {
             "start_duel" => Ok(Self::StartDuel),
             "register_as_challenger" => Ok(Self::RegisterChallenger),
             "register_as_defender" => Ok(Self::RegisterDefender),
             "get_duel_state" => Ok(Self::GetDuelState),
             "list_insults" => Ok(Self::ListInsults),
             "throw_insult" => Ok(Self::ThrowInsult {
-                insult: Self::extract_string(
-                    &params.arguments.unwrap_or_default(),
-                    "insult",
-                    &params.name,
-                    "Insult",
-                )?,
+                insult: Self::take_string(&mut args, "insult", &tool_name, "Insult")?,
             }),
             "respond" => Ok(Self::Respond {
-                comeback: Self::extract_string(
-                    &params.arguments.unwrap_or_default(),
-                    "comeback",
-                    &params.name,
-                    "Comeback",
-                )?,
+                comeback: Self::take_string(&mut args, "comeback", &tool_name, "Comeback")?,
             }),
             "get_hint" => Ok(Self::GetHint),
-            _ => Err(CallToolError::unknown_tool(&params.name)),
+            _ => Err(CallToolError::unknown_tool(&tool_name)),
         }
     }
 }
@@ -337,5 +337,28 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(format!("{err:?}").contains("Insult too long"));
+    }
+
+    #[test]
+    fn rejects_invalid_types_as_empty_string() {
+        // Test that non-string arguments (number, null, missing) are treated as empty strings
+        let mut args = serde_json::Map::new();
+        args.insert("insult".to_string(), json!(12345)); // Number instead of string
+
+        let params = CallToolRequestParams {
+            name: "throw_insult".to_string(),
+            arguments: Some(args),
+            meta: None,
+            task: None,
+        };
+
+        // Should return Ok but with empty insult string (default behavior)
+        let result = ToolAction::try_from(params).unwrap();
+        match result {
+            ToolAction::ThrowInsult { insult } => {
+                assert_eq!(insult, "", "Number should become empty string");
+            }
+            _ => panic!("Expected ThrowInsult"),
+        }
     }
 }
