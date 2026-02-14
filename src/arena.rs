@@ -86,17 +86,17 @@ pub enum ArenaOutcome {
     /// A session has successfully registered for a role.
     RoleRegistered {
         /// The role that was registered.
-        role: Duelist
+        role: Duelist,
     },
     /// An insult was successfully thrown.
     InsultThrown {
         /// The insult that was thrown.
-        insult: String
+        insult: String,
     },
     /// An exchange (insult + comeback) was processed.
     ExchangeProcessed {
         /// The result of the exchange.
-        exchange: crate::duel::Exchange
+        exchange: crate::duel::Exchange,
     },
 }
 
@@ -154,7 +154,7 @@ impl DuelSessions {
 
 /// The Arena encapsulates the game state (Duel) and session management.
 ///
-/// It also handles DoS protection by enforcing timeouts on inactive duels.
+/// It also handles `DoS` protection by enforcing timeouts on inactive duels.
 pub struct Arena {
     duel: Option<Duel>,
     sessions: DuelSessions,
