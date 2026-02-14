@@ -1,10 +1,10 @@
 //! Action parsing for MCP tool requests.
 //!
 //! This module decouples the parsing of tool arguments from the tool definitions themselves.
-//! It implements validation logic (like input length checks) to prevent DoS.
+//! It implements validation logic (like input length checks) to prevent `DoS`.
 
-use rust_mcp_sdk::schema::schema_utils::CallToolError;
 use rust_mcp_sdk::schema::CallToolRequestParams;
+use rust_mcp_sdk::schema::schema_utils::CallToolError;
 
 /// Represents a parsed and validated tool action.
 ///
