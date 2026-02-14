@@ -39,9 +39,7 @@ fn test_log_injection_throw_insult() {
             let server = InsultServer::new();
             let _ = server.handle_start_duel().await;
             let session = SessionId::new("session").unwrap();
-            let _ = server
-                .handle_register_as_challenger(session.clone())
-                .await;
+            let _ = server.handle_register_as_challenger(session.clone()).await;
 
             // We attempt to throw an insult.
             // If the insult is unknown, it returns an error containing the input.

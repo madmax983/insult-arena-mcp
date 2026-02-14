@@ -319,8 +319,7 @@ impl ServerHandler for InsultServer {
         let response = match action {
             ToolAction::StartDuel => self.handle_start_duel().await,
             ToolAction::RegisterChallenger => {
-                self.handle_register_as_challenger(session_id.clone())
-                    .await
+                self.handle_register_as_challenger(session_id.clone()).await
             }
             ToolAction::RegisterDefender => {
                 self.handle_register_as_defender(session_id.clone()).await

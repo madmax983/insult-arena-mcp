@@ -802,9 +802,14 @@ mod tests {
         // Win the duel (Challenger wins 3 times)
         for _ in 0..3 {
             arena
-                .throw_insult(&p1, PlayerInput::new("You fight like a dairy farmer!").unwrap())
+                .throw_insult(
+                    &p1,
+                    PlayerInput::new("You fight like a dairy farmer!").unwrap(),
+                )
                 .unwrap();
-            arena.respond(&p2, PlayerInput::new("wrong").unwrap()).unwrap();
+            arena
+                .respond(&p2, PlayerInput::new("wrong").unwrap())
+                .unwrap();
         }
 
         // Duel should be finished
