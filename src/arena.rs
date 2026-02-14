@@ -46,24 +46,34 @@ pub const MAX_SESSION_ID_LENGTH: usize = 128;
 /// Errors that can occur in the Arena.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ArenaError {
+    /// No duel is currently in progress.
     #[error("No duel in progress. Call start_duel first!")]
     NoDuel,
+    /// The input string exceeds the maximum length.
     #[error("Input too long (max {0} chars)")]
     InputTooLong(usize),
+    /// The session ID exceeds the maximum length.
     #[error("Session ID too long (max {0} chars)")]
     SessionIdTooLong(usize),
+    /// The requested role is already occupied by another session.
     #[error("{0} role is already taken!")]
     RoleTaken(String),
+    /// It is not the calling session's turn to act.
     #[error("It is not your turn! Waiting for {0}.")]
     NotYourTurn(String),
+    /// The insult is not recognized in the [`crate::InsultBank`].
     #[error("Unknown insult: \"{0}\". Use list_insults to see valid options.")]
     UnknownInsult(String),
+    /// No insult is currently pending, so no hint can be given.
     #[error("No pending insult to hint about.")]
     NoPendingInsult,
+    /// Could not find a comeback for this insult in the bank.
     #[error("Could not find comeback for this insult.")]
     ComebackNotFound,
+    /// A duel is already in progress and cannot be interrupted.
     #[error("A duel is already in progress. Wait for it to finish!")]
     DuelInProgress,
+    /// An error occurred in the core duel logic.
     #[error(transparent)]
     DuelError(#[from] InsultError),
 }
@@ -71,10 +81,23 @@ pub enum ArenaError {
 /// The outcome of an action in the Arena.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArenaOutcome {
+    /// A new duel has successfully started.
     DuelStarted,
-    RoleRegistered { role: Duelist },
-    InsultThrown { insult: String },
-    ExchangeProcessed { exchange: crate::duel::Exchange },
+    /// A session has successfully registered for a role.
+    RoleRegistered {
+        /// The role that was registered.
+        role: Duelist
+    },
+    /// An insult was successfully thrown.
+    InsultThrown {
+        /// The insult that was thrown.
+        insult: String
+    },
+    /// An exchange (insult + comeback) was processed.
+    ExchangeProcessed {
+        /// The result of the exchange.
+        exchange: crate::duel::Exchange
+    },
 }
 
 /// Tracks which session is playing which role.
@@ -130,6 +153,8 @@ impl DuelSessions {
 }
 
 /// The Arena encapsulates the game state (Duel) and session management.
+///
+/// It also handles DoS protection by enforcing timeouts on inactive duels.
 pub struct Arena {
     duel: Option<Duel>,
     sessions: DuelSessions,
@@ -153,11 +178,16 @@ impl Arena {
     /// Set a custom timeout for the duel.
     ///
     /// Useful for testing or adjusting game pace.
+    /// The default timeout is 5 minutes.
     pub const fn set_timeout(&mut self, timeout: Duration) {
         self.timeout = timeout;
     }
 
     /// Starts a new duel, resetting any existing state.
+    ///
+    /// If a duel is already in progress, this method will return an error unless
+    /// the duel has been inactive for longer than the timeout period (default 5 minutes).
+    /// In that case, the stale duel is forcefully reset.
     ///
     /// # Examples
     ///
