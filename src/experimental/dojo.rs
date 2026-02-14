@@ -1,3 +1,14 @@
+//! Single-player mode against an AI Sensei.
+//!
+//! The Dojo allows players to practice their insults against a simulated opponent
+//! ([`Sensei`]) of varying difficulty levels.
+//!
+//! # Mechanics
+//!
+//! - **Single Player**: The player always acts as the Challenger initially.
+//! - **Auto-Play**: The Sensei automatically responds to insults and attacks when it's their turn.
+//! - **Hype Tracking**: The [`Audience`] tracks the excitement level of the match.
+
 use crate::experimental::audience::{Audience, Reaction};
 use crate::experimental::sensei::Sensei;
 use crate::{Duel, DuelResult, DuelState, Duelist, ExchangeResult, InsultError};
@@ -17,6 +28,36 @@ pub enum DojoEvent {
 }
 
 /// A single-player training ground against an AI Sensei.
+///
+/// # Hero's Journey
+///
+/// ```
+/// use insult_arena_mcp::experimental::dojo::{Dojo, DojoEvent};
+///
+/// // 1. Enter the Dojo (Difficulty 0.5)
+/// let mut dojo = Dojo::new(0.5);
+///
+/// // 2. Throw an insult to start
+/// let events = dojo.turn("You fight like a dairy farmer!").unwrap();
+///
+/// // 3. Process what happened
+/// for event in events {
+///     match event {
+///         DojoEvent::PlayerAction { description, .. } => {
+///             println!("You: {}", description);
+///         }
+///         DojoEvent::SenseiMove { description, .. } => {
+///             println!("Sensei: {}", description);
+///         }
+///         DojoEvent::AudienceReaction(reaction) => {
+///             println!("Crowd: {:?}", reaction);
+///         }
+///         DojoEvent::GameOver(result) => {
+///             println!("Game Over! Winner: {}", result.winner);
+///         }
+///     }
+/// }
+/// ```
 pub struct Dojo {
     /// The underlying duel state.
     duel: Duel,

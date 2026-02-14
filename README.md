@@ -118,6 +118,28 @@ Challenger             Server              Defender
     |                    |                    |
 ```
 
+### Notification Payload
+
+The server sends a `notifications/turn` event with the following JSON payload:
+
+```json
+{
+  "type": "turn_notification",
+  "state": {
+    "phase": "awaiting_comeback",
+    "next_to_act": "Defender",
+    "pending_insult": "You fight like a dairy farmer!",
+    "challenger_score": 0,
+    "defender_score": 0,
+    "wins_needed": 3
+  },
+  "message": "It's Defender's turn!"
+}
+```
+
+- `state`: Mirrors the `DuelStateView` returned by `get_duel_state`.
+- `message`: A human-readable prompt.
+
 ## Experimental Features (Nova)
 
 The `nova` feature flag unlocks additional game mechanics and modes. These are experimental and subject to change.
