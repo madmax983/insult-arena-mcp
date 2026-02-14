@@ -39,3 +39,7 @@
 **2026-02-13 - DoS: Stale Duel Reset**
 **Threat:** The `Arena` enforces a singleton game state where one active duel blocks all other potential players. If a player starts a duel and abandons it (e.g., disconnects or crashes), no new duel can be started until the server restarts, creating a Denial of Service (DoS) condition.
 **Defense:** Implemented a timeout mechanism in `src/arena.rs`. An active duel that has been inactive for more than `timeout` (default 5 minutes) is automatically reset when `start_duel` is called. Added `last_active` timestamp tracking to all state-mutating methods.
+
+**2026-03-20 - DoS: Panic via NaN Propagation**
+**Threat:** `Sensei::new(f64::NAN)` propagated `NaN` to the `skill` field because `f64::clamp` does not handle `NaN`. When `Sensei::defend` called `rand::gen_bool(skill)`, it panicked, creating a DoS vector for library users or potential API exposures.
+**Defense:** Explicitly sanitized `skill` input in `Sensei::new` to treat `NaN` as `0.0` before clamping.

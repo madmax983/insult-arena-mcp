@@ -32,10 +32,13 @@ impl Sensei {
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn new(skill: f64) -> Self {
-        // Clamp skill between 0.0 and 1.0
-        Self {
-            skill: skill.clamp(0.0, 1.0),
-        }
+        // Clamp skill between 0.0 and 1.0. NaN becomes 0.0.
+        let skill = if skill.is_nan() {
+            0.0
+        } else {
+            skill.clamp(0.0, 1.0)
+        };
+        Self { skill }
     }
 
     /// Decides on an insult to throw.
