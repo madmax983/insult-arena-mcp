@@ -331,13 +331,17 @@ impl Arena {
                 let view = DuelStateView::from(&*duel);
                 Ok((ArenaOutcome::InsultThrown { insult }, view))
             }
-            Err(e) => match e {
-                InsultCheckError::UnknownInsult => Err(ArenaError::UnknownInsult(insult)),
-                InsultCheckError::WaitingForComeback => {
-                    Err(ArenaError::DuelError(InsultError::WaitingForComeback))
-                }
-                InsultCheckError::DuelOver => Err(ArenaError::DuelError(InsultError::DuelOver)),
-            },
+            Err(e) => Err(Self::map_insult_check_error(e, insult)),
+        }
+    }
+
+    fn map_insult_check_error(e: InsultCheckError, insult: String) -> ArenaError {
+        match e {
+            InsultCheckError::UnknownInsult => ArenaError::UnknownInsult(insult),
+            InsultCheckError::WaitingForComeback => {
+                ArenaError::DuelError(InsultError::WaitingForComeback)
+            }
+            InsultCheckError::DuelOver => ArenaError::DuelError(InsultError::DuelOver),
         }
     }
 
