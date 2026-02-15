@@ -1,5 +1,9 @@
 //! Arena module: Encapsulates the game state and logic.
 //!
+//! This module also enforces security constraints to prevent Denial of Service (DoS):
+//! - **Input Length Limits**: Insults and session IDs are checked against [`MAX_INPUT_LENGTH`] and [`MAX_SESSION_ID_LENGTH`].
+//! - **Timeouts**: Stale duels are automatically reset to free up resources.
+//!
 //! # Hero's Journey
 //!
 //! ```
@@ -266,6 +270,12 @@ impl Arena {
     }
 
     /// Get the current state of the duel.
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing:
+    /// 1. [`DuelStateView`]: The public state of the game (scores, phase, etc).
+    /// 2. `Option<String>`: The role of the requested session ("Challenger", "Defender", or None).
     ///
     /// # Errors
     /// Returns error if no duel is in progress.
