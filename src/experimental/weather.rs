@@ -89,11 +89,22 @@ impl WeatherSystem {
     /// * `Heatwave` dampens crowd reactions (x0.5).
     /// * `Fog` and `Clear` have no effect.
     #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
     pub const fn apply_hype_modifier(&self, hype_change: i32) -> i32 {
         match self.current {
             WeatherCondition::Storm => {
                 // Integer math: x1.5 is roughly (x * 3) / 2
-                (hype_change * 3) / 2
+                // Cast to i64 to prevent overflow before clamping
+                let val = (hype_change as i64 * 3) / 2;
+
+                // Manual clamp because Ord::clamp is not const-stable yet
+                if val > i32::MAX as i64 {
+                    i32::MAX
+                } else if val < i32::MIN as i64 {
+                    i32::MIN
+                } else {
+                    val as i32
+                }
             }
             WeatherCondition::Heatwave => hype_change / 2,
             _ => hype_change,
@@ -163,5 +174,14 @@ mod tests {
 
         weather.current = WeatherCondition::Fog;
         assert!(weather.obscures_hints());
+    }
+
+    #[test]
+    fn test_hype_modifier_overflow() {
+        let mut weather = WeatherSystem::new();
+        weather.current = WeatherCondition::Storm;
+        // i32::MAX * 1.5 should saturate to i32::MAX
+        let result = weather.apply_hype_modifier(i32::MAX);
+        assert_eq!(result, i32::MAX);
     }
 }

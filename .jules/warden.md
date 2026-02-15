@@ -39,3 +39,7 @@
 **2026-02-13 - DoS: Stale Duel Reset**
 **Threat:** The `Arena` enforces a singleton game state where one active duel blocks all other potential players. If a player starts a duel and abandons it (e.g., disconnects or crashes), no new duel can be started until the server restarts, creating a Denial of Service (DoS) condition.
 **Defense:** Implemented a timeout mechanism in `src/arena.rs`. An active duel that has been inactive for more than `timeout` (default 5 minutes) is automatically reset when `start_duel` is called. Added `last_active` timestamp tracking to all state-mutating methods.
+
+**2026-05-18 - Integer Overflow: Hype Modifier**
+**Threat:** `WeatherSystem::apply_hype_modifier` performed integer multiplication (`hype_change * 3`) on an `i32` input, which could overflow (panic or wrap) if the input was large (e.g., `i32::MAX`).
+**Defense:** Cast input to `i64` for calculation and manually clamped the result to `i32` range before casting back, ensuring safe `const fn` execution. Added regression test `test_hype_modifier_overflow`.
