@@ -80,7 +80,7 @@ pub enum ExchangeResult {
     /// The defender wins the exchange and becomes the attacker.
     Parried {
         /// The insult that was thrown.
-        insult: String,
+        insult: Cow<'static, str>,
         /// The comeback that defeated it.
         comeback: String,
     },
@@ -89,11 +89,11 @@ pub enum ExchangeResult {
     /// The attacker wins the exchange and attacks again.
     Failed {
         /// The insult that was thrown.
-        insult: String,
+        insult: Cow<'static, str>,
         /// The failed comeback attempt.
         attempt: String,
         /// The correct comeback they should have used.
-        correct: String,
+        correct: Cow<'static, str>,
     },
 }
 
@@ -428,26 +428,16 @@ impl Duel {
             .is_some()
         {
             // Successful parry! Defender wins exchange and becomes attacker.
-            return (
-                ExchangeResult::Parried {
-                    insult: insult.into_owned(),
-                    comeback,
-                },
-                defender,
-            );
+            return (ExchangeResult::Parried { insult, comeback }, defender);
         }
 
         // Failed comeback. Attacker wins exchange.
-        let correct = self
-            .insult_bank
-            .find_comeback(&insult)
-            .unwrap_or("???")
-            .to_string();
+        let correct = self.insult_bank.find_comeback(&insult).unwrap_or("???");
         (
             ExchangeResult::Failed {
-                insult: insult.into_owned(),
+                insult,
                 attempt: comeback,
-                correct,
+                correct: Cow::Borrowed(correct),
             },
             attacker,
         )
