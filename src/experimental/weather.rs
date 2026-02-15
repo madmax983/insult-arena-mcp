@@ -89,11 +89,20 @@ impl WeatherSystem {
     /// * `Heatwave` dampens crowd reactions (x0.5).
     /// * `Fog` and `Clear` have no effect.
     #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
     pub const fn apply_hype_modifier(&self, hype_change: i32) -> i32 {
         match self.current {
             WeatherCondition::Storm => {
                 // Integer math: x1.5 is roughly (x * 3) / 2
-                (hype_change * 3) / 2
+                // 🛡️ SENTRY: Use i64 to prevent overflow, then clamp to i32 range.
+                let val = (hype_change as i64).saturating_mul(3) / 2;
+                if val > i32::MAX as i64 {
+                    i32::MAX
+                } else if val < i32::MIN as i64 {
+                    i32::MIN
+                } else {
+                    val as i32
+                }
             }
             WeatherCondition::Heatwave => hype_change / 2,
             _ => hype_change,
@@ -163,5 +172,21 @@ mod tests {
 
         weather.current = WeatherCondition::Fog;
         assert!(weather.obscures_hints());
+    }
+
+    #[test]
+    fn test_storm_multiplier_overflow_protection() {
+        let mut weather = WeatherSystem::new();
+        weather.current = WeatherCondition::Storm;
+
+        // Verify positive overflow is clamped
+        let result = weather.apply_hype_modifier(i32::MAX);
+        assert_eq!(result, i32::MAX);
+
+        // Verify negative overflow (underflow) is clamped
+        let result = weather.apply_hype_modifier(i32::MIN);
+        // i32::MIN (-2147483648) * 3 = -6442450944. / 2 = -3221225472.
+        // This is < i32::MIN. So clamped to i32::MIN.
+        assert_eq!(result, i32::MIN);
     }
 }
