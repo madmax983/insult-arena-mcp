@@ -43,6 +43,78 @@ pub const MAX_INPUT_LENGTH: usize = 1024;
 /// send excessively long session IDs.
 pub const MAX_SESSION_ID_LENGTH: usize = 128;
 
+/// A validated session ID.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SessionId(String);
+
+impl SessionId {
+    /// Returns the session ID as a string slice.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl TryFrom<String> for SessionId {
+    type Error = ArenaError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        if value.len() > MAX_SESSION_ID_LENGTH {
+            Err(ArenaError::SessionIdTooLong(MAX_SESSION_ID_LENGTH))
+        } else {
+            Ok(Self(value))
+        }
+    }
+}
+
+impl AsRef<str> for SessionId {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for SessionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// A validated player input string (insult or comeback).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlayerInput(String);
+
+impl PlayerInput {
+    /// Returns the input as a string slice.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Consumes the wrapper and returns the inner String.
+    #[must_use]
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl TryFrom<String> for PlayerInput {
+    type Error = ArenaError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        if value.len() > MAX_INPUT_LENGTH {
+            Err(ArenaError::InputTooLong(MAX_INPUT_LENGTH))
+        } else {
+            Ok(Self(value))
+        }
+    }
+}
+
+impl AsRef<str> for PlayerInput {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
 /// Errors that can occur in the Arena.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ArenaError {
@@ -83,16 +155,12 @@ pub enum ArenaOutcome {
 /// to concrete session IDs provided by the MCP runtime.
 #[derive(Debug, Default)]
 struct DuelSessions {
-    challenger: Option<String>,
-    defender: Option<String>,
+    challenger: Option<SessionId>,
+    defender: Option<SessionId>,
 }
 
 impl DuelSessions {
-    fn register(&mut self, role: Duelist, session_id: String) -> Result<(), ArenaError> {
-        if session_id.len() > MAX_SESSION_ID_LENGTH {
-            return Err(ArenaError::SessionIdTooLong(MAX_SESSION_ID_LENGTH));
-        }
-
+    fn register(&mut self, role: Duelist, session_id: SessionId) -> Result<(), ArenaError> {
         let slot = match role {
             Duelist::Challenger => &mut self.challenger,
             Duelist::Defender => &mut self.defender,
@@ -107,9 +175,9 @@ impl DuelSessions {
     }
 
     fn get_role(&self, session_id: &str) -> Option<Duelist> {
-        if self.challenger.as_deref() == Some(session_id) {
+        if self.challenger.as_ref().map(SessionId::as_str) == Some(session_id) {
             Some(Duelist::Challenger)
-        } else if self.defender.as_deref() == Some(session_id) {
+        } else if self.defender.as_ref().map(SessionId::as_str) == Some(session_id) {
             Some(Duelist::Defender)
         } else {
             None
@@ -118,11 +186,11 @@ impl DuelSessions {
 
     fn validate_turn(&self, actor: Duelist, session_id: &str) -> Result<(), ArenaError> {
         let expected_session = match actor {
-            Duelist::Challenger => self.challenger.as_deref(),
-            Duelist::Defender => self.defender.as_deref(),
+            Duelist::Challenger => self.challenger.as_ref(),
+            Duelist::Defender => self.defender.as_ref(),
         };
 
-        if expected_session.is_some_and(|expected| expected != session_id) {
+        if expected_session.is_some_and(|expected| expected.as_str() != session_id) {
             return Err(ArenaError::NotYourTurn(actor.to_string()));
         }
         Ok(())
@@ -203,6 +271,7 @@ impl Arena {
         role: Duelist,
         session_id: String,
     ) -> Result<(ArenaOutcome, Option<DuelStateView>), ArenaError> {
+        let session_id = SessionId::try_from(session_id)?;
         self.sessions.register(role, session_id)?;
         self.last_active = Instant::now();
         let state = self.duel.as_ref().map(DuelStateView::from);
@@ -329,11 +398,9 @@ impl Arena {
     pub fn throw_insult(
         &mut self,
         session_id: &str,
-        mut insult: String,
+        insult: String,
     ) -> Result<(ArenaOutcome, DuelStateView), ArenaError> {
-        if insult.len() > MAX_INPUT_LENGTH {
-            return Err(ArenaError::InputTooLong(MAX_INPUT_LENGTH));
-        }
+        let insult_input = PlayerInput::try_from(insult)?;
 
         let Some(duel) = self.duel.as_mut() else {
             return Err(ArenaError::NoDuel);
@@ -346,17 +413,18 @@ impl Arena {
 
         // ⚡ Bolt Optimization: Zero allocation path!
         // Using throw_insult_ref to avoid cloning the insult string.
-        match duel.throw_insult_ref(&insult) {
+        match duel.throw_insult_ref(insult_input.as_str()) {
             Ok(canonical) => {
                 self.last_active = Instant::now();
                 // Reuse the existing allocation to store the canonical string.
+                let mut insult = insult_input.into_inner();
                 insult.clear();
                 insult.push_str(canonical);
 
                 let view = DuelStateView::from(&*duel);
                 Ok((ArenaOutcome::InsultThrown { insult }, view))
             }
-            Err(e) => Err(Self::map_insult_check_error(e, insult)),
+            Err(e) => Err(Self::map_insult_check_error(e, insult_input.into_inner())),
         }
     }
 
@@ -402,9 +470,7 @@ impl Arena {
         session_id: &str,
         comeback: String,
     ) -> Result<(ArenaOutcome, DuelStateView), ArenaError> {
-        if comeback.len() > MAX_INPUT_LENGTH {
-            return Err(ArenaError::InputTooLong(MAX_INPUT_LENGTH));
-        }
+        let comeback = PlayerInput::try_from(comeback)?;
 
         let Some(duel) = self.duel.as_mut() else {
             return Err(ArenaError::NoDuel);
@@ -418,7 +484,7 @@ impl Arena {
 
         // ⚡ Bolt Optimization: Move 'comeback' directly to Duel.
         // Zero allocations here (was 1 from &str).
-        match duel.respond(comeback) {
+        match duel.respond(comeback.into_inner()) {
             Ok(exchange) => {
                 self.last_active = Instant::now();
                 let view = DuelStateView::from(&*duel);
