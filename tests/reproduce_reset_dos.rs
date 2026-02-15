@@ -1,4 +1,4 @@
-use insult_arena_mcp::arena::ArenaError;
+use insult_arena_mcp::arena::{ArenaError, SessionId, PlayerInput};
 use insult_arena_mcp::{Arena, ArenaOutcome, Duelist};
 
 #[test]
@@ -11,11 +11,15 @@ fn test_unrestricted_game_reset_dos() {
     assert!(matches!(outcome, ArenaOutcome::DuelStarted));
 
     // 2. Register players and make progress
-    arena.register_challenger("alice".to_string()).unwrap();
-    arena.register_defender("bob".to_string()).unwrap();
+    let alice = SessionId::new("alice".to_string()).unwrap();
+    let bob = SessionId::new("bob".to_string()).unwrap();
 
+    arena.register_challenger(alice.clone()).unwrap();
+    arena.register_defender(bob.clone()).unwrap();
+
+    let insult = PlayerInput::new("You fight like a dairy farmer!".to_string()).unwrap();
     arena
-        .throw_insult("alice", "You fight like a dairy farmer!".to_string())
+        .throw_insult(alice.clone(), insult)
         .unwrap();
 
     // Verify state is "mid-game"

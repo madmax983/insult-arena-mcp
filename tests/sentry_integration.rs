@@ -1,3 +1,4 @@
+use insult_arena_mcp::arena::{SessionId, PlayerInput};
 use insult_arena_mcp::{Announcer, Arena, ArenaOutcome};
 
 #[test]
@@ -9,8 +10,11 @@ fn full_duel_integration_with_match_point() {
     assert!(matches!(outcome, ArenaOutcome::DuelStarted));
 
     // Register sessions
-    arena.register_challenger("Alice".to_string()).unwrap();
-    arena.register_defender("Bob".to_string()).unwrap();
+    let alice = SessionId::new("Alice".to_string()).unwrap();
+    let bob = SessionId::new("Bob".to_string()).unwrap();
+
+    arena.register_challenger(alice.clone()).unwrap();
+    arena.register_defender(bob.clone()).unwrap();
 
     // Duel flow:
     // 1. Alice throws insult.
@@ -21,14 +25,16 @@ fn full_duel_integration_with_match_point() {
     // 6. Alice fails. (Bob score: 3) -> WIN
 
     // 1. Alice throws
-    let insult = "You fight like a dairy farmer!";
-    let (outcome, view) = arena.throw_insult("Alice", insult.to_string()).unwrap();
+    let insult_str = "You fight like a dairy farmer!";
+    let insult = PlayerInput::new(insult_str.to_string()).unwrap();
+    let (outcome, view) = arena.throw_insult(alice.clone(), insult).unwrap();
     assert_eq!(view.phase, "awaiting_comeback");
     assert!(matches!(outcome, ArenaOutcome::InsultThrown { .. }));
 
     // 2. Bob responds (Correct)
-    let comeback = "How appropriate. You fight like a cow!";
-    let (outcome, view) = arena.respond("Bob", comeback.to_string()).unwrap();
+    let comeback_str = "How appropriate. You fight like a cow!";
+    let comeback = PlayerInput::new(comeback_str.to_string()).unwrap();
+    let (outcome, view) = arena.respond(bob.clone(), comeback).unwrap();
     assert_eq!(view.defender_score, 1);
     assert_eq!(view.phase, "awaiting_insult");
     assert_eq!(view.next_to_act, Some("Defender".to_string()));
@@ -39,12 +45,14 @@ fn full_duel_integration_with_match_point() {
     assert!(msg.contains("Score: 0-1"));
 
     // 3. Bob throws
-    let insult = "You have the manners of a beggar.";
-    let (_, _view) = arena.throw_insult("Bob", insult.to_string()).unwrap();
+    let insult_str = "You have the manners of a beggar.";
+    let insult = PlayerInput::new(insult_str.to_string()).unwrap();
+    let (_, _view) = arena.throw_insult(bob.clone(), insult).unwrap();
 
     // 4. Alice fails
-    let wrong_comeback = "I am rubber, you are glue.";
-    let (outcome, view) = arena.respond("Alice", wrong_comeback.to_string()).unwrap();
+    let wrong_comeback_str = "I am rubber, you are glue.";
+    let wrong_comeback = PlayerInput::new(wrong_comeback_str.to_string()).unwrap();
+    let (outcome, view) = arena.respond(alice.clone(), wrong_comeback).unwrap();
     assert_eq!(view.defender_score, 2);
     assert_eq!(view.phase, "awaiting_insult"); // Bob won exchange, so Bob attacks
     assert_eq!(view.next_to_act, Some("Defender".to_string()));
@@ -59,12 +67,14 @@ fn full_duel_integration_with_match_point() {
     );
 
     // 5. Bob throws (for the win)
-    let insult = "Nobody's ever drawn blood from me and nobody ever will!";
-    let (_, _view) = arena.throw_insult("Bob", insult.to_string()).unwrap();
+    let insult_str = "Nobody's ever drawn blood from me and nobody ever will!";
+    let insult = PlayerInput::new(insult_str.to_string()).unwrap();
+    let (_, _view) = arena.throw_insult(bob.clone(), insult).unwrap();
 
     // 6. Alice fails
-    let wrong_comeback = "You run fast?";
-    let (outcome, view) = arena.respond("Alice", wrong_comeback.to_string()).unwrap();
+    let wrong_comeback_str = "You run fast?";
+    let wrong_comeback = PlayerInput::new(wrong_comeback_str.to_string()).unwrap();
+    let (outcome, view) = arena.respond(alice.clone(), wrong_comeback).unwrap();
     assert_eq!(view.defender_score, 3);
     assert_eq!(view.phase, "finished");
     assert_eq!(view.winner, Some("Defender".to_string()));

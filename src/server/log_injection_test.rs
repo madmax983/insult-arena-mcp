@@ -3,6 +3,7 @@
 
 use super::*;
 use std::sync::{Arc, Mutex};
+use crate::arena::{SessionId, PlayerInput};
 
 struct LogWriter(Arc<Mutex<String>>);
 
@@ -48,8 +49,12 @@ fn test_log_injection_throw_insult() {
             let malicious_input = "malicious\nINJECTED_LOG";
 
             tracing::warn!("TEST LOG");
+
+            let session = SessionId::new("session".to_string()).unwrap();
+            let insult = PlayerInput::new(malicious_input.to_string()).unwrap();
+
             let _ = server
-                .handle_throw_insult("session".to_string(), malicious_input.to_string())
+                .handle_throw_insult(session, insult)
                 .await;
         });
     });

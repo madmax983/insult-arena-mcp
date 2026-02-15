@@ -5,6 +5,7 @@
 
 use rust_mcp_sdk::schema::CallToolRequestParams;
 use rust_mcp_sdk::schema::schema_utils::CallToolError;
+use crate::arena::PlayerInput;
 
 /// Represents a parsed and validated tool action.
 ///
@@ -25,43 +26,35 @@ pub enum ToolAction {
     /// Throw a specific insult.
     ThrowInsult {
         /// The insult string to throw.
-        insult: String,
+        insult: PlayerInput,
     },
     /// Respond with a comeback.
     Respond {
         /// The comeback string to use.
-        comeback: String,
+        comeback: PlayerInput,
     },
     /// Get a hint for the current pending insult.
     GetHint,
 }
 
 impl ToolAction {
-    fn take_string(
+    fn take_player_input(
         args: &mut serde_json::Map<String, serde_json::Value>,
         key: &str,
         tool_name: &str,
-        error_label: &str,
-    ) -> Result<String, CallToolError> {
+    ) -> Result<PlayerInput, CallToolError> {
         let val_str = match args.remove(key) {
             Some(serde_json::Value::String(s)) => s,
             _ => String::new(),
         };
 
-        // 🛡️ HARDENING: Check length BEFORE allocation to prevent DoS
-        // Note: The allocation happened when serde parsed the JSON request,
-        // but we prevent further cloning/allocation here.
-        if val_str.len() > crate::arena::MAX_INPUT_LENGTH {
-            return Err(CallToolError::invalid_arguments(
+        // 🛡️ HARDENING: PlayerInput constructor enforces length limits
+        PlayerInput::new(val_str).map_err(|e| {
+            CallToolError::invalid_arguments(
                 tool_name,
-                Some(format!(
-                    "{} too long (max {} chars)",
-                    error_label,
-                    crate::arena::MAX_INPUT_LENGTH
-                )),
-            ));
-        }
-        Ok(val_str)
+                Some(e.to_string()),
+            )
+        })
     }
 }
 
@@ -80,10 +73,10 @@ impl TryFrom<CallToolRequestParams> for ToolAction {
             "get_duel_state" => Ok(Self::GetDuelState),
             "list_insults" => Ok(Self::ListInsults),
             "throw_insult" => Ok(Self::ThrowInsult {
-                insult: Self::take_string(&mut args, "insult", &tool_name, "Insult")?,
+                insult: Self::take_player_input(&mut args, "insult", &tool_name)?,
             }),
             "respond" => Ok(Self::Respond {
-                comeback: Self::take_string(&mut args, "comeback", &tool_name, "Comeback")?,
+                comeback: Self::take_player_input(&mut args, "comeback", &tool_name)?,
             }),
             "get_hint" => Ok(Self::GetHint),
             _ => Err(CallToolError::unknown_tool(&tool_name)),
@@ -113,7 +106,7 @@ mod tests {
         let result = ToolAction::try_from(params);
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(format!("{err:?}").contains("Insult too long"));
+        assert!(format!("{err:?}").contains("Input too long"));
     }
 
     #[test]
@@ -133,7 +126,7 @@ mod tests {
         let result = ToolAction::try_from(params).unwrap();
         match result {
             ToolAction::ThrowInsult { insult } => {
-                assert_eq!(insult, "", "Number should become empty string");
+                assert_eq!(insult.as_str(), "", "Number should become empty string");
             }
             _ => panic!("Expected ThrowInsult"),
         }
