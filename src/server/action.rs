@@ -3,9 +3,9 @@
 //! This module decouples the parsing of tool arguments from the tool definitions themselves.
 //! It implements validation logic (like input length checks) to prevent `DoS`.
 
+use crate::arena::PlayerInput;
 use rust_mcp_sdk::schema::CallToolRequestParams;
 use rust_mcp_sdk::schema::schema_utils::CallToolError;
-use crate::arena::PlayerInput;
 
 /// Represents a parsed and validated tool action.
 ///
@@ -49,12 +49,8 @@ impl ToolAction {
         };
 
         // 🛡️ HARDENING: PlayerInput constructor enforces length limits
-        PlayerInput::new(val_str).map_err(|e| {
-            CallToolError::invalid_arguments(
-                tool_name,
-                Some(e.to_string()),
-            )
-        })
+        PlayerInput::new(val_str)
+            .map_err(|e| CallToolError::invalid_arguments(tool_name, Some(e.to_string())))
     }
 }
 

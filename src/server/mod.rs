@@ -25,7 +25,7 @@ use tokio::sync::Mutex;
 use tracing::{info, warn};
 
 use crate::announcer::Announcer;
-use crate::arena::{Arena, ArenaError, ArenaOutcome, SessionId, PlayerInput};
+use crate::arena::{Arena, ArenaError, ArenaOutcome, PlayerInput, SessionId};
 use crate::duel::{DuelStateView, Duelist};
 
 pub mod action;
@@ -242,9 +242,13 @@ impl InsultServer {
         }
     }
 
-    async fn handle_throw_insult(&self, session_id: SessionId, insult: PlayerInput) -> DuelResponse {
+    async fn handle_throw_insult(
+        &self,
+        session_id: SessionId,
+        insult: PlayerInput,
+    ) -> DuelResponse {
         // ⚡ Bolt Optimization: Pass ownership of 'insult' to Arena to avoid allocation.
-        self.execute_turn_action("Insult", |arena| arena.throw_insult(session_id, insult))
+        self.execute_turn_action("Insult", |arena| arena.throw_insult(&session_id, insult))
             .await
     }
 
@@ -252,14 +256,14 @@ impl InsultServer {
         info!("💬 COMEBACK ATTEMPT: {:?}", comeback);
 
         // ⚡ Bolt Optimization: Pass ownership of 'comeback' to Arena to avoid allocation.
-        self.execute_turn_action("Respond", |arena| arena.respond(session_id, comeback))
+        self.execute_turn_action("Respond", |arena| arena.respond(&session_id, comeback))
             .await
     }
 
     async fn handle_get_hint(&self, session_id: SessionId) -> DuelResponse {
         let arena = self.arena.lock().await;
 
-        match arena.get_hint(session_id) {
+        match arena.get_hint(&session_id) {
             Ok((hint, insult)) => {
                 DuelResponse::with_hint("Here's a hint for the comeback:", hint, insult)
             }
@@ -298,15 +302,13 @@ impl ServerHandler for InsultServer {
     ) -> Result<CallToolResult, CallToolError> {
         // Get session ID for role tracking
         let session_id_opt = runtime.session_id();
-        let session_str = session_id_opt.clone().unwrap_or_else(|| "unknown".to_string());
+        let session_str = session_id_opt
+            .clone()
+            .unwrap_or_else(|| "unknown".to_string());
 
         // Hardening: Validate session ID length before usage
-        let session_id = SessionId::new(session_str).map_err(|e| {
-             CallToolError::invalid_arguments(
-                 &params.name,
-                 Some(e.to_string()),
-             )
-        })?;
+        let session_id = SessionId::new(session_str)
+            .map_err(|e| CallToolError::invalid_arguments(&params.name, Some(e.to_string())))?;
 
         // Parse and validate the action
         let action = ToolAction::try_from(params)?;
@@ -385,9 +387,7 @@ mod security_tests {
         let session = SessionId::new("attacker".to_string()).unwrap();
         let insult = PlayerInput::new(malicious_insult.to_string()).unwrap();
 
-        let _ = server
-            .handle_throw_insult(session, insult)
-            .await;
+        let _ = server.handle_throw_insult(session, insult).await;
 
         let logs = buffer.0.lock().unwrap().join("");
 

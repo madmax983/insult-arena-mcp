@@ -39,7 +39,7 @@ mod insults;
 mod server;
 
 pub use announcer::Announcer;
-pub use arena::{Arena, ArenaOutcome, SessionId, PlayerInput};
+pub use arena::{Arena, ArenaOutcome, PlayerInput, SessionId};
 pub use duel::{
     Duel, DuelResult, DuelState, DuelStateView, Duelist, Exchange, ExchangeResult, InsultError,
 };

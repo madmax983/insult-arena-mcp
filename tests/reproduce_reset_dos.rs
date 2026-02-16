@@ -1,4 +1,4 @@
-use insult_arena_mcp::arena::{ArenaError, SessionId, PlayerInput};
+use insult_arena_mcp::arena::{ArenaError, PlayerInput, SessionId};
 use insult_arena_mcp::{Arena, ArenaOutcome, Duelist};
 
 #[test]
@@ -18,9 +18,7 @@ fn test_unrestricted_game_reset_dos() {
     arena.register_defender(bob.clone()).unwrap();
 
     let insult = PlayerInput::new("You fight like a dairy farmer!".to_string()).unwrap();
-    arena
-        .throw_insult(alice.clone(), insult)
-        .unwrap();
+    arena.throw_insult(&alice, insult).unwrap();
 
     // Verify state is "mid-game"
     let (view, _) = arena.get_duel_state(None).unwrap();

@@ -2,8 +2,8 @@
 #![allow(clippy::expect_used)]
 
 use super::*;
+use crate::arena::{PlayerInput, SessionId};
 use std::sync::{Arc, Mutex};
-use crate::arena::{SessionId, PlayerInput};
 
 struct LogWriter(Arc<Mutex<String>>);
 
@@ -53,9 +53,7 @@ fn test_log_injection_throw_insult() {
             let session = SessionId::new("session".to_string()).unwrap();
             let insult = PlayerInput::new(malicious_input.to_string()).unwrap();
 
-            let _ = server
-                .handle_throw_insult(session, insult)
-                .await;
+            let _ = server.handle_throw_insult(session, insult).await;
         });
     });
 
