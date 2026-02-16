@@ -84,6 +84,13 @@ The duel follows classic Monkey Island rules:
 4. If the comeback fails → Attacker scores a point and attacks again
 5. First to 3 points wins!
 
+## Architecture
+
+- **Server**: Handles MCP connections and broadcasts turn notifications.
+- **Arena**: Manages the game sessions, roles, and input validation.
+- **Duel**: Pure state machine implementing the insult sword fighting rules.
+- **Announcer**: Generates flavor text and commentary.
+
 ## Available Tools
 
 | Tool | Description |
@@ -176,6 +183,14 @@ Challenger vs Defender - First to 3 wins!
    ✨ PARRIED! Defender wins the exchange!
 
 🏆 DUEL OVER! Defender WINS! (Score: 0-3)
+```
+
+## Documentation
+
+To view the full API documentation with interactive examples:
+
+```bash
+cargo doc --open
 ```
 
 ## Building

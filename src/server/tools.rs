@@ -89,11 +89,15 @@ use serde_json::json;
 use std::collections::HashMap;
 
 /// Helper to create an empty input schema (for tools with no arguments).
+///
+/// Reduces boilerplate for simple tools like `start_duel` that require no parameters.
 pub fn empty_input_schema() -> ToolInputSchema {
     ToolInputSchema::new(vec![], None, None)
 }
 
 /// Helper to create an input schema with a single required string parameter.
+///
+/// Reduces boilerplate for tools like `throw_insult` that take a single string argument.
 pub fn string_param_schema(name: &str, description: &str) -> ToolInputSchema {
     let mut props = HashMap::new();
     let mut prop_map = serde_json::Map::new();

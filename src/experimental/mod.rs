@@ -35,7 +35,20 @@
 //!
 //! # Feature Flags
 //!
-//! Many of these features are gated behind the `nova` feature flag in `Cargo.toml`.
+//! ⚠️ **Warning**: All modules in `experimental` require the `nova` feature flag to be enabled.
+//!
+//! Add this to your `Cargo.toml`:
+//!
+//! ```toml
+//! [features]
+//! nova = []
+//! ```
+//!
+//! Or run with:
+//!
+//! ```bash
+//! cargo run --features nova
+//! ```
 
 pub mod achievements;
 pub mod audience;
