@@ -16,7 +16,7 @@ pub enum Reaction {
 
 /// Maximum number of past insults to remember for repetition checking.
 ///
-/// Prevents unbounded memory growth (DoS) in long-running duels.
+/// Prevents unbounded memory growth (`DoS`) in long-running duels.
 const MAX_HISTORY_SIZE: usize = 50;
 
 /// A virtual audience that tracks the "hype" of the duel.
@@ -138,7 +138,7 @@ mod tests {
             let exchange = Exchange {
                 attacker: Duelist::Challenger,
                 result: ExchangeResult::Parried {
-                    insult: format!("insult {}", i).into(),
+                    insult: format!("insult {i}").into(),
                     comeback: "comeback".into(),
                 },
                 winner: Duelist::Defender,
