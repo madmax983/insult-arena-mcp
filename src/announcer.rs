@@ -111,7 +111,7 @@ impl Announcer {
         exchange: &crate::duel::Exchange,
         view: Option<&DuelStateView>,
     ) {
-        let is_finished = view.map_or(false, |v| v.phase == "finished");
+        let is_finished = view.is_some_and(|v| v.phase == "finished");
 
         Self::format_result_text(f, exchange, is_finished);
 
