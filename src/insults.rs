@@ -97,6 +97,21 @@ const CLASSIC_INSULTS: &[InsultPair] = &[
 ///
 /// This implementation avoids heap allocations.
 fn normalized_eq(a: &str, b: &str) -> bool {
+    // ⚡ Bolt Optimization: Fast path for ASCII strings.
+    // Avoids UTF-8 decoding overhead and complex iterator state in flat_map(to_lowercase).
+    // Uses raw bytes which are faster to iterate and process.
+    if a.is_ascii() && b.is_ascii() {
+        let a_iter = a
+            .bytes()
+            .filter(u8::is_ascii_alphanumeric)
+            .map(|b| b.to_ascii_lowercase());
+        let b_iter = b
+            .bytes()
+            .filter(u8::is_ascii_alphanumeric)
+            .map(|b| b.to_ascii_lowercase());
+        return a_iter.eq(b_iter);
+    }
+
     let a_iter = a
         .chars()
         .filter(|c| c.is_alphanumeric())
