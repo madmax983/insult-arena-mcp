@@ -105,6 +105,26 @@ impl NotificationManager {
     }
 
     /// Broadcasts a turn notification to all connected sessions.
+    ///
+    /// # Payload Example
+    ///
+    /// The notification is sent as a JSON-RPC notification `notifications/turn`
+    /// with the following payload:
+    ///
+    /// ```json
+    /// {
+    ///   "type": "turn_notification",
+    ///   "state": {
+    ///     "phase": "awaiting_comeback",
+    ///     "next_to_act": "Defender",
+    ///     "pending_insult": "You fight like a dairy farmer!",
+    ///     "challenger_score": 0,
+    ///     "defender_score": 0,
+    ///     "wins_needed": 3
+    ///   },
+    ///   "message": "It's Defender's turn!"
+    /// }
+    /// ```
     pub async fn notify_turn(&self, state: &DuelStateView) {
         let runtime_guard = self.runtime.read().await;
         let Some(runtime) = runtime_guard.as_ref() else {
