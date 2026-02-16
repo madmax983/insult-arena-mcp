@@ -1,5 +1,10 @@
+use std::collections::VecDeque;
+
 use crate::{Exchange, ExchangeResult};
 use serde::{Deserialize, Serialize};
+
+/// Maximum number of insults to remember in history.
+pub const HISTORY_LIMIT: usize = 50;
 
 /// Represents the crowd's reaction to an exchange.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -57,7 +62,9 @@ pub struct Audience {
     /// Hype level from 0 to 100. Starts at 50.
     pub hype: i32,
     /// History of insults used to detect repetition.
-    history: Vec<String>,
+    ///
+    /// Limited to [`HISTORY_LIMIT`] items to prevent `DoS` via memory exhaustion.
+    history: VecDeque<String>,
 }
 
 impl Default for Audience {
@@ -69,10 +76,10 @@ impl Default for Audience {
 impl Audience {
     /// Creates a new audience with initial hype of 50.
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             hype: 50,
-            history: Vec::new(),
+            history: VecDeque::with_capacity(HISTORY_LIMIT),
         }
     }
 
@@ -101,7 +108,11 @@ impl Audience {
             return Reaction::Boo("Get new material!".into());
         }
 
-        self.history.push(normalized);
+        // Add to history and enforce limit (FIFO)
+        if self.history.len() >= HISTORY_LIMIT {
+            self.history.pop_front();
+        }
+        self.history.push_back(normalized);
 
         match &exchange.result {
             ExchangeResult::Parried { .. } => {
@@ -237,6 +248,43 @@ mod sentry_repro_tests {
         assert!(
             matches!(reaction, Reaction::Boo(_)),
             "Audience should boo repeated insult even with different casing"
+        );
+    }
+
+    #[test]
+    fn test_history_bounded() {
+        let mut audience = Audience::new();
+
+        // 1. Fill history with unique insults (0 to HISTORY_LIMIT inclusive -> HISTORY_LIMIT + 1 items)
+        for i in 0..=HISTORY_LIMIT {
+            let exchange = Exchange {
+                attacker: Duelist::Challenger,
+                result: ExchangeResult::Parried {
+                    insult: format!("insult {i}").into(),
+                    comeback: "comeback".into(),
+                },
+                winner: Duelist::Defender,
+            };
+            audience.react(&exchange);
+        }
+
+        // 2. Reuse the oldest insult ("insult 0")
+        // If history is bounded (size HISTORY_LIMIT), "insult 0" should have been evicted.
+        let exchange = Exchange {
+            attacker: Duelist::Challenger,
+            result: ExchangeResult::Parried {
+                insult: "insult 0".into(),
+                comeback: "comeback".into(),
+            },
+            winner: Duelist::Defender,
+        };
+        let reaction = audience.react(&exchange);
+
+        // EXPECTATION: Should NOT Boo if history is bounded.
+        // CURRENT BUG: Returns Boo because history is unbounded.
+        assert!(
+            !matches!(reaction, Reaction::Boo(_)),
+            "History should be bounded! Old insult caused Boo."
         );
     }
 }

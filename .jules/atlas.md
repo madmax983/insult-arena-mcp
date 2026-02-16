@@ -24,3 +24,7 @@
 **[Extracted ToolAction to server/action.rs]**
 **Tangle:** `src/server/tools.rs` mixed schema definitions (API Contract) with request parsing logic (Implementation), coupling "what" with "how".
 **Blueprint:** Extracted `ToolAction` and its parsing logic into `src/server/action.rs`. Now `tools.rs` is pure definition, and `action.rs` is pure parsing/validation.
+
+**[Bounded Audience History]**
+**Tangle:** `Audience` struct in `src/experimental/audience.rs` used an unbounded `Vec<String>` for history, allowing indefinite memory growth (DoS vulnerability) during long sessions.
+**Blueprint:** Switched `history` to `VecDeque<String>` and enforced a hard limit of 50 items (FIFO eviction). This prevents memory exhaustion while maintaining the "repetition penalty" mechanic.
