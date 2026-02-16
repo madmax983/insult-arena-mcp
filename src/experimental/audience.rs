@@ -14,6 +14,11 @@ pub enum Reaction {
     Silence,
 }
 
+/// Maximum number of past insults to remember for repetition checking.
+///
+/// Prevents unbounded memory growth (DoS) in long-running duels.
+const MAX_HISTORY_SIZE: usize = 50;
+
 /// A virtual audience that tracks the "hype" of the duel.
 ///
 /// # Rules of the Crowd
@@ -102,6 +107,10 @@ impl Audience {
         }
 
         self.history.push(normalized);
+        // 🛡️ HARDENING: Prevent memory exhaustion by capping history size.
+        if self.history.len() > MAX_HISTORY_SIZE {
+            self.history.remove(0);
+        }
 
         match &exchange.result {
             ExchangeResult::Parried { .. } => {
@@ -120,6 +129,42 @@ impl Audience {
 mod tests {
     use super::*;
     use crate::{Duelist, Exchange, ExchangeResult};
+
+    #[test]
+    fn test_history_limit() {
+        let mut audience = Audience::new();
+        // Fill history beyond capacity
+        for i in 0..60 {
+            let exchange = Exchange {
+                attacker: Duelist::Challenger,
+                result: ExchangeResult::Parried {
+                    insult: format!("insult {}", i).into(),
+                    comeback: "comeback".into(),
+                },
+                winner: Duelist::Defender,
+            };
+            audience.react(&exchange);
+        }
+
+        assert_eq!(
+            audience.history.len(),
+            MAX_HISTORY_SIZE,
+            "History size should be capped"
+        );
+        // Verify the oldest are removed.
+        // History stores normalized insults. "insult 0" -> "insult0".
+        // The last added was "insult 59" -> "insult59".
+        // So "insult 0" to "insult 9" should be gone.
+        // "insult 10" should be present.
+        assert!(
+            !audience.history.contains(&"insult0".to_string()),
+            "Oldest entry should be removed"
+        );
+        assert!(
+            audience.history.contains(&"insult59".to_string()),
+            "Newest entry should be present"
+        );
+    }
 
     #[test]
     fn test_parry_increases_hype() {
