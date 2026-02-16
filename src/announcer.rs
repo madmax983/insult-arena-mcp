@@ -246,7 +246,7 @@ mod tests {
                     exchange: Exchange {
                         attacker: Duelist::Challenger,
                         result: ExchangeResult::Parried {
-                            insult: "i".to_string(),
+                            insult: "i".into(),
                             comeback: "c".to_string(),
                         },
                         winner: Duelist::Defender,
@@ -261,9 +261,9 @@ mod tests {
                     exchange: Exchange {
                         attacker: Duelist::Challenger,
                         result: ExchangeResult::Failed {
-                            insult: "i".to_string(),
+                            insult: "i".into(),
                             attempt: "bad".to_string(),
-                            correct: "correct".to_string(),
+                            correct: "correct".into(),
                         },
                         winner: Duelist::Challenger,
                     },
@@ -283,9 +283,9 @@ mod tests {
                     exchange: Exchange {
                         attacker: Duelist::Defender,
                         result: ExchangeResult::Failed {
-                            insult: "i".to_string(),
+                            insult: "i".into(),
                             attempt: "bad".to_string(),
-                            correct: "correct".to_string(),
+                            correct: "correct".into(),
                         },
                         winner: Duelist::Challenger,
                     },
@@ -299,7 +299,7 @@ mod tests {
                     exchange: Exchange {
                         attacker: Duelist::Challenger,
                         result: ExchangeResult::Parried {
-                            insult: "i".to_string(),
+                            insult: "i".into(),
                             comeback: "c".to_string(),
                         },
                         winner: Duelist::Defender,
@@ -314,7 +314,7 @@ mod tests {
                     exchange: Exchange {
                         attacker: Duelist::Challenger,
                         result: ExchangeResult::Parried {
-                            insult: "i".to_string(),
+                            insult: "i".into(),
                             comeback: "c".to_string(),
                         },
                         winner: Duelist::Defender,
@@ -329,9 +329,9 @@ mod tests {
                     exchange: Exchange {
                         attacker: Duelist::Defender,
                         result: ExchangeResult::Failed {
-                            insult: "i".to_string(),
+                            insult: "i".into(),
                             attempt: "bad".to_string(),
-                            correct: "correct".to_string(),
+                            correct: "correct".into(),
                         },
                         winner: Duelist::Challenger,
                     },
@@ -345,7 +345,7 @@ mod tests {
                     exchange: Exchange {
                         attacker: Duelist::Challenger,
                         result: ExchangeResult::Parried {
-                            insult: "i".to_string(),
+                            insult: "i".into(),
                             comeback: "c".to_string(),
                         },
                         winner: Duelist::Defender,

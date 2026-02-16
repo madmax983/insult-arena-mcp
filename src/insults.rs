@@ -250,7 +250,7 @@ impl InsultBank {
     /// assert_eq!(comeback, Some("How appropriate. You fight like a cow!"));
     /// ```
     #[must_use]
-    pub fn find_comeback(&self, insult: &str) -> Option<&str> {
+    pub fn find_comeback(&self, insult: &str) -> Option<&'static str> {
         self.find_pair(insult).map(|pair| pair.comeback)
     }
 
@@ -258,7 +258,7 @@ impl InsultBank {
     ///
     /// Returns the canonical pair from the bank if the input insult matches.
     #[must_use]
-    pub fn find_pair(&self, insult: &str) -> Option<&InsultPair> {
+    pub fn find_pair(&self, insult: &str) -> Option<&'static InsultPair> {
         self.pairs
             .iter()
             .find(|pair| normalized_eq(pair.insult, insult))
