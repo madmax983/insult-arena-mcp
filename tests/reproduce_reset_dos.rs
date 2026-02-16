@@ -15,7 +15,7 @@ fn test_unrestricted_game_reset_dos() {
     let bob = SessionId::new("bob".to_string()).unwrap();
 
     arena.register_challenger(alice.clone()).unwrap();
-    arena.register_defender(bob.clone()).unwrap();
+    arena.register_defender(bob).unwrap();
 
     let insult = PlayerInput::new("You fight like a dairy farmer!".to_string()).unwrap();
     arena.throw_insult(&alice, insult).unwrap();

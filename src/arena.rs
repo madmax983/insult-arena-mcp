@@ -906,7 +906,7 @@ mod tests {
         assert!(matches!(result, Err(ArenaError::NotYourTurn(_))));
 
         // 6. Defender CAN respond
-        let comeback = PlayerInput::new(cow_comeback.clone()).unwrap();
+        let comeback = PlayerInput::new(cow_comeback).unwrap();
         let (_, view) = arena.respond(&bob, comeback).unwrap();
         assert_eq!(view.phase, "awaiting_insult");
 
