@@ -111,33 +111,27 @@ impl Announcer {
         exchange: &crate::duel::Exchange,
         view: Option<&DuelStateView>,
     ) {
-        let (scores, is_finished, match_point_text) = view.map_or_else(
-            || (None, false, ""),
-            |view| {
-                let is_finished = view.phase == "finished";
+        let is_finished = view.is_some_and(|v| v.phase == "finished");
 
-                // GAME FEEL: Added Match Point notification to heighten tension near end-game (Ludwig)
-                let match_point_text = if !is_finished
-                    && (view.challenger_score == view.wins_needed - 1
-                        || view.defender_score == view.wins_needed - 1)
-                {
-                    "\n\n🔥 MATCH POINT! 🔥 Next point wins!"
-                } else {
-                    ""
-                };
-                (
-                    Some((view.challenger_score, view.defender_score)),
-                    is_finished,
-                    match_point_text,
-                )
-            },
-        );
+        Self::format_result_text(f, exchange, is_finished);
 
-        // ⚡ Bolt Optimization:
-        // Removed intermediate `score_display` string allocation (via `format!`).
-        // Now writes scores directly to the result buffer.
-        // Used unwrap() as writing to String is infallible (barring OOM).
-        #[allow(clippy::unwrap_used)]
+        let scores = view.map(|v| (v.challenger_score, v.defender_score));
+        Self::format_score_text(f, scores);
+
+        if let Some(v) = view {
+            f.push_str(Self::get_match_point_text(v));
+        }
+
+        // Append expected comeback if failed
+        if let ExchangeResult::Failed { ref correct, .. } = exchange.result {
+            #[allow(clippy::unwrap_used)]
+            write!(f, "\n\nExpected comeback: \"{correct}\"").unwrap();
+        }
+    }
+
+    /// Helper to format the result of the exchange (Victory, Touché, or Oof).
+    #[allow(clippy::unwrap_used)]
+    fn format_result_text(f: &mut String, exchange: &crate::duel::Exchange, is_finished: bool) {
         if exchange.result.is_parried() {
             if is_finished {
                 write!(f, "🏆 VICTORY! {} has won the duel! ", exchange.winner).unwrap();
@@ -162,22 +156,28 @@ impl Announcer {
                 .unwrap();
             }
         }
+    }
 
-        // Append score directly
+    /// Helper to format the score string.
+    #[allow(clippy::unwrap_used)]
+    fn format_score_text(f: &mut String, scores: Option<(u8, u8)>) {
         if let Some((challenger, defender)) = scores {
-            #[allow(clippy::unwrap_used)]
             write!(f, "(Score: {challenger}-{defender})").unwrap();
         } else {
             f.push_str("(Score: ?-?)");
         }
+    }
 
-        // Append match point text
-        f.push_str(match_point_text);
-
-        // Append expected comeback if failed
-        if let ExchangeResult::Failed { ref correct, .. } = exchange.result {
-            #[allow(clippy::unwrap_used)]
-            write!(f, "\n\nExpected comeback: \"{correct}\"").unwrap();
+    /// Helper to determine if we should display "MATCH POINT!".
+    fn get_match_point_text(view: &DuelStateView) -> &'static str {
+        // GAME FEEL: Added Match Point notification to heighten tension near end-game (Ludwig)
+        if view.phase != "finished"
+            && (view.challenger_score == view.wins_needed - 1
+                || view.defender_score == view.wins_needed - 1)
+        {
+            "\n\n🔥 MATCH POINT! 🔥 Next point wins!"
+        } else {
+            ""
         }
     }
 }
