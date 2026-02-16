@@ -369,4 +369,32 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_announcer_match_point_logic() {
+        // Case: 3-2 Victory.
+        // Winner has 3. Loser has 2 (which is wins_needed - 1).
+        // Since is_finished is true, "MATCH POINT!" should NOT appear.
+        let view = make_view(3, 2, true);
+        let outcome = ArenaOutcome::ExchangeProcessed {
+            exchange: Exchange {
+                attacker: Duelist::Defender,
+                result: ExchangeResult::Failed {
+                    insult: "i".into(),
+                    attempt: "bad".to_string(),
+                    correct: "correct".into(),
+                },
+                winner: Duelist::Challenger,
+            },
+        };
+
+        let msg = Announcer::announce(&outcome, Some(&view));
+
+        assert!(msg.contains("VICTORY") || msg.contains("wins the duel"));
+        assert!(msg.contains("(Score: 3-2)"));
+        assert!(
+            !msg.contains("MATCH POINT"),
+            "Match point warning should not appear when duel is finished, even if loser is close."
+        );
+    }
 }
