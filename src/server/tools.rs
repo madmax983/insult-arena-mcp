@@ -108,12 +108,12 @@ pub fn string_param_schema(name: &str, description: &str) -> ToolInputSchema {
     ToolInputSchema::new(vec![name.to_string()], Some(props), None)
 }
 
-/// Tool: `start_duel`
-pub fn tool_start_duel() -> Tool {
+/// Internal helper to create a base tool definition with standard defaults.
+fn create_base_tool(name: &str, description: &str, input_schema: ToolInputSchema) -> Tool {
     Tool {
-        name: "start_duel".to_string(),
-        description: Some("Start a new insult sword fighting duel! The Challenger throws the first insult. First to 3 exchange wins takes the duel.".to_string()),
-        input_schema: empty_input_schema(),
+        name: name.to_string(),
+        description: Some(description.to_string()),
+        input_schema,
         annotations: None,
         execution: None,
         icons: vec![],
@@ -121,114 +121,76 @@ pub fn tool_start_duel() -> Tool {
         output_schema: None,
         title: None,
     }
+}
+
+/// Tool: `start_duel`
+pub fn tool_start_duel() -> Tool {
+    create_base_tool(
+        "start_duel",
+        "Start a new insult sword fighting duel! The Challenger throws the first insult. First to 3 exchange wins takes the duel.",
+        empty_input_schema(),
+    )
 }
 
 /// Tool: `register_as_challenger`
 pub fn tool_register_as_challenger() -> Tool {
-    Tool {
-        name: "register_as_challenger".to_string(),
-        description: Some(
-            "Register yourself as the Challenger. The Challenger throws insults first.".to_string(),
-        ),
-        input_schema: empty_input_schema(),
-        annotations: None,
-        execution: None,
-        icons: vec![],
-        meta: None,
-        output_schema: None,
-        title: None,
-    }
+    create_base_tool(
+        "register_as_challenger",
+        "Register yourself as the Challenger. The Challenger throws insults first.",
+        empty_input_schema(),
+    )
 }
 
 /// Tool: `register_as_defender`
 pub fn tool_register_as_defender() -> Tool {
-    Tool {
-        name: "register_as_defender".to_string(),
-        description: Some(
-            "Register yourself as the Defender. The Defender responds to insults with comebacks."
-                .to_string(),
-        ),
-        input_schema: empty_input_schema(),
-        annotations: None,
-        execution: None,
-        icons: vec![],
-        meta: None,
-        output_schema: None,
-        title: None,
-    }
+    create_base_tool(
+        "register_as_defender",
+        "Register yourself as the Defender. The Defender responds to insults with comebacks.",
+        empty_input_schema(),
+    )
 }
 
 /// Tool: `get_duel_state`
 pub fn tool_get_duel_state() -> Tool {
-    Tool {
-        name: "get_duel_state".to_string(),
-        description: Some("Get the current state of the duel. Shows whose turn it is, scores, and any pending insult.".to_string()),
-        input_schema: empty_input_schema(),
-        annotations: None,
-        execution: None,
-        icons: vec![],
-        meta: None,
-        output_schema: None,
-        title: None,
-    }
+    create_base_tool(
+        "get_duel_state",
+        "Get the current state of the duel. Shows whose turn it is, scores, and any pending insult.",
+        empty_input_schema(),
+    )
 }
 
 /// Tool: `list_insults`
 pub fn tool_list_insults() -> Tool {
-    Tool {
-        name: "list_insults".to_string(),
-        description: Some("List all available insults you can use. In classic mode, you must use one of these exact insults.".to_string()),
-        input_schema: empty_input_schema(),
-        annotations: None,
-        execution: None,
-        icons: vec![],
-        meta: None,
-        output_schema: None,
-        title: None,
-    }
+    create_base_tool(
+        "list_insults",
+        "List all available insults you can use. In classic mode, you must use one of these exact insults.",
+        empty_input_schema(),
+    )
 }
 
 /// Tool: `throw_insult`
 pub fn tool_throw_insult() -> Tool {
-    Tool {
-        name: "throw_insult".to_string(),
-        description: Some("Throw an insult at your opponent! You must be the current attacker and use a valid insult from the classic list.".to_string()),
-        input_schema: string_param_schema("insult", "The insult to throw at your opponent"),
-        annotations: None,
-        execution: None,
-        icons: vec![],
-        meta: None,
-        output_schema: None,
-        title: None,
-    }
+    create_base_tool(
+        "throw_insult",
+        "Throw an insult at your opponent! You must be the current attacker and use a valid insult from the classic list.",
+        string_param_schema("insult", "The insult to throw at your opponent"),
+    )
 }
 
 /// Tool: `respond`
 pub fn tool_respond() -> Tool {
-    Tool {
-        name: "respond".to_string(),
-        description: Some("Respond to an insult with a witty comeback! If your comeback matches the correct response, you parry and become the attacker.".to_string()),
-        input_schema: string_param_schema("comeback", "Your witty comeback to parry the insult"),
-        annotations: None,
-        execution: None,
-        icons: vec![],
-        meta: None,
-        output_schema: None,
-        title: None,
-    }
+    create_base_tool(
+        "respond",
+        "Respond to an insult with a witty comeback! If your comeback matches the correct response, you parry and become the attacker.",
+        string_param_schema("comeback", "Your witty comeback to parry the insult"),
+    )
 }
 
 /// Tool: `get_hint`
 pub fn tool_get_hint() -> Tool {
-    Tool {
-        name: "get_hint".to_string(),
-        description: Some("Get a hint for the current pending insult. Returns the first few characters of the correct comeback.".to_string()),
-        input_schema: empty_input_schema(),
-        annotations: None,
-        execution: None,
-        icons: vec![],
-        meta: None,
-        output_schema: None,
-        title: None,
-    }
+    create_base_tool(
+        "get_hint",
+        "Get a hint for the current pending insult. Returns the first few characters of the correct comeback.",
+        empty_input_schema(),
+    )
 }
