@@ -177,23 +177,10 @@ impl InsultServer {
         match arena.register(role, session.clone()) {
             Ok((outcome, state)) => {
                 info!("🎭 Session {:?} registered as {}", session, role);
-                state.map_or_else(
-                    || DuelResponse {
-                        success: true,
-                        message: Announcer::announce(&outcome, None),
-                        state: None,
-                        your_role: Some(role.to_string()),
-                        insults: None,
-                        hint: None,
-                        insult: None,
-                    },
-                    |state| {
-                        DuelResponse::success_with_role(
-                            Announcer::announce(&outcome, Some(&state)),
-                            state,
-                            &role.to_string(),
-                        )
-                    },
+                DuelResponse::success_with_role(
+                    Announcer::announce(&outcome, Some(&state)),
+                    state,
+                    &role.to_string(),
                 )
             }
             Err(e) => DuelResponse::error(e.to_string()),

@@ -269,16 +269,27 @@ impl Arena {
     /// Register a session for a specific role.
     ///
     /// # Errors
-    /// Returns error if the role is already taken or session ID is invalid.
+    /// Returns error if the role is already taken, session ID is invalid,
+    /// or no duel is in progress.
     pub fn register(
         &mut self,
         role: Duelist,
         session_id: String,
-    ) -> Result<(ArenaOutcome, Option<DuelStateView>), ArenaError> {
+    ) -> Result<(ArenaOutcome, DuelStateView), ArenaError> {
         let session_id = SessionId::try_from(session_id)?;
+
+        if self.duel.is_none() {
+            return Err(ArenaError::NoDuel);
+        }
+
         self.sessions.register(role, session_id)?;
         self.last_active = Instant::now();
-        let state = self.duel.as_ref().map(DuelStateView::from);
+
+        let state = self
+            .duel
+            .as_ref()
+            .map(DuelStateView::from)
+            .ok_or(ArenaError::NoDuel)?;
 
         Ok((ArenaOutcome::RoleRegistered { role }, state))
     }
@@ -286,7 +297,7 @@ impl Arena {
     /// Register a session as the challenger.
     ///
     /// # Errors
-    /// Returns error if the role is already taken.
+    /// Returns error if the role is already taken or no duel is in progress.
     ///
     /// # Examples
     ///
@@ -306,14 +317,14 @@ impl Arena {
     pub fn register_challenger(
         &mut self,
         session_id: String,
-    ) -> Result<(ArenaOutcome, Option<DuelStateView>), ArenaError> {
+    ) -> Result<(ArenaOutcome, DuelStateView), ArenaError> {
         self.register(Duelist::Challenger, session_id)
     }
 
     /// Register a session as the defender.
     ///
     /// # Errors
-    /// Returns error if the role is already taken.
+    /// Returns error if the role is already taken or no duel is in progress.
     ///
     /// # Examples
     ///
@@ -329,7 +340,7 @@ impl Arena {
     pub fn register_defender(
         &mut self,
         session_id: String,
-    ) -> Result<(ArenaOutcome, Option<DuelStateView>), ArenaError> {
+    ) -> Result<(ArenaOutcome, DuelStateView), ArenaError> {
         self.register(Duelist::Defender, session_id)
     }
 
@@ -596,6 +607,7 @@ mod tests {
     #[test]
     fn register_roles() {
         let mut arena = Arena::new();
+        arena.start_duel().unwrap();
 
         let (outcome, _) = arena.register_challenger("session1".to_string()).unwrap();
         assert!(matches!(
@@ -694,6 +706,7 @@ mod tests {
     fn allow_self_play() {
         // Verify one session can play both roles
         let mut arena = Arena::new();
+        arena.start_duel().unwrap();
 
         let session = "solo_player";
         assert!(arena.register_challenger(session.to_string()).is_ok());
@@ -712,8 +725,6 @@ mod tests {
         // This means "get_role" returns the *primary* role.
         // But turn enforcement uses:
         // match attacker { Challenger => self.sessions.challenger == session, ... }
-
-        arena.start_duel().unwrap();
 
         // 1. Throw insult as Challenger (should work)
         let (outcome, _) = arena

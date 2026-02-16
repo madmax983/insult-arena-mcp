@@ -138,3 +138,30 @@ fn test_serialization_finished_omits_next_act() {
     assert!(parsed.get("next_to_act").is_none()); // Should be skipped
     assert_eq!(parsed["winner"], "Challenger");
 }
+
+#[test]
+fn test_serialization_pending_insult_skipped() {
+    let mut duel = Duel::new();
+    let view = DuelStateView::from(&duel);
+
+    // Initial state: pending_insult is None
+    assert!(view.pending_insult.is_none());
+
+    let json = serde_json::to_string(&view).unwrap();
+    let parsed: Value = serde_json::from_str(&json).unwrap();
+
+    // Verify "pending_insult" key is ABSENT
+    assert!(parsed.get("pending_insult").is_none(), "pending_insult should be skipped when null");
+
+    // Throw insult
+    duel.throw_insult("You fight like a dairy farmer!".to_string()).unwrap();
+    let view = DuelStateView::from(&duel);
+    assert!(view.pending_insult.is_some());
+
+    let json = serde_json::to_string(&view).unwrap();
+    let parsed: Value = serde_json::from_str(&json).unwrap();
+
+    // Verify "pending_insult" key is PRESENT
+    assert!(parsed.get("pending_insult").is_some(), "pending_insult should be present when set");
+    assert_eq!(parsed["pending_insult"], "You fight like a dairy farmer!");
+}
