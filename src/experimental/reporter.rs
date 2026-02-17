@@ -156,6 +156,24 @@ mod tests {
     }
 
     #[test]
+    fn test_analyze_mixed_results() {
+        let mut duel = Duel::new();
+        // 1. Challenger fails (No parry)
+        duel.throw_insult("You fight like a dairy farmer!".to_string()).unwrap();
+        duel.respond("wrong".to_string()).unwrap();
+
+        // 2. Challenger attacks, Defender parries (Parry!)
+        duel.throw_insult("You fight like a dairy farmer!".to_string()).unwrap();
+        duel.respond("How appropriate. You fight like a cow!".to_string()).unwrap();
+
+        // Total 2 rounds. 1 parry. Rate should be 0.5.
+        let stats = Reporter::analyze(&duel);
+
+        assert_eq!(stats.total_rounds, 2);
+        assert!((stats.parry_rate - 0.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
     fn test_chronicle_generation() {
         let mut duel = Duel::new();
         duel.throw_insult("You fight like a dairy farmer!".to_string())

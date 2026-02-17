@@ -162,16 +162,31 @@ mod tests {
         weather.current = WeatherCondition::Heatwave;
         assert_eq!(weather.apply_hype_modifier(10), 5); // 10 * 0.5 = 5
         assert_eq!(weather.apply_hype_modifier(-10), -5);
+
+        // Heatwave - odd numbers (truncation check)
+        assert_eq!(weather.apply_hype_modifier(11), 5); // 11 / 2 = 5
+        assert_eq!(weather.apply_hype_modifier(-11), -5); // -11 / 2 = -5
     }
 
     #[test]
     fn fog_obscures_hints() {
         let mut weather = WeatherSystem::new();
+
+        // Clear: No
         weather.current = WeatherCondition::Clear;
         assert!(!weather.obscures_hints());
 
+        // Fog: Yes
         weather.current = WeatherCondition::Fog;
         assert!(weather.obscures_hints());
+
+        // Storm: No
+        weather.current = WeatherCondition::Storm;
+        assert!(!weather.obscures_hints());
+
+        // Heatwave: No
+        weather.current = WeatherCondition::Heatwave;
+        assert!(!weather.obscures_hints());
     }
 
     #[test]
