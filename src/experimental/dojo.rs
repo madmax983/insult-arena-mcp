@@ -9,6 +9,7 @@
 //! - **Auto-Play**: The Sensei automatically responds to insults and attacks when it's their turn.
 //! - **Hype Tracking**: The [`Audience`] tracks the excitement level of the match.
 
+use crate::arena::{ArenaError, MAX_INPUT_LENGTH};
 use crate::experimental::audience::{Audience, Reaction};
 use crate::experimental::sensei::Sensei;
 use crate::{Duel, DuelResult, DuelState, Duelist, ExchangeResult, InsultError};
@@ -89,16 +90,29 @@ impl Dojo {
     /// Returns error if the move is invalid for the current state.
     #[allow(clippy::expect_used)]
     #[allow(clippy::missing_panics_doc)]
-    pub fn turn(&mut self, input: &str) -> Result<Vec<DojoEvent>, InsultError> {
+    pub fn turn(&mut self, input: &str) -> Result<Vec<DojoEvent>, ArenaError> {
+        if input.len() > MAX_INPUT_LENGTH {
+            return Err(ArenaError::InputTooLong(MAX_INPUT_LENGTH));
+        }
+
         let mut events = Vec::new();
 
-        // 1. Process Player's Move
+        self.process_player_move(input, &mut events)?;
+        self.process_sensei_loop(&mut events);
+
+        Ok(events)
+    }
+
+    fn process_player_move(
+        &mut self,
+        input: &str,
+        events: &mut Vec<DojoEvent>,
+    ) -> Result<(), ArenaError> {
         match self.duel.state() {
             DuelState::AwaitingInsult { attacker } => {
                 if attacker == Duelist::Defender {
-                    return Err(InsultError::WaitingForInsult); // Should be Sensei's turn, but let's check
+                    return Err(InsultError::WaitingForInsult.into());
                 }
-                // Player (Challenger) throws insult
                 self.duel.throw_insult(input.to_string())?;
                 events.push(DojoEvent::PlayerAction {
                     description: format!("You threw: \"{input}\""),
@@ -107,12 +121,9 @@ impl Dojo {
             }
             DuelState::AwaitingComeback { attacker } => {
                 if attacker == Duelist::Challenger {
-                    return Err(InsultError::WaitingForComeback);
+                    return Err(InsultError::WaitingForComeback.into());
                 }
-                // Player (Defender) responds
                 let exchange = self.duel.respond(input.to_string())?;
-
-                // Add Audience Reaction
                 let reaction = self.audience.react(&exchange);
                 events.push(DojoEvent::AudienceReaction(reaction));
 
@@ -131,10 +142,13 @@ impl Dojo {
                     }
                 }
             }
-            DuelState::Finished { .. } => return Err(InsultError::DuelOver),
+            DuelState::Finished { .. } => return Err(InsultError::DuelOver.into()),
         }
+        Ok(())
+    }
 
-        // 2. Sensei Loop
+    #[allow(clippy::expect_used)] // Internal loop, panic on logic error
+    fn process_sensei_loop(&mut self, events: &mut Vec<DojoEvent>) {
         loop {
             if self.duel.is_finished() {
                 if let Some(result) = self.duel.result() {
@@ -145,9 +159,7 @@ impl Dojo {
 
             match self.duel.state() {
                 DuelState::AwaitingComeback { attacker } => {
-                    // If Attacker is Challenger (Player), then it's Defender (Sensei)'s turn to respond.
                     if attacker == Duelist::Challenger {
-                        // Sensei responds
                         let pending = self
                             .duel
                             .pending_insult()
@@ -178,15 +190,12 @@ impl Dojo {
                             description,
                         });
 
-                        // Capture audience reaction
                         events.push(DojoEvent::AudienceReaction(self.audience.react(&exchange)));
                     } else {
-                        // Attacker is Defender (Sensei), so it's Challenger (Player)'s turn to respond.
                         break;
                     }
                 }
                 DuelState::AwaitingInsult { attacker } => {
-                    // If Attacker is Defender (Sensei), Sensei throws insult.
                     if attacker == Duelist::Defender {
                         let insult = self.sensei.attack(self.duel.insult_bank());
 
@@ -199,7 +208,6 @@ impl Dojo {
                             description: format!("Sensei throws: \"{insult}\""),
                         });
                     } else {
-                        // Attacker is Challenger (Player). Break loop to let player act.
                         break;
                     }
                 }
@@ -211,8 +219,6 @@ impl Dojo {
                 }
             }
         }
-
-        Ok(events)
     }
 }
 

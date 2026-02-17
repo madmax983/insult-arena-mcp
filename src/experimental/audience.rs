@@ -85,7 +85,24 @@ impl Audience {
 
     /// Helper to normalize strings for repetition detection.
     /// Retains only alphanumeric characters and converts to lowercase.
+    ///
+    /// # Security
+    ///
+    /// Truncates the input to [`crate::arena::MAX_INPUT_LENGTH`] to prevent excessive allocation.
     fn normalize(s: &str) -> String {
+        // 🛡️ SENTRY: Truncate input to prevent DoS via massive allocation.
+        // We use bytes length check first for speed, then char slicing if needed.
+        let s = if s.len() > crate::arena::MAX_INPUT_LENGTH {
+            // Find char boundary to avoid panic
+            let mut len = crate::arena::MAX_INPUT_LENGTH;
+            while !s.is_char_boundary(len) {
+                len -= 1;
+            }
+            &s[..len]
+        } else {
+            s
+        };
+
         s.chars()
             .filter(|c| c.is_alphanumeric())
             .flat_map(char::to_lowercase)
