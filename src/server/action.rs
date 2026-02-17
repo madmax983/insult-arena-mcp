@@ -1,7 +1,42 @@
 //! Action parsing for MCP tool requests.
 //!
-//! This module decouples the parsing of tool arguments from the tool definitions themselves.
-//! It implements validation logic (like input length checks) to prevent `DoS`.
+//! # The "Parser" Layer
+//!
+//! This module acts as the "Parser" in the "Parse, Don't Validate" pattern.
+//! It decouples the *intent* of a tool call (what the user wants to do) from the
+//! *mechanics* of how it's executed.
+//!
+//! ## Responsibilities
+//!
+//! 1.  **Parsing**: Converts untyped JSON (`CallToolRequestParams`) into a strongly-typed [`ToolAction`] enum.
+//! 2.  **Validation**: Enforces structural validity (e.g., `start_duel` takes no args).
+//! 3.  **Security**: Enforces input length limits *before* any heavy business logic runs, preventing `DoS` via memory exhaustion.
+//!
+//! ## Hero's Journey (Implementation)
+//!
+//! ```ignore
+//! use insult_arena_mcp::server::action::ToolAction;
+//! use rust_mcp_sdk::schema::CallToolRequestParams;
+//! use serde_json::json;
+//!
+//! // 1. Receive a raw request from the client
+//! let params = CallToolRequestParams {
+//!     name: "throw_insult".to_string(),
+//!     arguments: Some(serde_json::Map::from_iter(vec![
+//!         ("insult".to_string(), json!("You fight like a dairy farmer!"))
+//!     ])),
+//!     meta: None,
+//!     task: None,
+//! };
+//!
+//! // 2. Parse it into a strongly-typed Action
+//! let action = ToolAction::try_from(params).unwrap();
+//!
+//! // 3. Match and execute (in the Server)
+//! if let ToolAction::ThrowInsult { insult } = action {
+//!     assert_eq!(insult, "You fight like a dairy farmer!");
+//! }
+//! ```
 
 use rust_mcp_sdk::schema::CallToolRequestParams;
 use rust_mcp_sdk::schema::schema_utils::CallToolError;
@@ -13,30 +48,61 @@ use rust_mcp_sdk::schema::schema_utils::CallToolError;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolAction {
     /// Start a new duel.
+    ///
+    /// Corresponds to the `start_duel` tool.
+    /// Requires no arguments.
     StartDuel,
     /// Register as the Challenger (attacks first).
+    ///
+    /// Corresponds to the `register_as_challenger` tool.
     RegisterChallenger,
     /// Register as the Defender (responds to insults).
+    ///
+    /// Corresponds to the `register_as_defender` tool.
     RegisterDefender,
     /// Check the current game state.
+    ///
+    /// Corresponds to the `get_duel_state` tool.
     GetDuelState,
     /// List all valid insults.
+    ///
+    /// Corresponds to the `list_insults` tool.
     ListInsults,
     /// Throw a specific insult.
+    ///
+    /// Corresponds to the `throw_insult` tool.
+    ///
+    /// # Validation
+    ///
+    /// The `insult` string is truncated/rejected if it exceeds [`crate::arena::MAX_INPUT_LENGTH`].
     ThrowInsult {
         /// The insult string to throw.
         insult: String,
     },
     /// Respond with a comeback.
+    ///
+    /// Corresponds to the `respond` tool.
+    ///
+    /// # Validation
+    ///
+    /// The `comeback` string is truncated/rejected if it exceeds [`crate::arena::MAX_INPUT_LENGTH`].
     Respond {
         /// The comeback string to use.
         comeback: String,
     },
     /// Get a hint for the current pending insult.
+    ///
+    /// Corresponds to the `get_hint` tool.
     GetHint,
 }
 
 impl ToolAction {
+    /// Internal helper to extract and validate a string argument.
+    ///
+    /// # Security
+    ///
+    /// This method enforces length limits *before* returning the string to prevent
+    /// Denial of Service (`DoS`) attacks via memory exhaustion.
     fn take_string(
         args: &mut serde_json::Map<String, serde_json::Value>,
         key: &str,
