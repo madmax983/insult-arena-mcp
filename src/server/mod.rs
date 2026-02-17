@@ -29,6 +29,7 @@ use crate::arena::{Arena, ArenaError, ArenaOutcome};
 use crate::duel::{DuelStateView, Duelist};
 
 pub mod action;
+pub mod constants;
 pub mod notifications;
 pub mod response;
 
