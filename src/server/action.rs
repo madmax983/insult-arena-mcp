@@ -165,11 +165,10 @@ impl TryFrom<CallToolRequestParams> for ToolAction {
             }
 
             RESPOND => {
-                let args: RespondArgs = serde_json::from_value(args_val).unwrap_or_else(|_| {
-                    RespondArgs {
+                let args: RespondArgs =
+                    serde_json::from_value(args_val).unwrap_or_else(|_| RespondArgs {
                         comeback: String::new(),
-                    }
-                });
+                    });
 
                 Self::validate_length(
                     &args.comeback,
