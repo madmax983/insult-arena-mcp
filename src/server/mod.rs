@@ -45,6 +45,9 @@ pub use response::DuelResponse;
 /// It uses an [`Arc<Mutex<Arena>>`] to share game state safely across async tasks.
 /// Notifications are sent via the `HyperRuntime` which is injected after server start.
 ///
+/// It implements `Clone` cheaply (Arc-based), so it can be shared between the
+/// Hyper service and the notification system.
+///
 /// # Example
 ///
 /// ```
