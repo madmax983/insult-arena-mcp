@@ -84,6 +84,10 @@
 //! }
 //! ```
 
+use crate::server::constants::{
+    ARG_COMEBACK, ARG_INSULT, GET_DUEL_STATE, GET_HINT, LIST_INSULTS, REGISTER_CHALLENGER,
+    REGISTER_DEFENDER, RESPOND, START_DUEL, THROW_INSULT,
+};
 use rust_mcp_sdk::schema::{Tool, ToolInputSchema};
 use serde_json::json;
 use std::collections::HashMap;
@@ -126,7 +130,7 @@ fn create_base_tool(name: &str, description: &str, input_schema: ToolInputSchema
 /// Tool: `start_duel`
 pub fn tool_start_duel() -> Tool {
     create_base_tool(
-        "start_duel",
+        START_DUEL,
         "Start a new insult sword fighting duel! The Challenger throws the first insult. First to 3 exchange wins takes the duel.",
         empty_input_schema(),
     )
@@ -135,7 +139,7 @@ pub fn tool_start_duel() -> Tool {
 /// Tool: `register_as_challenger`
 pub fn tool_register_as_challenger() -> Tool {
     create_base_tool(
-        "register_as_challenger",
+        REGISTER_CHALLENGER,
         "Register yourself as the Challenger. The Challenger throws insults first.",
         empty_input_schema(),
     )
@@ -144,7 +148,7 @@ pub fn tool_register_as_challenger() -> Tool {
 /// Tool: `register_as_defender`
 pub fn tool_register_as_defender() -> Tool {
     create_base_tool(
-        "register_as_defender",
+        REGISTER_DEFENDER,
         "Register yourself as the Defender. The Defender responds to insults with comebacks.",
         empty_input_schema(),
     )
@@ -153,7 +157,7 @@ pub fn tool_register_as_defender() -> Tool {
 /// Tool: `get_duel_state`
 pub fn tool_get_duel_state() -> Tool {
     create_base_tool(
-        "get_duel_state",
+        GET_DUEL_STATE,
         "Get the current state of the duel. Shows whose turn it is, scores, and any pending insult.",
         empty_input_schema(),
     )
@@ -162,7 +166,7 @@ pub fn tool_get_duel_state() -> Tool {
 /// Tool: `list_insults`
 pub fn tool_list_insults() -> Tool {
     create_base_tool(
-        "list_insults",
+        LIST_INSULTS,
         "List all available insults you can use. In classic mode, you must use one of these exact insults.",
         empty_input_schema(),
     )
@@ -171,25 +175,25 @@ pub fn tool_list_insults() -> Tool {
 /// Tool: `throw_insult`
 pub fn tool_throw_insult() -> Tool {
     create_base_tool(
-        "throw_insult",
+        THROW_INSULT,
         "Throw an insult at your opponent! You must be the current attacker and use a valid insult from the classic list.",
-        string_param_schema("insult", "The insult to throw at your opponent"),
+        string_param_schema(ARG_INSULT, "The insult to throw at your opponent"),
     )
 }
 
 /// Tool: `respond`
 pub fn tool_respond() -> Tool {
     create_base_tool(
-        "respond",
+        RESPOND,
         "Respond to an insult with a witty comeback! If your comeback matches the correct response, you parry and become the attacker.",
-        string_param_schema("comeback", "Your witty comeback to parry the insult"),
+        string_param_schema(ARG_COMEBACK, "Your witty comeback to parry the insult"),
     )
 }
 
 /// Tool: `get_hint`
 pub fn tool_get_hint() -> Tool {
     create_base_tool(
-        "get_hint",
+        GET_HINT,
         "Get a hint for the current pending insult. Returns the first few characters of the correct comeback.",
         empty_input_schema(),
     )

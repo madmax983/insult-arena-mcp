@@ -38,8 +38,13 @@
 //! }
 //! ```
 
+use crate::server::constants::{
+    GET_DUEL_STATE, GET_HINT, LIST_INSULTS, REGISTER_CHALLENGER, REGISTER_DEFENDER, RESPOND,
+    START_DUEL, THROW_INSULT,
+};
 use rust_mcp_sdk::schema::CallToolRequestParams;
 use rust_mcp_sdk::schema::schema_utils::CallToolError;
+use serde::{Deserialize, Deserializer};
 
 /// Represents a parsed and validated tool action.
 ///
@@ -48,86 +53,75 @@ use rust_mcp_sdk::schema::schema_utils::CallToolError;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolAction {
     /// Start a new duel.
-    ///
-    /// Corresponds to the `start_duel` tool.
-    /// Requires no arguments.
     StartDuel,
-    /// Register as the Challenger (attacks first).
-    ///
-    /// Corresponds to the `register_as_challenger` tool.
+    /// Register as the Challenger.
     RegisterChallenger,
-    /// Register as the Defender (responds to insults).
-    ///
-    /// Corresponds to the `register_as_defender` tool.
+    /// Register as the Defender.
     RegisterDefender,
     /// Check the current game state.
-    ///
-    /// Corresponds to the `get_duel_state` tool.
     GetDuelState,
     /// List all valid insults.
-    ///
-    /// Corresponds to the `list_insults` tool.
     ListInsults,
     /// Throw a specific insult.
-    ///
-    /// Corresponds to the `throw_insult` tool.
-    ///
-    /// # Validation
-    ///
-    /// The `insult` string is truncated/rejected if it exceeds [`crate::arena::MAX_INPUT_LENGTH`].
     ThrowInsult {
         /// The insult string to throw.
         insult: String,
     },
     /// Respond with a comeback.
-    ///
-    /// Corresponds to the `respond` tool.
-    ///
-    /// # Validation
-    ///
-    /// The `comeback` string is truncated/rejected if it exceeds [`crate::arena::MAX_INPUT_LENGTH`].
     Respond {
         /// The comeback string to use.
         comeback: String,
     },
     /// Get a hint for the current pending insult.
-    ///
-    /// Corresponds to the `get_hint` tool.
     GetHint,
 }
 
-impl ToolAction {
-    /// Internal helper to extract and validate a string argument.
-    ///
-    /// # Security
-    ///
-    /// This method enforces length limits *before* returning the string to prevent
-    /// Denial of Service (`DoS`) attacks via memory exhaustion.
-    fn take_string(
-        args: &mut serde_json::Map<String, serde_json::Value>,
-        key: &str,
-        tool_name: &str,
-        error_label: &str,
-    ) -> Result<String, CallToolError> {
-        let val_str = match args.remove(key) {
-            Some(serde_json::Value::String(s)) => s,
-            _ => String::new(),
-        };
+/// Helper for lossy string deserialization.
+///
+/// If the input is a string, it returns it.
+/// If the input is anything else (or null), it returns an empty string.
+/// This preserves legacy behavior where invalid types were treated as empty strings.
+fn deserialize_lossy_string<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let v: serde_json::Value = Deserialize::deserialize(deserializer)?;
+    match v {
+        serde_json::Value::String(s) => Ok(s),
+        _ => Ok(String::new()),
+    }
+}
 
-        // 🛡️ HARDENING: Check length BEFORE allocation to prevent DoS
-        // Note: The allocation happened when serde parsed the JSON request,
-        // but we prevent further cloning/allocation here.
-        if val_str.len() > crate::arena::MAX_INPUT_LENGTH {
-            return Err(CallToolError::invalid_arguments(
+/// Arguments for `throw_insult`.
+#[derive(Deserialize)]
+struct ThrowInsultArgs {
+    #[serde(rename = "insult", deserialize_with = "deserialize_lossy_string")]
+    insult: String,
+}
+
+/// Arguments for `respond`.
+#[derive(Deserialize)]
+struct RespondArgs {
+    #[serde(rename = "comeback", deserialize_with = "deserialize_lossy_string")]
+    comeback: String,
+}
+
+impl ToolAction {
+    /// Helper to validate string length to prevent `DoS`.
+    fn validate_length(
+        s: &str,
+        field_name: &str,
+        tool_name: &str,
+        limit: usize,
+    ) -> Result<(), CallToolError> {
+        if s.len() > limit {
+            Err(CallToolError::invalid_arguments(
                 tool_name,
-                Some(format!(
-                    "{} too long (max {} chars)",
-                    error_label,
-                    crate::arena::MAX_INPUT_LENGTH
-                )),
-            ));
+                Some(format!("{field_name} too long (max {limit} chars)")),
+            ))
+        } else {
+            Ok(())
         }
-        Ok(val_str)
     }
 }
 
@@ -136,22 +130,58 @@ impl TryFrom<CallToolRequestParams> for ToolAction {
 
     fn try_from(params: CallToolRequestParams) -> Result<Self, Self::Error> {
         // ⚡ Bolt Optimization: Take ownership of arguments to avoid string cloning.
-        let mut args = params.arguments.unwrap_or_default();
+        // Convert Option<Map> to Value::Object (or Null) for serde parsing.
+        let args_val = params
+            .arguments
+            .map_or(serde_json::Value::Null, serde_json::Value::Object);
         let tool_name = params.name;
 
         match tool_name.as_str() {
-            "start_duel" => Ok(Self::StartDuel),
-            "register_as_challenger" => Ok(Self::RegisterChallenger),
-            "register_as_defender" => Ok(Self::RegisterDefender),
-            "get_duel_state" => Ok(Self::GetDuelState),
-            "list_insults" => Ok(Self::ListInsults),
-            "throw_insult" => Ok(Self::ThrowInsult {
-                insult: Self::take_string(&mut args, "insult", &tool_name, "Insult")?,
-            }),
-            "respond" => Ok(Self::Respond {
-                comeback: Self::take_string(&mut args, "comeback", &tool_name, "Comeback")?,
-            }),
-            "get_hint" => Ok(Self::GetHint),
+            START_DUEL => Ok(Self::StartDuel),
+            REGISTER_CHALLENGER => Ok(Self::RegisterChallenger),
+            REGISTER_DEFENDER => Ok(Self::RegisterDefender),
+            GET_DUEL_STATE => Ok(Self::GetDuelState),
+            LIST_INSULTS => Ok(Self::ListInsults),
+            GET_HINT => Ok(Self::GetHint),
+
+            THROW_INSULT => {
+                // Parse arguments into struct
+                // Use unwrap_or_else to handle parsing failures (e.g. missing keys) by falling back to defaults
+                let args: ThrowInsultArgs =
+                    serde_json::from_value(args_val).unwrap_or_else(|_| ThrowInsultArgs {
+                        insult: String::new(),
+                    });
+
+                Self::validate_length(
+                    &args.insult,
+                    "Insult",
+                    &tool_name,
+                    crate::arena::MAX_INPUT_LENGTH,
+                )?;
+
+                Ok(Self::ThrowInsult {
+                    insult: args.insult,
+                })
+            }
+
+            RESPOND => {
+                let args: RespondArgs =
+                    serde_json::from_value(args_val).unwrap_or_else(|_| RespondArgs {
+                        comeback: String::new(),
+                    });
+
+                Self::validate_length(
+                    &args.comeback,
+                    "Comeback",
+                    &tool_name,
+                    crate::arena::MAX_INPUT_LENGTH,
+                )?;
+
+                Ok(Self::Respond {
+                    comeback: args.comeback,
+                })
+            }
+
             _ => Err(CallToolError::unknown_tool(&tool_name)),
         }
     }
@@ -161,16 +191,17 @@ impl TryFrom<CallToolRequestParams> for ToolAction {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+    use crate::server::constants::{ARG_INSULT, THROW_INSULT};
     use serde_json::json;
 
     #[test]
     fn rejects_excessive_input_length_efficiently() {
         let long_string = "a".repeat(crate::arena::MAX_INPUT_LENGTH + 1);
         let mut args = serde_json::Map::new();
-        args.insert("insult".to_string(), json!(long_string));
+        args.insert(ARG_INSULT.to_string(), json!(long_string));
 
         let params = CallToolRequestParams {
-            name: "throw_insult".to_string(),
+            name: THROW_INSULT.to_string(),
             arguments: Some(args),
             meta: None,
             task: None,
@@ -186,10 +217,10 @@ mod tests {
     fn rejects_invalid_types_as_empty_string() {
         // Test that non-string arguments (number, null, missing) are treated as empty strings
         let mut args = serde_json::Map::new();
-        args.insert("insult".to_string(), json!(12345)); // Number instead of string
+        args.insert(ARG_INSULT.to_string(), json!(12345)); // Number instead of string
 
         let params = CallToolRequestParams {
-            name: "throw_insult".to_string(),
+            name: THROW_INSULT.to_string(),
             arguments: Some(args),
             meta: None,
             task: None,
@@ -200,6 +231,24 @@ mod tests {
         match result {
             ToolAction::ThrowInsult { insult } => {
                 assert_eq!(insult, "", "Number should become empty string");
+            }
+            _ => panic!("Expected ThrowInsult"),
+        }
+    }
+
+    #[test]
+    fn handles_missing_argument_as_empty_string() {
+        let params = CallToolRequestParams {
+            name: THROW_INSULT.to_string(),
+            arguments: Some(serde_json::Map::new()), // Empty args
+            meta: None,
+            task: None,
+        };
+
+        let result = ToolAction::try_from(params).unwrap();
+        match result {
+            ToolAction::ThrowInsult { insult } => {
+                assert_eq!(insult, "", "Missing argument should become empty string");
             }
             _ => panic!("Expected ThrowInsult"),
         }
