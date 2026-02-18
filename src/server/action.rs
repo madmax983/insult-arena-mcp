@@ -148,20 +148,10 @@ impl TryFrom<CallToolRequestParams> for ToolAction {
             GET_DUEL_STATE => Ok(Self::GetDuelState),
             LIST_INSULTS => Ok(Self::ListInsults),
             THROW_INSULT => Ok(Self::ThrowInsult {
-                insult: Self::take_player_input(
-                    &mut args,
-                    ARG_INSULT,
-                    &tool_name,
-                    "Insult",
-                )?,
+                insult: Self::take_player_input(&mut args, ARG_INSULT, &tool_name, "Insult")?,
             }),
             RESPOND => Ok(Self::Respond {
-                comeback: Self::take_player_input(
-                    &mut args,
-                    ARG_COMEBACK,
-                    &tool_name,
-                    "Comeback",
-                )?,
+                comeback: Self::take_player_input(&mut args, ARG_COMEBACK, &tool_name, "Comeback")?,
             }),
             GET_HINT => Ok(Self::GetHint),
             _ => Err(CallToolError::unknown_tool(&tool_name)),
