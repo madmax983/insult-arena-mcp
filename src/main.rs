@@ -1,6 +1,23 @@
-//! Insult Arena - LLM vs LLM sword fighting over MCP.
+//! Insult Arena MCP Server - Entry Point
 //!
-//! Run with: `cargo run`
+//! This is the main executable for the Insult Arena MCP server.
+//! It sets up the environment, initializes the server components, and starts the
+//! HTTP/SSE server to listen for client connections.
+//!
+//! # Responsibilities
+//!
+//! 1.  **Logging**: Initializes `tracing` for structured logging.
+//! 2.  **Server Setup**: Creates the [`InsultServer`] handler and the Hyper server.
+//! 3.  **Signal Handling**: Listens for `Ctrl+C` to perform a graceful shutdown.
+//! 4.  **Runtime Injection**: Injects the `HyperRuntime` back into the handler for notifications.
+//!
+//! # Usage
+//!
+//! Run with:
+//!
+//! ```bash
+//! cargo run
+//! ```
 //!
 //! Connect clients to: <http://localhost:3000/sse>
 
@@ -15,6 +32,9 @@ use rust_mcp_sdk::schema::{
 };
 use tracing_subscriber::EnvFilter;
 
+/// The main entry point.
+///
+/// Initializes the server and blocks until a shutdown signal is received.
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Initialize logging

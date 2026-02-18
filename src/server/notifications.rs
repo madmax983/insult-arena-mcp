@@ -1,3 +1,24 @@
+//! Turn notification system.
+//!
+//! # The Herald of the Arena
+//!
+//! The notification system is responsible for broadcasting game state updates
+//! to all connected clients. This enables the autonomous "Game Loop" where
+//! AI agents react to each other's moves without human intervention.
+//!
+//! ## Architecture
+//!
+//! 1.  **Event Source**: The `Arena` produces a state change (e.g., `AwaitingComeback`).
+//! 2.  **Manager**: The [`NotificationManager`] queues a job.
+//! 3.  **Worker**: A background task (with concurrency limits) picks up the job.
+//! 4.  **Transport**: The `HyperRuntime` sends a JSON-RPC notification (`notifications/turn`) via SSE.
+//!
+//! ## Flow
+//!
+//! ```text
+//! [Arena] -> (State Change) -> [NotificationManager] -> (Channel) -> [Worker] -> (SSE) -> [Clients]
+//! ```
+
 use rust_mcp_sdk::mcp_server::hyper_runtime::HyperRuntime;
 use rust_mcp_sdk::schema::CustomNotification;
 use serde_json::json;
@@ -14,6 +35,19 @@ struct NotificationJob {
 }
 
 /// Manages broadcasting notifications to connected clients.
+///
+/// # Usage (Internal)
+///
+/// ```ignore
+/// // 1. Create the manager
+/// let manager = NotificationManager::new();
+///
+/// // 2. Inject the runtime (once server starts)
+/// manager.set_runtime(runtime).await;
+///
+/// // 3. Broadcast a turn update
+/// manager.notify_turn(&current_state).await;
+/// ```
 #[derive(Clone)]
 pub struct NotificationManager {
     runtime: Arc<RwLock<Option<Arc<HyperRuntime>>>>,

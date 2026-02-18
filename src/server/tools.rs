@@ -128,6 +128,20 @@ fn create_base_tool(name: &str, description: &str, input_schema: ToolInputSchema
 }
 
 /// Tool: `start_duel`
+///
+/// # Definition
+///
+/// ```json
+/// {
+///   "name": "start_duel",
+///   "description": "Start a new insult sword fighting duel!...",
+///   "inputSchema": {
+///     "type": "object",
+///     "properties": {},
+///     "required": []
+///   }
+/// }
+/// ```
 pub fn tool_start_duel() -> Tool {
     create_base_tool(
         START_DUEL,
@@ -137,6 +151,20 @@ pub fn tool_start_duel() -> Tool {
 }
 
 /// Tool: `register_as_challenger`
+///
+/// # Definition
+///
+/// ```json
+/// {
+///   "name": "register_as_challenger",
+///   "description": "Register yourself as the Challenger...",
+///   "inputSchema": {
+///     "type": "object",
+///     "properties": {},
+///     "required": []
+///   }
+/// }
+/// ```
 pub fn tool_register_as_challenger() -> Tool {
     create_base_tool(
         REGISTER_CHALLENGER,
@@ -146,6 +174,20 @@ pub fn tool_register_as_challenger() -> Tool {
 }
 
 /// Tool: `register_as_defender`
+///
+/// # Definition
+///
+/// ```json
+/// {
+///   "name": "register_as_defender",
+///   "description": "Register yourself as the Defender...",
+///   "inputSchema": {
+///     "type": "object",
+///     "properties": {},
+///     "required": []
+///   }
+/// }
+/// ```
 pub fn tool_register_as_defender() -> Tool {
     create_base_tool(
         REGISTER_DEFENDER,
@@ -155,6 +197,20 @@ pub fn tool_register_as_defender() -> Tool {
 }
 
 /// Tool: `get_duel_state`
+///
+/// # Definition
+///
+/// ```json
+/// {
+///   "name": "get_duel_state",
+///   "description": "Get the current state of the duel...",
+///   "inputSchema": {
+///     "type": "object",
+///     "properties": {},
+///     "required": []
+///   }
+/// }
+/// ```
 pub fn tool_get_duel_state() -> Tool {
     create_base_tool(
         GET_DUEL_STATE,
@@ -164,6 +220,20 @@ pub fn tool_get_duel_state() -> Tool {
 }
 
 /// Tool: `list_insults`
+///
+/// # Definition
+///
+/// ```json
+/// {
+///   "name": "list_insults",
+///   "description": "List all available insults you can use...",
+///   "inputSchema": {
+///     "type": "object",
+///     "properties": {},
+///     "required": []
+///   }
+/// }
+/// ```
 pub fn tool_list_insults() -> Tool {
     create_base_tool(
         LIST_INSULTS,
@@ -173,6 +243,22 @@ pub fn tool_list_insults() -> Tool {
 }
 
 /// Tool: `throw_insult`
+///
+/// # Definition
+///
+/// ```json
+/// {
+///   "name": "throw_insult",
+///   "description": "Throw an insult at your opponent!...",
+///   "inputSchema": {
+///     "type": "object",
+///     "properties": {
+///       "insult": { "type": "string", "description": "..." }
+///     },
+///     "required": ["insult"]
+///   }
+/// }
+/// ```
 pub fn tool_throw_insult() -> Tool {
     create_base_tool(
         THROW_INSULT,
@@ -182,6 +268,22 @@ pub fn tool_throw_insult() -> Tool {
 }
 
 /// Tool: `respond`
+///
+/// # Definition
+///
+/// ```json
+/// {
+///   "name": "respond",
+///   "description": "Respond to an insult with a witty comeback!...",
+///   "inputSchema": {
+///     "type": "object",
+///     "properties": {
+///       "comeback": { "type": "string", "description": "..." }
+///     },
+///     "required": ["comeback"]
+///   }
+/// }
+/// ```
 pub fn tool_respond() -> Tool {
     create_base_tool(
         RESPOND,
@@ -191,6 +293,20 @@ pub fn tool_respond() -> Tool {
 }
 
 /// Tool: `get_hint`
+///
+/// # Definition
+///
+/// ```json
+/// {
+///   "name": "get_hint",
+///   "description": "Get a hint for the current pending insult...",
+///   "inputSchema": {
+///     "type": "object",
+///     "properties": {},
+///     "required": []
+///   }
+/// }
+/// ```
 pub fn tool_get_hint() -> Tool {
     create_base_tool(
         GET_HINT,
