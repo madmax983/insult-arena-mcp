@@ -135,6 +135,79 @@ fn contains_ignore_case(haystack: &str, needle: &str) -> bool {
     contains_ignore_case_char_slice(haystack, &needle_chars)
 }
 
+/// Helper to check if a haystack contains a needle (pre-normalized as byte slice).
+///
+/// Optimized for ASCII-only haystack and needle.
+/// Avoids `char` decoding overhead.
+fn contains_ignore_case_bytes(haystack: &str, needle: &[u8]) -> bool {
+    if needle.is_empty() {
+        return true;
+    }
+
+    let haystack_bytes = haystack.as_bytes();
+    if haystack_bytes.len() < needle.len() {
+        return false;
+    }
+
+    // Manual sliding window to find match
+    for i in 0..=(haystack_bytes.len() - needle.len()) {
+        let sub = &haystack_bytes[i..i + needle.len()];
+        // Check match
+        if sub
+            .iter()
+            .zip(needle)
+            .all(|(h, n)| h.to_ascii_lowercase() == *n)
+        {
+            return true;
+        }
+    }
+    false
+}
+
+/// Helper to check if a Unicode haystack contains an ASCII needle, ignoring case.
+///
+/// Avoids allocating a `Vec<char>` for the needle when the query is ASCII.
+fn contains_ignore_case_mixed(haystack: &str, needle: &[u8]) -> bool {
+    if needle.is_empty() {
+        return true;
+    }
+
+    let mut haystack_iter = haystack.chars();
+
+    loop {
+        let mut check_iter = haystack_iter.clone();
+        let mut matched = true;
+
+        for &n in needle {
+            if let Some(c) = check_iter.next() {
+                if c.is_ascii() {
+                    if c.to_ascii_lowercase() as u8 != n {
+                        matched = false;
+                        break;
+                    }
+                } else {
+                    // Unicode char cannot match ASCII needle byte
+                    matched = false;
+                    break;
+                }
+            } else {
+                matched = false;
+                break;
+            }
+        }
+
+        if matched {
+            return true;
+        }
+
+        if haystack_iter.next().is_none() {
+            break;
+        }
+    }
+
+    false
+}
+
 /// Helper to check if a haystack contains a needle (pre-normalized as char slice).
 ///
 /// This avoids re-normalizing the needle for every position in the haystack.
@@ -300,6 +373,35 @@ impl InsultBank {
         // Fixed-size stack buffer sufficient for max query length (128) + expansion.
         // 256 chars = 1KB stack usage, well within safe limits.
         const BUFFER_SIZE: usize = 256;
+
+        // If query is ASCII, we can use a faster byte-based search path.
+        if query.is_ascii() {
+            let mut buffer = [0u8; BUFFER_SIZE];
+            let mut len = 0;
+
+            for b in query.bytes().take(MAX_SEARCH_QUERY_LENGTH) {
+                if len < BUFFER_SIZE {
+                    buffer[len] = b.to_ascii_lowercase();
+                    len += 1;
+                } else {
+                    break;
+                }
+            }
+            let query_bytes = &buffer[..len];
+
+            return self
+                .pairs
+                .iter()
+                .filter(|pair| {
+                    if pair.insult.is_ascii() {
+                        contains_ignore_case_bytes(pair.insult, query_bytes)
+                    } else {
+                        contains_ignore_case_mixed(pair.insult, query_bytes)
+                    }
+                })
+                .collect();
+        }
+
         let mut buffer = ['\0'; BUFFER_SIZE];
         let mut len = 0;
 
