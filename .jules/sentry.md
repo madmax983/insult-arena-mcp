@@ -19,3 +19,7 @@
 ## [Arena] Hint Access Control
 **Learning:** `Arena::get_hint` was a method that accessed shared game state (the pending insult) but took no arguments, allowing *any* connected client to access privileged information (the correct answer). This pattern of implicit access to shared state without context checks is a security vulnerability in multi-user systems.
 **Action:** Always verify *who* is asking for information in shared state methods, especially in "read-only" operations that might reveal hidden state. Enforced strict turn validation for `get_hint` using `DuelSessions`.
+
+## [Announcer] Panic on Invalid Duel State
+**Learning:** `Announcer::get_match_point_text` panicked when `wins_needed` was 0 due to integer underflow (`0 - 1`). While `wins_needed` should be >= 1, `DuelStateView` is public and can be constructed with invalid values (e.g., via deserialization).
+**Action:** Added a check for `wins_needed > 0` before subtraction. View logic must be robust against Model state validity.

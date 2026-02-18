@@ -172,6 +172,7 @@ impl Announcer {
     fn get_match_point_text(view: &DuelStateView) -> &'static str {
         // GAME FEEL: Added Match Point notification to heighten tension near end-game (Ludwig)
         if view.phase != "finished"
+            && view.wins_needed > 0
             && (view.challenger_score == view.wins_needed - 1
                 || view.defender_score == view.wins_needed - 1)
         {
