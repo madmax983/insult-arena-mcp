@@ -94,7 +94,9 @@ impl WeatherSystem {
         match self.current {
             WeatherCondition::Storm => {
                 // Integer math: x1.5 is roughly (x * 3) / 2
-                // 🛡️ SENTRY: Use i64 to prevent overflow, then clamp to i32 range.
+                // 🛡️ SENTRY: Use i64 to prevent overflow during multiplication.
+                // We manually clamp to i32 bounds before casting back to ensure safety.
+                // The `clippy::cast_possible_truncation` allow is safe because of this explicit check.
                 let val = (hype_change as i64).saturating_mul(3) / 2;
                 if val > i32::MAX as i64 {
                     i32::MAX
