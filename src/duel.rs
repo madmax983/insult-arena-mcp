@@ -27,6 +27,7 @@ use std::borrow::Cow;
 use serde::{Deserialize, Serialize};
 
 use crate::InsultBank;
+use crate::insults::InsultPair;
 
 /// Identifies a duelist in the fight.
 ///
@@ -217,8 +218,8 @@ pub struct Duel {
     state: DuelState,
     /// The current pending insult (if any).
     ///
-    /// Stores `Cow` to avoid allocation when the insult is canonical (from the bank).
-    pending_insult: Option<Cow<'static, str>>,
+    /// Stores `&'static InsultPair` to allow O(1) access to the expected comeback.
+    pending_insult: Option<&'static InsultPair>,
     /// Score for challenger.
     challenger_score: u8,
     /// Score for defender.
@@ -278,7 +279,7 @@ impl Duel {
     /// Returns the pending insult if waiting for a comeback.
     #[must_use]
     pub fn pending_insult(&self) -> Option<&str> {
-        self.pending_insult.as_deref()
+        self.pending_insult.map(|p| p.insult)
     }
 
     /// Returns the exchange history.
@@ -351,7 +352,7 @@ impl Duel {
             .find_pair(insult)
             .ok_or(InsultCheckError::UnknownInsult)?;
 
-        self.pending_insult = Some(Cow::Borrowed(pair.insult));
+        self.pending_insult = Some(pair);
         self.state = DuelState::AwaitingComeback { attacker };
         Ok(pair.insult)
     }
@@ -384,7 +385,7 @@ impl Duel {
         let (attacker, insult) = self.validate_respond_phase()?;
         let defender = attacker.opponent();
 
-        let (result, winner) = self.resolve_exchange(insult, comeback, attacker, defender);
+        let (result, winner) = Self::resolve_exchange(insult, comeback, attacker, defender);
 
         self.update_scores(winner);
 
@@ -400,7 +401,7 @@ impl Duel {
         Ok(exchange)
     }
 
-    fn validate_respond_phase(&mut self) -> Result<(Duelist, Cow<'static, str>), InsultError> {
+    fn validate_respond_phase(&mut self) -> Result<(Duelist, &'static InsultPair), InsultError> {
         let attacker = match self.state {
             DuelState::AwaitingComeback { attacker } => attacker,
             DuelState::AwaitingInsult { .. } => return Err(InsultError::WaitingForInsult),
@@ -416,28 +417,31 @@ impl Duel {
     }
 
     fn resolve_exchange(
-        &self,
-        insult: Cow<'static, str>,
+        pair: &'static InsultPair,
         comeback: String,
         attacker: Duelist,
         defender: Duelist,
     ) -> (ExchangeResult, Duelist) {
-        if self
-            .insult_bank
-            .check_comeback(&insult, &comeback)
-            .is_some()
-        {
+        // ⚡ Bolt Optimization: Zero-cost comeback validation!
+        // We know exactly which insult was thrown (via `pair`), so we can check
+        // the comeback directly against the expected answer without searching the bank (O(N) -> O(1)).
+        if crate::insults::normalized_eq(pair.comeback, &comeback) {
             // Successful parry! Defender wins exchange and becomes attacker.
-            return (ExchangeResult::Parried { insult, comeback }, defender);
+            return (
+                ExchangeResult::Parried {
+                    insult: Cow::Borrowed(pair.insult),
+                    comeback,
+                },
+                defender,
+            );
         }
 
         // Failed comeback. Attacker wins exchange.
-        let correct = self.insult_bank.find_comeback(&insult).unwrap_or("???");
         (
             ExchangeResult::Failed {
-                insult,
+                insult: Cow::Borrowed(pair.insult),
                 attempt: comeback,
-                correct: Cow::Borrowed(correct),
+                correct: Cow::Borrowed(pair.comeback),
             },
             attacker,
         )

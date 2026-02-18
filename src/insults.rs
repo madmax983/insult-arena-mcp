@@ -96,7 +96,7 @@ const CLASSIC_INSULTS: &[InsultPair] = &[
 /// 2. Case-insensitivity.
 ///
 /// This implementation avoids heap allocations.
-fn normalized_eq(a: &str, b: &str) -> bool {
+pub fn normalized_eq(a: &str, b: &str) -> bool {
     // ⚡ Bolt Optimization: Fast path for ASCII strings.
     // Avoids UTF-8 decoding overhead and complex iterator state in flat_map(to_lowercase).
     // Uses raw bytes which are faster to iterate and process.
