@@ -39,3 +39,7 @@
 **2026-02-13 - DoS: Stale Duel Reset**
 **Threat:** The `Arena` enforces a singleton game state where one active duel blocks all other potential players. If a player starts a duel and abandons it (e.g., disconnects or crashes), no new duel can be started until the server restarts, creating a Denial of Service (DoS) condition.
 **Defense:** Implemented a timeout mechanism in `src/arena.rs`. An active duel that has been inactive for more than `timeout` (default 5 minutes) is automatically reset when `start_duel` is called. Added `last_active` timestamp tracking to all state-mutating methods.
+
+**2026-03-01 - DoS: Unbounded Input in Experimental Dojo**
+**Threat:** The `Dojo::turn` method in `src/experimental/dojo.rs` accepted unbounded `&str` inputs, converting them to `String` without length checks. This allowed massive allocations (DoS) before game logic processing.
+**Defense:** Enforced `MAX_INPUT_LENGTH` check in `Dojo::turn` (returning `ArenaError::InputTooLong`) and added truncation in `Audience::normalize` as a defense-in-depth measure. Added `tests/dojo_dos.rs` to verify.
