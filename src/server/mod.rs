@@ -238,10 +238,8 @@ impl InsultServer {
         // ⚡ Bolt Optimization: Pass ownership of 'comeback' to Arena to avoid allocation.
         // Arena expects String, so we unwrap PlayerInput.
         let comeback_str = comeback.into_inner();
-        self.execute_turn_action("Respond", |arena| {
-            arena.respond(&session_id, comeback_str)
-        })
-        .await
+        self.execute_turn_action("Respond", |arena| arena.respond(&session_id, comeback_str))
+            .await
     }
 
     async fn handle_get_hint(&self, session_id: String) -> DuelResponse {
