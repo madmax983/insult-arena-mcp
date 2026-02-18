@@ -2,6 +2,7 @@
 #![allow(clippy::expect_used)]
 
 use super::*;
+use crate::arena::PlayerInput;
 use std::sync::{Arc, Mutex};
 
 struct LogWriter(Arc<Mutex<String>>);
@@ -46,10 +47,12 @@ fn test_log_injection_throw_insult() {
             // If the insult is unknown, it returns an error containing the input.
             // This will trigger the error path in `handle_throw_insult`.
             let malicious_input = "malicious\nINJECTED_LOG";
+            // The input should be valid structurally (length check only), even if malicious content
+            let input = PlayerInput::try_from(malicious_input.to_string()).unwrap();
 
             tracing::warn!("TEST LOG");
             let _ = server
-                .handle_throw_insult("session".to_string(), malicious_input.to_string())
+                .handle_throw_insult("session".to_string(), input)
                 .await;
         });
     });

@@ -34,10 +34,15 @@
 //!
 //! // 3. Match and execute (in the Server)
 //! if let ToolAction::ThrowInsult { insult } = action {
-//!     assert_eq!(insult, "You fight like a dairy farmer!");
+//!     assert_eq!(insult.as_str(), "You fight like a dairy farmer!");
 //! }
 //! ```
 
+use crate::arena::PlayerInput;
+use crate::server::constants::{
+    ARG_COMEBACK, ARG_INSULT, GET_DUEL_STATE, GET_HINT, LIST_INSULTS, REGISTER_CHALLENGER,
+    REGISTER_DEFENDER, RESPOND, START_DUEL, THROW_INSULT,
+};
 use rust_mcp_sdk::schema::CallToolRequestParams;
 use rust_mcp_sdk::schema::schema_utils::CallToolError;
 
@@ -74,10 +79,10 @@ pub enum ToolAction {
     ///
     /// # Validation
     ///
-    /// The `insult` string is truncated/rejected if it exceeds [`crate::arena::MAX_INPUT_LENGTH`].
+    /// The `insult` string is validated and wrapped in [`PlayerInput`], enforcing length limits.
     ThrowInsult {
-        /// The insult string to throw.
-        insult: String,
+        /// The validated insult.
+        insult: PlayerInput,
     },
     /// Respond with a comeback.
     ///
@@ -85,10 +90,10 @@ pub enum ToolAction {
     ///
     /// # Validation
     ///
-    /// The `comeback` string is truncated/rejected if it exceeds [`crate::arena::MAX_INPUT_LENGTH`].
+    /// The `comeback` string is validated and wrapped in [`PlayerInput`], enforcing length limits.
     Respond {
-        /// The comeback string to use.
-        comeback: String,
+        /// The validated comeback.
+        comeback: PlayerInput,
     },
     /// Get a hint for the current pending insult.
     ///
@@ -97,37 +102,34 @@ pub enum ToolAction {
 }
 
 impl ToolAction {
-    /// Internal helper to extract and validate a string argument.
+    /// Internal helper to extract and validate a player input argument.
     ///
     /// # Security
     ///
-    /// This method enforces length limits *before* returning the string to prevent
+    /// This method enforces length limits via [`PlayerInput::try_from`] to prevent
     /// Denial of Service (`DoS`) attacks via memory exhaustion.
-    fn take_string(
+    fn take_player_input(
         args: &mut serde_json::Map<String, serde_json::Value>,
         key: &str,
         tool_name: &str,
         error_label: &str,
-    ) -> Result<String, CallToolError> {
+    ) -> Result<PlayerInput, CallToolError> {
         let val_str = match args.remove(key) {
             Some(serde_json::Value::String(s)) => s,
             _ => String::new(),
         };
 
-        // 🛡️ HARDENING: Check length BEFORE allocation to prevent DoS
-        // Note: The allocation happened when serde parsed the JSON request,
-        // but we prevent further cloning/allocation here.
-        if val_str.len() > crate::arena::MAX_INPUT_LENGTH {
-            return Err(CallToolError::invalid_arguments(
+        // 🛡️ HARDENING: Check length via PlayerInput validation
+        PlayerInput::try_from(val_str).map_err(|_| {
+            CallToolError::invalid_arguments(
                 tool_name,
                 Some(format!(
                     "{} too long (max {} chars)",
                     error_label,
                     crate::arena::MAX_INPUT_LENGTH
                 )),
-            ));
-        }
-        Ok(val_str)
+            )
+        })
     }
 }
 
@@ -140,18 +142,28 @@ impl TryFrom<CallToolRequestParams> for ToolAction {
         let tool_name = params.name;
 
         match tool_name.as_str() {
-            "start_duel" => Ok(Self::StartDuel),
-            "register_as_challenger" => Ok(Self::RegisterChallenger),
-            "register_as_defender" => Ok(Self::RegisterDefender),
-            "get_duel_state" => Ok(Self::GetDuelState),
-            "list_insults" => Ok(Self::ListInsults),
-            "throw_insult" => Ok(Self::ThrowInsult {
-                insult: Self::take_string(&mut args, "insult", &tool_name, "Insult")?,
+            START_DUEL => Ok(Self::StartDuel),
+            REGISTER_CHALLENGER => Ok(Self::RegisterChallenger),
+            REGISTER_DEFENDER => Ok(Self::RegisterDefender),
+            GET_DUEL_STATE => Ok(Self::GetDuelState),
+            LIST_INSULTS => Ok(Self::ListInsults),
+            THROW_INSULT => Ok(Self::ThrowInsult {
+                insult: Self::take_player_input(
+                    &mut args,
+                    ARG_INSULT,
+                    &tool_name,
+                    "Insult",
+                )?,
             }),
-            "respond" => Ok(Self::Respond {
-                comeback: Self::take_string(&mut args, "comeback", &tool_name, "Comeback")?,
+            RESPOND => Ok(Self::Respond {
+                comeback: Self::take_player_input(
+                    &mut args,
+                    ARG_COMEBACK,
+                    &tool_name,
+                    "Comeback",
+                )?,
             }),
-            "get_hint" => Ok(Self::GetHint),
+            GET_HINT => Ok(Self::GetHint),
             _ => Err(CallToolError::unknown_tool(&tool_name)),
         }
     }
@@ -167,10 +179,10 @@ mod tests {
     fn rejects_excessive_input_length_efficiently() {
         let long_string = "a".repeat(crate::arena::MAX_INPUT_LENGTH + 1);
         let mut args = serde_json::Map::new();
-        args.insert("insult".to_string(), json!(long_string));
+        args.insert(ARG_INSULT.to_string(), json!(long_string));
 
         let params = CallToolRequestParams {
-            name: "throw_insult".to_string(),
+            name: THROW_INSULT.to_string(),
             arguments: Some(args),
             meta: None,
             task: None,
@@ -186,10 +198,10 @@ mod tests {
     fn rejects_invalid_types_as_empty_string() {
         // Test that non-string arguments (number, null, missing) are treated as empty strings
         let mut args = serde_json::Map::new();
-        args.insert("insult".to_string(), json!(12345)); // Number instead of string
+        args.insert(ARG_INSULT.to_string(), json!(12345)); // Number instead of string
 
         let params = CallToolRequestParams {
-            name: "throw_insult".to_string(),
+            name: THROW_INSULT.to_string(),
             arguments: Some(args),
             meta: None,
             task: None,
@@ -199,7 +211,7 @@ mod tests {
         let result = ToolAction::try_from(params).unwrap();
         match result {
             ToolAction::ThrowInsult { insult } => {
-                assert_eq!(insult, "", "Number should become empty string");
+                assert_eq!(insult.as_str(), "", "Number should become empty string");
             }
             _ => panic!("Expected ThrowInsult"),
         }
