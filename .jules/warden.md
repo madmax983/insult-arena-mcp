@@ -43,3 +43,7 @@
 **2026-03-01 - DoS: Unbounded Input in Experimental Dojo**
 **Threat:** The `Dojo::turn` method in `src/experimental/dojo.rs` accepted unbounded `&str` inputs, converting them to `String` without length checks. This allowed massive allocations (DoS) before game logic processing.
 **Defense:** Enforced `MAX_INPUT_LENGTH` check in `Dojo::turn` (returning `ArenaError::InputTooLong`) and added truncation in `Audience::normalize` as a defense-in-depth measure. Added `tests/dojo_dos.rs` to verify.
+
+**2026-03-02 - DoS: Notification Worker Hang**
+**Threat:** Slow clients can block the notification semaphore indefinitely by failing to read from the SSE stream, causing the worker loop to stall waiting for permits and stopping all notifications.
+**Defense:** Added 5s timeout to `notify_custom` calls in `src/server/notifications.rs` to ensure worker tasks eventually release their semaphore permits.

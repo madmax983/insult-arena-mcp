@@ -23,6 +23,7 @@ use rust_mcp_sdk::mcp_server::hyper_runtime::HyperRuntime;
 use rust_mcp_sdk::schema::CustomNotification;
 use serde_json::json;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::{Mutex, RwLock, Semaphore, mpsc};
 use tracing::{info, warn};
 
@@ -124,13 +125,31 @@ impl NotificationManager {
                     // Task holds the permit until done
                     let _permit = permit;
                     info!("   → Sending to session: {:?}", session_id);
-                    if let Err(e) = runtime.notify_custom(&session_id, notification).await {
-                        warn!(
-                            "   ✗ Failed to send notification to {:?}: {:?}",
-                            session_id, e
-                        );
-                    } else {
-                        info!("   ✓ Notification sent to {:?}", session_id);
+
+                    // 🛡️ HARDENING: Enforce timeout to prevent "Slowloris" DoS where
+                    // slow clients block the semaphore permits indefinitely.
+                    let result = tokio::time::timeout(
+                        Duration::from_secs(5),
+                        runtime.notify_custom(&session_id, notification),
+                    )
+                    .await;
+
+                    match result {
+                        Ok(Ok(())) => {
+                            info!("   ✓ Notification sent to {:?}", session_id);
+                        }
+                        Ok(Err(e)) => {
+                            warn!(
+                                "   ✗ Failed to send notification to {:?}: {:?}",
+                                session_id, e
+                            );
+                        }
+                        Err(_) => {
+                            warn!(
+                                "   ⚠️ Notification TIMED OUT for session {:?} (possible DoS/slow client)",
+                                session_id
+                            );
+                        }
                     }
                 });
             }
