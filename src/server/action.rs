@@ -184,7 +184,10 @@ where
         where
             A: de::MapAccess<'de>,
         {
-            while map.next_entry::<de::IgnoredAny, de::IgnoredAny>()?.is_some() {}
+            while map
+                .next_entry::<de::IgnoredAny, de::IgnoredAny>()?
+                .is_some()
+            {}
             Ok(String::new())
         }
     }
