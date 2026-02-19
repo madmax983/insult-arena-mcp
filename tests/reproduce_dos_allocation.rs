@@ -1,7 +1,9 @@
-//! Reproduce DoS via Unbounded Allocation in Tool Parsing.
+//! Reproduce `DoS` via Unbounded Allocation in Tool Parsing.
 //!
 //! This test verifies that `InsultServer` correctly rejects inputs that exceed
 //! `MAX_INPUT_LENGTH` by sending requests through the `ServerHandler` trait.
+
+#![allow(clippy::unwrap_used)]
 
 use async_trait::async_trait;
 use insult_arena_mcp::InsultServer;
@@ -115,9 +117,9 @@ async fn rejects_excessive_input_length_in_throw_insult() {
 
     assert!(result.is_err());
     let err = result.unwrap_err();
-    let err_msg = format!("{:?}", err);
+    let err_msg = format!("{err:?}");
     assert!(err_msg.contains("Insult too long"));
-    assert!(err_msg.contains(&format!("max {} chars", limit)));
+    assert!(err_msg.contains(&format!("max {limit} chars")));
 }
 
 #[tokio::test]
@@ -148,6 +150,6 @@ async fn rejects_excessive_input_length_in_respond() {
 
     assert!(result.is_err());
     let err = result.unwrap_err();
-    let err_msg = format!("{:?}", err);
+    let err_msg = format!("{err:?}");
     assert!(err_msg.contains("Comeback too long"));
 }
