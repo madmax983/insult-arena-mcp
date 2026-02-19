@@ -44,7 +44,9 @@ use crate::server::constants::{
 };
 use rust_mcp_sdk::schema::CallToolRequestParams;
 use rust_mcp_sdk::schema::schema_utils::CallToolError;
+use serde::de::{self, Visitor};
 use serde::{Deserialize, Deserializer};
+use std::fmt;
 
 /// Represents a parsed and validated tool action.
 ///
@@ -96,11 +98,102 @@ fn deserialize_lossy_string<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
     D: Deserializer<'de>,
 {
-    let v: serde_json::Value = Deserialize::deserialize(deserializer)?;
-    match v {
-        serde_json::Value::String(s) => Ok(s),
-        _ => Ok(String::new()),
+    struct LossyStringVisitor;
+
+    impl<'de> Visitor<'de> for LossyStringVisitor {
+        type Value = String;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a string or any other value")
+        }
+
+        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(v.to_owned())
+        }
+
+        fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(v)
+        }
+
+        // Handle other types by returning empty string
+        fn visit_bool<E>(self, _v: bool) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(String::new())
+        }
+
+        fn visit_i64<E>(self, _v: i64) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(String::new())
+        }
+
+        fn visit_u64<E>(self, _v: u64) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(String::new())
+        }
+
+        fn visit_f64<E>(self, _v: f64) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(String::new())
+        }
+
+        fn visit_unit<E>(self) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(String::new())
+        }
+
+        fn visit_none<E>(self) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(String::new())
+        }
+
+        fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            deserializer.deserialize_any(self)
+        }
+
+        // For sequences and maps, we consume and return empty
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: de::SeqAccess<'de>,
+        {
+            while seq.next_element::<de::IgnoredAny>()?.is_some() {}
+            Ok(String::new())
+        }
+
+        fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+        where
+            A: de::MapAccess<'de>,
+        {
+            while map.next_entry::<de::IgnoredAny, de::IgnoredAny>()?.is_some() {}
+            Ok(String::new())
+        }
     }
+
+    // ⚡ Bolt Optimization: Use a custom visitor to avoid allocating an intermediate `serde_json::Value`.
+    // Previously, `Value::deserialize` would construct a `Value::String(String)`, which involves
+    // checking variants and moving the string twice. The visitor consumes the string directly
+    // from the deserializer.
+    deserializer.deserialize_any(LossyStringVisitor)
 }
 
 /// Arguments for `throw_insult`.
@@ -260,6 +353,78 @@ mod tests {
         match result {
             ToolAction::ThrowInsult { insult } => {
                 assert_eq!(insult, "", "Missing argument should become empty string");
+            }
+            _ => panic!("Expected ThrowInsult"),
+        }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod extended_tests {
+    use super::*;
+    use crate::server::constants::{ARG_INSULT, THROW_INSULT};
+    use serde_json::json;
+
+    #[test]
+    fn handles_unicode_strings() {
+        let insult = "You fight like a 🐮!";
+        let mut args = serde_json::Map::new();
+        args.insert(ARG_INSULT.to_string(), json!(insult));
+
+        let params = CallToolRequestParams {
+            name: THROW_INSULT.to_string(),
+            arguments: Some(args),
+            meta: None,
+            task: None,
+        };
+
+        let result = ToolAction::try_from(params).unwrap();
+        match result {
+            ToolAction::ThrowInsult { insult: parsed } => {
+                assert_eq!(parsed, insult);
+            }
+            _ => panic!("Expected ThrowInsult"),
+        }
+    }
+
+    #[test]
+    fn handles_boolean_as_empty_string() {
+        let mut args = serde_json::Map::new();
+        args.insert(ARG_INSULT.to_string(), json!(true));
+
+        let params = CallToolRequestParams {
+            name: THROW_INSULT.to_string(),
+            arguments: Some(args),
+            meta: None,
+            task: None,
+        };
+
+        let result = ToolAction::try_from(params).unwrap();
+        match result {
+            ToolAction::ThrowInsult { insult } => {
+                assert_eq!(insult, "", "Boolean should be empty string");
+            }
+            _ => panic!("Expected ThrowInsult"),
+        }
+    }
+
+    #[test]
+    fn handles_null_as_empty_string() {
+        let mut args = serde_json::Map::new();
+        args.insert(ARG_INSULT.to_string(), json!(null));
+
+        let params = CallToolRequestParams {
+            name: THROW_INSULT.to_string(),
+            arguments: Some(args),
+            meta: None,
+            task: None,
+        };
+
+        let result = ToolAction::try_from(params).unwrap();
+        match result {
+            ToolAction::ThrowInsult { insult } => {
+                assert_eq!(insult, "", "Null should be empty string");
             }
             _ => panic!("Expected ThrowInsult"),
         }
