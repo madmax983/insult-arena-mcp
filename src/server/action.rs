@@ -39,8 +39,8 @@
 //! ```
 
 use crate::server::constants::{
-    GET_DUEL_STATE, GET_HINT, LIST_INSULTS, REGISTER_CHALLENGER, REGISTER_DEFENDER, RESPOND,
-    START_DUEL, THROW_INSULT,
+    ARG_COMEBACK, ARG_INSULT, GET_DUEL_STATE, GET_HINT, LIST_INSULTS, REGISTER_CHALLENGER,
+    REGISTER_DEFENDER, RESPOND, START_DUEL, THROW_INSULT,
 };
 use rust_mcp_sdk::schema::CallToolRequestParams;
 use rust_mcp_sdk::schema::schema_utils::CallToolError;
@@ -156,6 +156,18 @@ impl TryFrom<CallToolRequestParams> for ToolAction {
             GET_HINT => Ok(Self::GetHint),
 
             THROW_INSULT => {
+                // 🛡️ HARDENING: Check length before allocation/parsing to prevent DoS.
+                if let serde_json::Value::Object(map) = &args_val {
+                    if let Some(serde_json::Value::String(s)) = map.get(ARG_INSULT) {
+                        Self::validate_length(
+                            s,
+                            "Insult",
+                            &tool_name,
+                            crate::arena::MAX_INPUT_LENGTH,
+                        )?;
+                    }
+                }
+
                 // Parse arguments into struct
                 // Use unwrap_or_else to handle parsing failures (e.g. missing keys) by falling back to defaults
                 let args: ThrowInsultArgs =
@@ -163,6 +175,7 @@ impl TryFrom<CallToolRequestParams> for ToolAction {
                         insult: String::new(),
                     });
 
+                // Defense-in-depth: Re-validate final string.
                 Self::validate_length(
                     &args.insult,
                     "Insult",
@@ -176,6 +189,18 @@ impl TryFrom<CallToolRequestParams> for ToolAction {
             }
 
             RESPOND => {
+                // 🛡️ HARDENING: Check length before allocation/parsing to prevent DoS.
+                if let serde_json::Value::Object(map) = &args_val {
+                    if let Some(serde_json::Value::String(s)) = map.get(ARG_COMEBACK) {
+                        Self::validate_length(
+                            s,
+                            "Comeback",
+                            &tool_name,
+                            crate::arena::MAX_INPUT_LENGTH,
+                        )?;
+                    }
+                }
+
                 let args: RespondArgs =
                     serde_json::from_value(args_val).unwrap_or_else(|_| RespondArgs {
                         comeback: String::new(),
