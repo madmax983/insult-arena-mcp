@@ -229,6 +229,29 @@ impl Arena {
         self.timeout = timeout;
     }
 
+    fn validate_insult_turn(
+        sessions: &DuelSessions,
+        duel: &Duel,
+        session_id: &str,
+    ) -> Result<(), ArenaError> {
+        if let DuelState::AwaitingInsult { attacker } = duel.state() {
+            sessions.validate_turn(attacker, session_id)?;
+        }
+        Ok(())
+    }
+
+    fn validate_response_turn(
+        sessions: &DuelSessions,
+        duel: &Duel,
+        session_id: &str,
+    ) -> Result<(), ArenaError> {
+        if let DuelState::AwaitingComeback { attacker } = duel.state() {
+            let defender = attacker.opponent();
+            sessions.validate_turn(defender, session_id)?;
+        }
+        Ok(())
+    }
+
     /// Starts a new duel, resetting any existing state.
     ///
     /// # Examples
@@ -285,11 +308,8 @@ impl Arena {
         self.sessions.register(role, session_id)?;
         self.last_active = Instant::now();
 
-        let state = self
-            .duel
-            .as_ref()
-            .map(DuelStateView::from)
-            .ok_or(ArenaError::NoDuel)?;
+        let duel = self.duel.as_ref().ok_or(ArenaError::NoDuel)?;
+        let state = DuelStateView::from(duel);
 
         Ok((ArenaOutcome::RoleRegistered { role }, state))
     }
@@ -427,10 +447,7 @@ impl Arena {
             return Err(ArenaError::NoDuel);
         };
 
-        // Validate turn/role
-        if let DuelState::AwaitingInsult { attacker } = duel.state() {
-            self.sessions.validate_turn(attacker, session_id)?;
-        }
+        Self::validate_insult_turn(&self.sessions, duel, session_id)?;
 
         // ⚡ Bolt Optimization: Zero allocation path!
         // Using throw_insult_ref to avoid cloning the insult string.
@@ -497,11 +514,7 @@ impl Arena {
             return Err(ArenaError::NoDuel);
         };
 
-        // Validate turn/role
-        if let DuelState::AwaitingComeback { attacker } = duel.state() {
-            let defender = attacker.opponent();
-            self.sessions.validate_turn(defender, session_id)?;
-        }
+        Self::validate_response_turn(&self.sessions, duel, session_id)?;
 
         // ⚡ Bolt Optimization: Move 'comeback' directly to Duel.
         // Zero allocations here (was 1 from &str).
@@ -528,13 +541,12 @@ impl Arena {
         };
 
         // Ensure it is the correct turn (Defender's turn to respond)
-        if let DuelState::AwaitingComeback { attacker } = duel.state() {
-            let defender = attacker.opponent();
-            self.sessions.validate_turn(defender, session_id)?;
-        } else {
-            // If we are not waiting for a comeback, we can't give a hint
+        let DuelState::AwaitingComeback { attacker } = duel.state() else {
             return Err(ArenaError::NoPendingInsult);
-        }
+        };
+
+        let defender = attacker.opponent();
+        self.sessions.validate_turn(defender, session_id)?;
 
         let Some(insult) = duel.pending_insult() else {
             return Err(ArenaError::NoPendingInsult);
