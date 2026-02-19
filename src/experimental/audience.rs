@@ -52,8 +52,10 @@ pub enum Reaction {
 /// // 3. React!
 /// let reaction = audience.react(&exchange);
 /// match reaction {
-///     Reaction::Cheer(msg) => println!("👏 {}", msg),
-///     _ => println!("😐"),
+///     Reaction::Cheer(msg) => println!("👏 Crowd Cheers: {}", msg),
+///     Reaction::Laugh(msg) => println!("😂 Crowd Laughs: {}", msg),
+///     Reaction::Boo(msg) => println!("👎 Crowd Boos: {}", msg),
+///     Reaction::Silence => println!("😐 Crowd is silent."),
 /// }
 /// assert!(audience.hype > 50);
 /// ```

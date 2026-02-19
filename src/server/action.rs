@@ -50,6 +50,12 @@ use serde::{Deserialize, Deserializer};
 ///
 /// This enum encapsulates the intent of a client's tool call.
 /// It is constructed by parsing `CallToolRequestParams`.
+///
+/// # Robustness
+///
+/// Note that string arguments are parsed using `deserialize_lossy_string`,
+/// meaning that invalid types (numbers, nulls) are silently converted to empty strings
+/// rather than returning a JSON parsing error.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolAction {
     /// Start a new duel.
@@ -80,7 +86,12 @@ pub enum ToolAction {
 ///
 /// If the input is a string, it returns it.
 /// If the input is anything else (or null), it returns an empty string.
+///
+/// # Robustness
+///
 /// This preserves legacy behavior where invalid types were treated as empty strings.
+/// This prevents deserialization errors from crashing the request handler when
+/// clients send unexpected types (e.g., numbers, nulls).
 fn deserialize_lossy_string<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
     D: Deserializer<'de>,
