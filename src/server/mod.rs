@@ -28,12 +28,11 @@ use crate::announcer::Announcer;
 use crate::arena::{Arena, ArenaError, ArenaOutcome};
 use crate::duel::{DuelStateView, Duelist};
 
-pub mod action;
-pub mod constants;
+pub mod api;
 pub mod notifications;
 pub mod response;
 
-use action::ToolAction;
+use api::ToolAction;
 use notifications::NotificationManager;
 pub use response::DuelResponse;
 
@@ -158,8 +157,7 @@ impl Default for InsultServer {
     }
 }
 
-mod tools;
-use tools::{
+use api::{
     tool_get_duel_state, tool_get_hint, tool_list_insults, tool_register_as_challenger,
     tool_register_as_defender, tool_respond, tool_start_duel, tool_throw_insult,
 };

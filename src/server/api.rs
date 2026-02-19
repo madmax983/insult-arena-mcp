@@ -1,55 +1,52 @@
-//! Action parsing for MCP tool requests.
+//! API definitions for the Insult Arena MCP server.
 //!
-//! # The "Parser" Layer
-//!
-//! This module acts as the "Parser" in the "Parse, Don't Validate" pattern.
-//! It decouples the *intent* of a tool call (what the user wants to do) from the
-//! *mechanics* of how it's executed.
-//!
-//! ## Responsibilities
-//!
-//! 1.  **Parsing**: Converts untyped JSON (`CallToolRequestParams`) into a strongly-typed [`ToolAction`] enum.
-//! 2.  **Validation**: Enforces structural validity (e.g., `start_duel` takes no args).
-//! 3.  **Security**: Enforces input length limits *before* any heavy business logic runs, preventing `DoS` via memory exhaustion.
-//!
-//! ## Hero's Journey (Implementation)
-//!
-//! ```ignore
-//! use insult_arena_mcp::server::action::ToolAction;
-//! use rust_mcp_sdk::schema::CallToolRequestParams;
-//! use serde_json::json;
-//!
-//! // 1. Receive a raw request from the client
-//! let params = CallToolRequestParams {
-//!     name: "throw_insult".to_string(),
-//!     arguments: Some(serde_json::Map::from_iter(vec![
-//!         ("insult".to_string(), json!("You fight like a dairy farmer!"))
-//!     ])),
-//!     meta: None,
-//!     task: None,
-//! };
-//!
-//! // 2. Parse it into a strongly-typed Action
-//! let action = ToolAction::try_from(params).unwrap();
-//!
-//! // 3. Match and execute (in the Server)
-//! if let ToolAction::ThrowInsult { insult } = action {
-//!     assert_eq!(insult, "You fight like a dairy farmer!");
-//! }
-//! ```
+//! This module defines the "Contract" between the server and the MCP clients.
+//! It consolidates:
+//! 1. **Constants**: Tool names and argument keys.
+//! 2. **Schema**: The `Tool` definitions exposed to LLMs.
+//! 3. **Parsing**: The `ToolAction` enum and logic to parse `CallToolRequestParams`.
 
-use crate::server::constants::{
-    GET_DUEL_STATE, GET_HINT, LIST_INSULTS, REGISTER_CHALLENGER, REGISTER_DEFENDER, RESPOND,
-    START_DUEL, THROW_INSULT,
-};
-use rust_mcp_sdk::schema::CallToolRequestParams;
 use rust_mcp_sdk::schema::schema_utils::CallToolError;
+use rust_mcp_sdk::schema::{CallToolRequestParams, Tool, ToolInputSchema};
 use serde::{Deserialize, Deserializer};
+use serde_json::json;
+use std::collections::HashMap;
+
+// --- CONSTANTS ---
+
+/// Tool Name: Start a new duel.
+pub const START_DUEL: &str = "start_duel";
+
+/// Tool Name: Register as the Challenger.
+pub const REGISTER_CHALLENGER: &str = "register_as_challenger";
+
+/// Tool Name: Register as the Defender.
+pub const REGISTER_DEFENDER: &str = "register_as_defender";
+
+/// Tool Name: Get the current duel state.
+pub const GET_DUEL_STATE: &str = "get_duel_state";
+
+/// Tool Name: List available insults.
+pub const LIST_INSULTS: &str = "list_insults";
+
+/// Tool Name: Throw an insult.
+pub const THROW_INSULT: &str = "throw_insult";
+
+/// Tool Name: Respond with a comeback.
+pub const RESPOND: &str = "respond";
+
+/// Tool Name: Get a hint for the pending insult.
+pub const GET_HINT: &str = "get_hint";
+
+/// Argument Key: The insult string.
+pub const ARG_INSULT: &str = "insult";
+
+/// Argument Key: The comeback string.
+pub const ARG_COMEBACK: &str = "comeback";
+
+// --- ACTION PARSING ---
 
 /// Represents a parsed and validated tool action.
-///
-/// This enum encapsulates the intent of a client's tool call.
-/// It is constructed by parsing `CallToolRequestParams`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolAction {
     /// Start a new duel.
@@ -77,10 +74,6 @@ pub enum ToolAction {
 }
 
 /// Helper for lossy string deserialization.
-///
-/// If the input is a string, it returns it.
-/// If the input is anything else (or null), it returns an empty string.
-/// This preserves legacy behavior where invalid types were treated as empty strings.
 fn deserialize_lossy_string<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
     D: Deserializer<'de>,
@@ -129,8 +122,6 @@ impl TryFrom<CallToolRequestParams> for ToolAction {
     type Error = CallToolError;
 
     fn try_from(params: CallToolRequestParams) -> Result<Self, Self::Error> {
-        // ⚡ Bolt Optimization: Take ownership of arguments to avoid string cloning.
-        // Convert Option<Map> to Value::Object (or Null) for serde parsing.
         let args_val = params
             .arguments
             .map_or(serde_json::Value::Null, serde_json::Value::Object);
@@ -145,8 +136,6 @@ impl TryFrom<CallToolRequestParams> for ToolAction {
             GET_HINT => Ok(Self::GetHint),
 
             THROW_INSULT => {
-                // Parse arguments into struct
-                // Use unwrap_or_else to handle parsing failures (e.g. missing keys) by falling back to defaults
                 let args: ThrowInsultArgs =
                     serde_json::from_value(args_val).unwrap_or_else(|_| ThrowInsultArgs {
                         insult: String::new(),
@@ -187,12 +176,107 @@ impl TryFrom<CallToolRequestParams> for ToolAction {
     }
 }
 
+// --- TOOL DEFINITIONS ---
+
+/// Helper to create an empty input schema.
+pub fn empty_input_schema() -> ToolInputSchema {
+    ToolInputSchema::new(vec![], None, None)
+}
+
+/// Helper to create an input schema with a single required string parameter.
+pub fn string_param_schema(name: &str, description: &str) -> ToolInputSchema {
+    let mut props = HashMap::new();
+    let mut prop_map = serde_json::Map::new();
+    prop_map.insert("type".to_string(), json!("string"));
+    prop_map.insert("description".to_string(), json!(description));
+    props.insert(name.to_string(), prop_map);
+
+    ToolInputSchema::new(vec![name.to_string()], Some(props), None)
+}
+
+/// Internal helper to create a base tool definition.
+fn create_base_tool(name: &str, description: &str, input_schema: ToolInputSchema) -> Tool {
+    Tool {
+        name: name.to_string(),
+        description: Some(description.to_string()),
+        input_schema,
+        annotations: None,
+        execution: None,
+        icons: vec![],
+        meta: None,
+        output_schema: None,
+        title: None,
+    }
+}
+
+pub fn tool_start_duel() -> Tool {
+    create_base_tool(
+        START_DUEL,
+        "Start a new insult sword fighting duel! The Challenger throws the first insult. First to 3 exchange wins takes the duel.",
+        empty_input_schema(),
+    )
+}
+
+pub fn tool_register_as_challenger() -> Tool {
+    create_base_tool(
+        REGISTER_CHALLENGER,
+        "Register yourself as the Challenger. The Challenger throws insults first.",
+        empty_input_schema(),
+    )
+}
+
+pub fn tool_register_as_defender() -> Tool {
+    create_base_tool(
+        REGISTER_DEFENDER,
+        "Register yourself as the Defender. The Defender responds to insults with comebacks.",
+        empty_input_schema(),
+    )
+}
+
+pub fn tool_get_duel_state() -> Tool {
+    create_base_tool(
+        GET_DUEL_STATE,
+        "Get the current state of the duel. Shows whose turn it is, scores, and any pending insult.",
+        empty_input_schema(),
+    )
+}
+
+pub fn tool_list_insults() -> Tool {
+    create_base_tool(
+        LIST_INSULTS,
+        "List all available insults you can use. In classic mode, you must use one of these exact insults.",
+        empty_input_schema(),
+    )
+}
+
+pub fn tool_throw_insult() -> Tool {
+    create_base_tool(
+        THROW_INSULT,
+        "Throw an insult at your opponent! You must be the current attacker and use a valid insult from the classic list.",
+        string_param_schema(ARG_INSULT, "The insult to throw at your opponent"),
+    )
+}
+
+pub fn tool_respond() -> Tool {
+    create_base_tool(
+        RESPOND,
+        "Respond to an insult with a witty comeback! If your comeback matches the correct response, you parry and become the attacker.",
+        string_param_schema(ARG_COMEBACK, "Your witty comeback to parry the insult"),
+    )
+}
+
+pub fn tool_get_hint() -> Tool {
+    create_base_tool(
+        GET_HINT,
+        "Get a hint for the current pending insult. Returns the first few characters of the correct comeback.",
+        empty_input_schema(),
+    )
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
-    use crate::server::constants::{ARG_INSULT, THROW_INSULT};
-    use serde_json::json;
 
     #[test]
     fn rejects_excessive_input_length_efficiently() {
@@ -215,9 +299,8 @@ mod tests {
 
     #[test]
     fn rejects_invalid_types_as_empty_string() {
-        // Test that non-string arguments (number, null, missing) are treated as empty strings
         let mut args = serde_json::Map::new();
-        args.insert(ARG_INSULT.to_string(), json!(12345)); // Number instead of string
+        args.insert(ARG_INSULT.to_string(), json!(12345));
 
         let params = CallToolRequestParams {
             name: THROW_INSULT.to_string(),
@@ -226,11 +309,10 @@ mod tests {
             task: None,
         };
 
-        // Should return Ok but with empty insult string (default behavior)
         let result = ToolAction::try_from(params).unwrap();
         match result {
             ToolAction::ThrowInsult { insult } => {
-                assert_eq!(insult, "", "Number should become empty string");
+                assert_eq!(insult, "");
             }
             _ => panic!("Expected ThrowInsult"),
         }
@@ -240,7 +322,7 @@ mod tests {
     fn handles_missing_argument_as_empty_string() {
         let params = CallToolRequestParams {
             name: THROW_INSULT.to_string(),
-            arguments: Some(serde_json::Map::new()), // Empty args
+            arguments: Some(serde_json::Map::new()),
             meta: None,
             task: None,
         };
@@ -248,7 +330,7 @@ mod tests {
         let result = ToolAction::try_from(params).unwrap();
         match result {
             ToolAction::ThrowInsult { insult } => {
-                assert_eq!(insult, "", "Missing argument should become empty string");
+                assert_eq!(insult, "");
             }
             _ => panic!("Expected ThrowInsult"),
         }
