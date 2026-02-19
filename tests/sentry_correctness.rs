@@ -1,5 +1,6 @@
+#![allow(clippy::unwrap_used)]
 
-use insult_arena_mcp::experimental::audience::{Audience, Reaction, HISTORY_LIMIT};
+use insult_arena_mcp::experimental::audience::{Audience, HISTORY_LIMIT, Reaction};
 use insult_arena_mcp::{Duel, Duelist, Exchange, ExchangeResult};
 
 #[test]
@@ -16,7 +17,10 @@ fn test_audience_unicode_normalization_dedupes() {
         winner: Duelist::Defender,
     };
     let reaction1 = audience.react(&exchange1);
-    assert!(matches!(reaction1, Reaction::Cheer(_)), "First use should cheer");
+    assert!(
+        matches!(reaction1, Reaction::Cheer(_)),
+        "First use should cheer"
+    );
 
     // 2. Play "¡HOLA!" (Spanish Uppercase)
     // Should be normalized to "hola" (if '¡' is stripped and 'H' -> 'h').
@@ -32,7 +36,10 @@ fn test_audience_unicode_normalization_dedupes() {
     };
     let reaction2 = audience.react(&exchange2);
 
-    assert!(matches!(reaction2, Reaction::Boo(_)), "Second use (different case) should be booed as repetition");
+    assert!(
+        matches!(reaction2, Reaction::Boo(_)),
+        "Second use (different case) should be booed as repetition"
+    );
 }
 
 #[test]
@@ -61,7 +68,10 @@ fn test_audience_unicode_different_languages_unique() {
     };
     let reaction = audience.react(&exchange2);
 
-    assert!(matches!(reaction, Reaction::Cheer(_)), "Different language should be unique");
+    assert!(
+        matches!(reaction, Reaction::Cheer(_)),
+        "Different language should be unique"
+    );
 }
 
 #[test]
@@ -77,13 +87,15 @@ fn test_duel_state_invariants_next_to_act() {
     assert_eq!(view.next_to_act.as_deref(), Some("Challenger"));
 
     // Throw insult -> AwaitingComeback (Defender)
-    duel.throw_insult("You fight like a dairy farmer!".to_string()).unwrap();
+    duel.throw_insult("You fight like a dairy farmer!".to_string())
+        .unwrap();
     let view = insult_arena_mcp::DuelStateView::from(&duel);
     assert_eq!(view.phase, "awaiting_comeback");
     assert_eq!(view.next_to_act.as_deref(), Some("Defender"));
 
     // Respond (Parry) -> AwaitingInsult (Defender)
-    duel.respond("How appropriate. You fight like a cow!".to_string()).unwrap();
+    duel.respond("How appropriate. You fight like a cow!".to_string())
+        .unwrap();
     let view = insult_arena_mcp::DuelStateView::from(&duel);
     assert_eq!(view.phase, "awaiting_insult");
     assert_eq!(view.next_to_act.as_deref(), Some("Defender"));
@@ -92,16 +104,21 @@ fn test_duel_state_invariants_next_to_act() {
     // Let's force a win to check finished state.
     // Need 3 wins. Defender has 1.
     // Defender attacks. Challenger fails. (Defender 2)
-    duel.throw_insult("You have the manners of a beggar.".to_string()).unwrap();
+    duel.throw_insult("You have the manners of a beggar.".to_string())
+        .unwrap();
     duel.respond("wrong".to_string()).unwrap();
 
     // Defender attacks. Challenger fails. (Defender 3 - Win)
-    duel.throw_insult("You have the manners of a beggar.".to_string()).unwrap();
+    duel.throw_insult("You have the manners of a beggar.".to_string())
+        .unwrap();
     duel.respond("wrong".to_string()).unwrap();
 
     let view = insult_arena_mcp::DuelStateView::from(&duel);
     assert_eq!(view.phase, "finished");
-    assert!(view.next_to_act.is_none(), "Finished duel should have no next actor");
+    assert!(
+        view.next_to_act.is_none(),
+        "Finished duel should have no next actor"
+    );
     assert_eq!(view.winner.as_deref(), Some("Defender"));
 }
 
@@ -114,13 +131,16 @@ fn test_audience_history_limit_strict() {
         let exchange = Exchange {
             attacker: Duelist::Challenger,
             result: ExchangeResult::Parried {
-                insult: format!("Unique insult {}", i).into(),
+                insult: format!("Unique insult {i}").into(),
                 comeback: "c".into(),
             },
             winner: Duelist::Defender,
         };
         let reaction = audience.react(&exchange);
-        assert!(matches!(reaction, Reaction::Cheer(_)), "Should cheer unique insult {}", i);
+        assert!(
+            matches!(reaction, Reaction::Cheer(_)),
+            "Should cheer unique insult {i}"
+        );
     }
 
     // Add one more (limit + 1). Should evict "Unique insult 0".
@@ -145,5 +165,8 @@ fn test_audience_history_limit_strict() {
     };
     let reaction = audience.react(&exchange_reuse);
 
-    assert!(matches!(reaction, Reaction::Cheer(_)), "Should cheer reused insult after eviction");
+    assert!(
+        matches!(reaction, Reaction::Cheer(_)),
+        "Should cheer reused insult after eviction"
+    );
 }
