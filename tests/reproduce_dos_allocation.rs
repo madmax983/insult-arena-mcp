@@ -100,7 +100,12 @@ async fn rejects_excessive_input_length_in_throw_insult() {
 
     let params = CallToolRequestParams {
         name: "throw_insult".to_string(),
-        arguments: Some(json!({ "insult": long_string }).as_object().unwrap().clone()),
+        arguments: Some(
+            json!({ "insult": long_string })
+                .as_object()
+                .unwrap()
+                .clone(),
+        ),
         meta: None,
         task: None,
     };
@@ -128,7 +133,12 @@ async fn rejects_excessive_input_length_in_respond() {
 
     let params = CallToolRequestParams {
         name: "respond".to_string(),
-        arguments: Some(json!({ "comeback": long_string }).as_object().unwrap().clone()),
+        arguments: Some(
+            json!({ "comeback": long_string })
+                .as_object()
+                .unwrap()
+                .clone(),
+        ),
         meta: None,
         task: None,
     };

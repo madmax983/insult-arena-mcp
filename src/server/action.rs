@@ -157,15 +157,10 @@ impl TryFrom<CallToolRequestParams> for ToolAction {
 
             THROW_INSULT => {
                 // 🛡️ HARDENING: Check length before allocation/parsing to prevent DoS.
-                if let serde_json::Value::Object(map) = &args_val {
-                    if let Some(serde_json::Value::String(s)) = map.get(ARG_INSULT) {
-                        Self::validate_length(
-                            s,
-                            "Insult",
-                            &tool_name,
-                            crate::arena::MAX_INPUT_LENGTH,
-                        )?;
-                    }
+                if let serde_json::Value::Object(map) = &args_val
+                    && let Some(serde_json::Value::String(s)) = map.get(ARG_INSULT)
+                {
+                    Self::validate_length(s, "Insult", &tool_name, crate::arena::MAX_INPUT_LENGTH)?;
                 }
 
                 // Parse arguments into struct
@@ -190,15 +185,15 @@ impl TryFrom<CallToolRequestParams> for ToolAction {
 
             RESPOND => {
                 // 🛡️ HARDENING: Check length before allocation/parsing to prevent DoS.
-                if let serde_json::Value::Object(map) = &args_val {
-                    if let Some(serde_json::Value::String(s)) = map.get(ARG_COMEBACK) {
-                        Self::validate_length(
-                            s,
-                            "Comeback",
-                            &tool_name,
-                            crate::arena::MAX_INPUT_LENGTH,
-                        )?;
-                    }
+                if let serde_json::Value::Object(map) = &args_val
+                    && let Some(serde_json::Value::String(s)) = map.get(ARG_COMEBACK)
+                {
+                    Self::validate_length(
+                        s,
+                        "Comeback",
+                        &tool_name,
+                        crate::arena::MAX_INPUT_LENGTH,
+                    )?;
                 }
 
                 let args: RespondArgs =
