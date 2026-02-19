@@ -1,3 +1,8 @@
+//! Post-match analysis and badges.
+//!
+//! The achievements system analyzes completed duels to award badges for specific feats,
+//! such as winning without taking damage ("Untouchable") or winning a close match ("Clutch Master").
+
 use serde::{Deserialize, Serialize};
 
 use crate::{Duel, Duelist};

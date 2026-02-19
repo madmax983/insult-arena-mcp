@@ -4,6 +4,9 @@ use crate::{Exchange, ExchangeResult};
 use serde::{Deserialize, Serialize};
 
 /// Maximum number of insults to remember in history.
+///
+/// This limit prevents the history from growing indefinitely, which could lead to
+/// memory exhaustion (`DoS`). Once the limit is reached, the oldest insults are forgotten.
 pub const HISTORY_LIMIT: usize = 50;
 
 /// Represents the crowd's reaction to an exchange.
@@ -112,6 +115,34 @@ impl Audience {
     }
 
     /// Reacts to an exchange, updating hype and returning a reaction.
+    ///
+    /// # Logic
+    ///
+    /// 1.  **Normalization**: The insult is normalized (lowercase, alphanumeric only) to detect repetition.
+    /// 2.  **Repetition Check**: If the insult is in the recent history ([`HISTORY_LIMIT`]), the audience BOOs (-20 hype).
+    /// 3.  **Result Check**:
+    ///     -   **Parry**: The audience CHEERS (+10 hype).
+    ///     -   **Fail**: The audience LAUGHS (-10 hype).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::experimental::audience::{Audience, Reaction};
+    /// use insult_arena_mcp::{Exchange, Duelist, ExchangeResult};
+    ///
+    /// let mut audience = Audience::new();
+    /// let exchange = Exchange {
+    ///     attacker: Duelist::Challenger,
+    ///     winner: Duelist::Defender,
+    ///     result: ExchangeResult::Parried {
+    ///         insult: "You fight like a dairy farmer!".into(),
+    ///         comeback: "How appropriate. You fight like a cow!".into()
+    ///     }
+    /// };
+    ///
+    /// let reaction = audience.react(&exchange);
+    /// assert!(matches!(reaction, Reaction::Cheer(_)));
+    /// ```
     pub fn react(&mut self, exchange: &Exchange) -> Reaction {
         let insult = match &exchange.result {
             ExchangeResult::Parried { insult, .. } | ExchangeResult::Failed { insult, .. } => {
