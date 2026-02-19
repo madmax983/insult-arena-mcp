@@ -44,6 +44,7 @@ use crate::server::constants::{
 };
 use rust_mcp_sdk::schema::CallToolRequestParams;
 use rust_mcp_sdk::schema::schema_utils::CallToolError;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer};
 
 /// Represents a parsed and validated tool action.
@@ -104,14 +105,14 @@ where
 }
 
 /// Arguments for `throw_insult`.
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 struct ThrowInsultArgs {
     #[serde(rename = "insult", deserialize_with = "deserialize_lossy_string")]
     insult: String,
 }
 
 /// Arguments for `respond`.
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 struct RespondArgs {
     #[serde(rename = "comeback", deserialize_with = "deserialize_lossy_string")]
     comeback: String,
@@ -133,6 +134,14 @@ impl ToolAction {
         } else {
             Ok(())
         }
+    }
+
+    /// Helper to parse arguments or fall back to default if parsing fails.
+    ///
+    /// This ensures we don't crash on malformed JSON structure (e.g. array instead of object),
+    /// though `serde_json::from_value` usually handles type mismatches if strict types aren't used.
+    fn parse_args_or_default<T: DeserializeOwned + Default>(value: serde_json::Value) -> T {
+        serde_json::from_value(value).unwrap_or_else(|_| T::default())
     }
 }
 
@@ -156,12 +165,7 @@ impl TryFrom<CallToolRequestParams> for ToolAction {
             GET_HINT => Ok(Self::GetHint),
 
             THROW_INSULT => {
-                // Parse arguments into struct
-                // Use unwrap_or_else to handle parsing failures (e.g. missing keys) by falling back to defaults
-                let args: ThrowInsultArgs =
-                    serde_json::from_value(args_val).unwrap_or_else(|_| ThrowInsultArgs {
-                        insult: String::new(),
-                    });
+                let args: ThrowInsultArgs = Self::parse_args_or_default(args_val);
 
                 Self::validate_length(
                     &args.insult,
@@ -176,10 +180,7 @@ impl TryFrom<CallToolRequestParams> for ToolAction {
             }
 
             RESPOND => {
-                let args: RespondArgs =
-                    serde_json::from_value(args_val).unwrap_or_else(|_| RespondArgs {
-                        comeback: String::new(),
-                    });
+                let args: RespondArgs = Self::parse_args_or_default(args_val);
 
                 Self::validate_length(
                     &args.comeback,
