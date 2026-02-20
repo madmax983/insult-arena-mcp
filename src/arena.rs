@@ -128,24 +128,34 @@ impl AsRef<str> for PlayerInput {
 /// Errors that can occur in the Arena.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ArenaError {
+    /// No duel is currently active.
     #[error("No duel in progress. Call start_duel first!")]
     NoDuel,
+    /// User input exceeded the maximum allowed length.
     #[error("Input too long (max {0} chars)")]
     InputTooLong(usize),
+    /// Session ID exceeded the maximum allowed length.
     #[error("Session ID too long (max {0} chars)")]
     SessionIdTooLong(usize),
+    /// The requested role is already occupied by another session.
     #[error("{0} role is already taken!")]
     RoleTaken(String),
+    /// The session tried to act out of turn.
     #[error("It is not your turn! Waiting for {0}.")]
     NotYourTurn(String),
+    /// The insult is not in the [`crate::InsultBank`].
     #[error("Unknown insult: \"{0}\". Use list_insults to see valid options.")]
     UnknownInsult(String),
+    /// A hint was requested but no insult is pending.
     #[error("No pending insult to hint about.")]
     NoPendingInsult,
+    /// Could not find a comeback for the pending insult (should not happen with valid insults).
     #[error("Could not find comeback for this insult.")]
     ComebackNotFound,
+    /// Tried to start a duel while one is already in progress.
     #[error("A duel is already in progress. Wait for it to finish!")]
     DuelInProgress,
+    /// An error from the underlying duel logic.
     #[error(transparent)]
     DuelError(#[from] InsultError),
 }
@@ -153,10 +163,23 @@ pub enum ArenaError {
 /// The outcome of an action in the Arena.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArenaOutcome {
+    /// A new duel has started.
     DuelStarted,
-    RoleRegistered { role: Duelist },
-    InsultThrown { insult: String },
-    ExchangeProcessed { exchange: crate::duel::Exchange },
+    /// A session has successfully registered for a role.
+    RoleRegistered {
+        /// The role that was assigned.
+        role: Duelist,
+    },
+    /// An insult was successfully thrown.
+    InsultThrown {
+        /// The insult that was thrown.
+        insult: String,
+    },
+    /// An exchange (insult + comeback) was completed.
+    ExchangeProcessed {
+        /// The result of the exchange.
+        exchange: crate::duel::Exchange,
+    },
 }
 
 /// Tracks which session is playing which role.
@@ -218,6 +241,14 @@ pub struct Arena {
 }
 
 impl Arena {
+    /// Creates a new, empty Arena.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::Arena;
+    /// let arena = Arena::new();
+    /// ```
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -368,6 +399,22 @@ impl Arena {
         self.register(Duelist::Defender, session_id)
     }
 
+    /// Returns the role (if any) associated with the given session ID.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::{Arena, Duelist};
+    /// use insult_arena_mcp::arena::SessionId;
+    ///
+    /// let mut arena = Arena::new();
+    /// arena.start_duel().unwrap();
+    ///
+    /// let sid = SessionId::try_from("session_123".to_string()).unwrap();
+    /// arena.register_challenger(sid.clone()).unwrap();
+    ///
+    /// assert_eq!(arena.get_role_for_session(&sid), Some(Duelist::Challenger));
+    /// ```
     #[must_use]
     pub fn get_role_for_session(&self, session_id: &SessionId) -> Option<Duelist> {
         self.sessions.get_role(session_id)
