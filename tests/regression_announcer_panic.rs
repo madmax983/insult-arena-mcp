@@ -4,7 +4,7 @@ use std::borrow::Cow;
 #[test]
 fn announcer_should_not_panic_on_zero_wins_needed() {
     let view = DuelStateView {
-        phase: "active".to_string(),
+        phase: Cow::Borrowed("active"),
         next_to_act: None,
         pending_insult: None,
         challenger_score: 0,

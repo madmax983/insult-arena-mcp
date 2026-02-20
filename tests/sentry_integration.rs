@@ -45,7 +45,7 @@ fn full_duel_integration_with_match_point() {
     let (outcome, view) = arena.respond(&bob, comeback).unwrap();
     assert_eq!(view.defender_score, 1);
     assert_eq!(view.phase, "awaiting_insult");
-    assert_eq!(view.next_to_act, Some("Defender".to_string()));
+    assert_eq!(view.next_to_act.as_deref(), Some("Defender"));
 
     // Verify announcement
     let msg = Announcer::announce(&outcome, Some(&view));
@@ -61,7 +61,7 @@ fn full_duel_integration_with_match_point() {
     let (outcome, view) = arena.respond(&alice, wrong_comeback).unwrap();
     assert_eq!(view.defender_score, 2);
     assert_eq!(view.phase, "awaiting_insult"); // Bob won exchange, so Bob attacks
-    assert_eq!(view.next_to_act, Some("Defender".to_string()));
+    assert_eq!(view.next_to_act.as_deref(), Some("Defender"));
 
     // MATCH POINT CHECK
     // Score is 0-2. Wins needed is 3. Bob needs 1 more.
@@ -81,7 +81,7 @@ fn full_duel_integration_with_match_point() {
     let (outcome, view) = arena.respond(&alice, wrong_comeback).unwrap();
     assert_eq!(view.defender_score, 3);
     assert_eq!(view.phase, "finished");
-    assert_eq!(view.winner, Some("Defender".to_string()));
+    assert_eq!(view.winner.as_deref(), Some("Defender"));
 
     // VICTORY CHECK
     let msg = Announcer::announce(&outcome, Some(&view));

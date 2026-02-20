@@ -10,7 +10,7 @@ fn test_view_awaiting_insult_start() {
     let view = DuelStateView::from(&duel);
 
     assert_eq!(view.phase, "awaiting_insult");
-    assert_eq!(view.next_to_act, Some("Challenger".to_string()));
+    assert_eq!(view.next_to_act.as_deref(), Some("Challenger"));
     assert_eq!(view.pending_insult, None);
     assert_eq!(view.challenger_score, 0);
     assert_eq!(view.defender_score, 0);
@@ -27,8 +27,8 @@ fn test_view_awaiting_comeback() {
 
     assert_eq!(view.phase, "awaiting_comeback");
     // Challenger threw insult, so Defender is next to act
-    assert_eq!(view.next_to_act, Some("Defender".to_string()));
-    assert_eq!(view.pending_insult, Some(insult));
+    assert_eq!(view.next_to_act.as_deref(), Some("Defender"));
+    assert_eq!(view.pending_insult.as_deref(), Some(insult.as_str()));
     assert_eq!(view.challenger_score, 0);
     assert_eq!(view.defender_score, 0);
     assert_eq!(view.winner, None);
@@ -46,7 +46,7 @@ fn test_view_awaiting_insult_after_parry() {
 
     assert_eq!(view.phase, "awaiting_insult");
     // Defender won, so Defender attacks next
-    assert_eq!(view.next_to_act, Some("Defender".to_string()));
+    assert_eq!(view.next_to_act.as_deref(), Some("Defender"));
     assert_eq!(view.pending_insult, None);
     // Defender score increased
     assert_eq!(view.defender_score, 1);
@@ -65,7 +65,7 @@ fn test_view_awaiting_insult_after_fail() {
 
     assert_eq!(view.phase, "awaiting_insult");
     // Challenger won (failed comeback), so Challenger attacks again
-    assert_eq!(view.next_to_act, Some("Challenger".to_string()));
+    assert_eq!(view.next_to_act.as_deref(), Some("Challenger"));
     assert_eq!(view.pending_insult, None);
     // Challenger score increased
     assert_eq!(view.challenger_score, 1);
@@ -89,7 +89,7 @@ fn test_view_finished() {
     assert_eq!(view.pending_insult, None);
     assert_eq!(view.challenger_score, 1);
     assert_eq!(view.defender_score, 0);
-    assert_eq!(view.winner, Some("Challenger".to_string()));
+    assert_eq!(view.winner.as_deref(), Some("Challenger"));
 }
 
 #[test]
