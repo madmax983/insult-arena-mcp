@@ -40,13 +40,11 @@
 
 use crate::arena::{ArenaError, PlayerInput};
 use crate::server::constants::{
-    GET_DUEL_STATE, GET_HINT, LIST_INSULTS, REGISTER_CHALLENGER, REGISTER_DEFENDER, RESPOND,
-    START_DUEL, THROW_INSULT,
+    ARG_COMEBACK, ARG_INSULT, GET_DUEL_STATE, GET_HINT, LIST_INSULTS, REGISTER_CHALLENGER,
+    REGISTER_DEFENDER, RESPOND, START_DUEL, THROW_INSULT,
 };
 use rust_mcp_sdk::schema::CallToolRequestParams;
 use rust_mcp_sdk::schema::schema_utils::CallToolError;
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Deserializer};
 
 /// Represents a parsed and validated tool action.
 ///
@@ -55,7 +53,7 @@ use serde::{Deserialize, Deserializer};
 ///
 /// # Robustness
 ///
-/// Note that string arguments are parsed using `deserialize_lossy_string`,
+/// Note that string arguments are parsed using `extract_arg`,
 /// meaning that invalid types (numbers, nulls) are silently converted to empty strings
 /// rather than returning a JSON parsing error.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -84,41 +82,6 @@ pub enum ToolAction {
     GetHint,
 }
 
-/// Helper for lossy string deserialization.
-///
-/// If the input is a string, it returns it.
-/// If the input is anything else (or null), it returns an empty string.
-///
-/// # Robustness
-///
-/// This preserves legacy behavior where invalid types were treated as empty strings.
-/// This prevents deserialization errors from crashing the request handler when
-/// clients send unexpected types (e.g., numbers, nulls).
-fn deserialize_lossy_string<'de, D>(deserializer: D) -> Result<String, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let v: serde_json::Value = Deserialize::deserialize(deserializer)?;
-    match v {
-        serde_json::Value::String(s) => Ok(s),
-        _ => Ok(String::new()),
-    }
-}
-
-/// Arguments for `throw_insult`.
-#[derive(Deserialize, Default)]
-struct ThrowInsultArgs {
-    #[serde(rename = "insult", deserialize_with = "deserialize_lossy_string")]
-    insult: String,
-}
-
-/// Arguments for `respond`.
-#[derive(Deserialize, Default)]
-struct RespondArgs {
-    #[serde(rename = "comeback", deserialize_with = "deserialize_lossy_string")]
-    comeback: String,
-}
-
 impl ToolAction {
     fn map_validation_error(e: &ArenaError, field: &str, tool: &str) -> CallToolError {
         match e {
@@ -130,12 +93,18 @@ impl ToolAction {
         }
     }
 
-    /// Helper to parse arguments or fall back to default if parsing fails.
+    /// Helper to extract a string argument from the arguments value.
     ///
-    /// This ensures we don't crash on malformed JSON structure (e.g. array instead of object),
-    /// though `serde_json::from_value` usually handles type mismatches if strict types aren't used.
-    fn parse_args_or_default<T: DeserializeOwned + Default>(value: serde_json::Value) -> T {
-        serde_json::from_value(value).unwrap_or_else(|_| T::default())
+    /// If the argument exists and is a string, it returns it.
+    /// Otherwise (if missing, null, number, object, etc.), it returns an empty string.
+    ///
+    /// This preserves legacy behavior where invalid types were treated as empty strings,
+    /// preventing crashes on malformed requests.
+    fn extract_arg(args: &serde_json::Value, key: &str) -> String {
+        match args.get(key) {
+            Some(serde_json::Value::String(s)) => s.clone(),
+            _ => String::new(),
+        }
     }
 }
 
@@ -159,18 +128,16 @@ impl TryFrom<CallToolRequestParams> for ToolAction {
             GET_HINT => Ok(Self::GetHint),
 
             THROW_INSULT => {
-                let args: ThrowInsultArgs = Self::parse_args_or_default(args_val);
-
-                let insult = PlayerInput::try_from(args.insult)
+                let insult_str = Self::extract_arg(&args_val, ARG_INSULT);
+                let insult = PlayerInput::try_from(insult_str)
                     .map_err(|e| Self::map_validation_error(&e, "Insult", &tool_name))?;
 
                 Ok(Self::ThrowInsult { insult })
             }
 
             RESPOND => {
-                let args: RespondArgs = Self::parse_args_or_default(args_val);
-
-                let comeback = PlayerInput::try_from(args.comeback)
+                let comeback_str = Self::extract_arg(&args_val, ARG_COMEBACK);
+                let comeback = PlayerInput::try_from(comeback_str)
                     .map_err(|e| Self::map_validation_error(&e, "Comeback", &tool_name))?;
 
                 Ok(Self::Respond { comeback })
