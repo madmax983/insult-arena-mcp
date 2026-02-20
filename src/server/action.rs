@@ -241,7 +241,11 @@ mod tests {
         let result = ToolAction::try_from(params).unwrap();
         match result {
             ToolAction::ThrowInsult { insult } => {
-                assert_eq!(insult.as_str(), "", "Missing argument should become empty string");
+                assert_eq!(
+                    insult.as_str(),
+                    "",
+                    "Missing argument should become empty string"
+                );
             }
             _ => panic!("Expected ThrowInsult"),
         }
