@@ -34,10 +34,11 @@
 //!
 //! // 3. Match and execute (in the Server)
 //! if let ToolAction::ThrowInsult { insult } = action {
-//!     assert_eq!(insult, "You fight like a dairy farmer!");
+//!     assert_eq!(insult.as_str(), "You fight like a dairy farmer!");
 //! }
 //! ```
 
+use crate::arena::{ArenaError, PlayerInput};
 use crate::server::constants::{
     GET_DUEL_STATE, GET_HINT, LIST_INSULTS, REGISTER_CHALLENGER, REGISTER_DEFENDER, RESPOND,
     START_DUEL, THROW_INSULT,
@@ -72,12 +73,12 @@ pub enum ToolAction {
     /// Throw a specific insult.
     ThrowInsult {
         /// The insult string to throw.
-        insult: String,
+        insult: PlayerInput,
     },
     /// Respond with a comeback.
     Respond {
         /// The comeback string to use.
-        comeback: String,
+        comeback: PlayerInput,
     },
     /// Get a hint for the current pending insult.
     GetHint,
@@ -119,20 +120,13 @@ struct RespondArgs {
 }
 
 impl ToolAction {
-    /// Helper to validate string length to prevent `DoS`.
-    fn validate_length(
-        s: &str,
-        field_name: &str,
-        tool_name: &str,
-        limit: usize,
-    ) -> Result<(), CallToolError> {
-        if s.len() > limit {
-            Err(CallToolError::invalid_arguments(
-                tool_name,
-                Some(format!("{field_name} too long (max {limit} chars)")),
-            ))
-        } else {
-            Ok(())
+    fn map_validation_error(e: &ArenaError, field: &str, tool: &str) -> CallToolError {
+        match e {
+            ArenaError::InputTooLong(limit) => CallToolError::invalid_arguments(
+                tool,
+                Some(format!("{field} too long (max {limit} chars)")),
+            ),
+            _ => CallToolError::from_message(e.to_string()),
         }
     }
 
@@ -167,31 +161,19 @@ impl TryFrom<CallToolRequestParams> for ToolAction {
             THROW_INSULT => {
                 let args: ThrowInsultArgs = Self::parse_args_or_default(args_val);
 
-                Self::validate_length(
-                    &args.insult,
-                    "Insult",
-                    &tool_name,
-                    crate::arena::MAX_INPUT_LENGTH,
-                )?;
+                let insult = PlayerInput::try_from(args.insult)
+                    .map_err(|e| Self::map_validation_error(&e, "Insult", &tool_name))?;
 
-                Ok(Self::ThrowInsult {
-                    insult: args.insult,
-                })
+                Ok(Self::ThrowInsult { insult })
             }
 
             RESPOND => {
                 let args: RespondArgs = Self::parse_args_or_default(args_val);
 
-                Self::validate_length(
-                    &args.comeback,
-                    "Comeback",
-                    &tool_name,
-                    crate::arena::MAX_INPUT_LENGTH,
-                )?;
+                let comeback = PlayerInput::try_from(args.comeback)
+                    .map_err(|e| Self::map_validation_error(&e, "Comeback", &tool_name))?;
 
-                Ok(Self::Respond {
-                    comeback: args.comeback,
-                })
+                Ok(Self::Respond { comeback })
             }
 
             _ => Err(CallToolError::unknown_tool(&tool_name)),
@@ -242,7 +224,7 @@ mod tests {
         let result = ToolAction::try_from(params).unwrap();
         match result {
             ToolAction::ThrowInsult { insult } => {
-                assert_eq!(insult, "", "Number should become empty string");
+                assert_eq!(insult.as_str(), "", "Number should become empty string");
             }
             _ => panic!("Expected ThrowInsult"),
         }
@@ -260,7 +242,11 @@ mod tests {
         let result = ToolAction::try_from(params).unwrap();
         match result {
             ToolAction::ThrowInsult { insult } => {
-                assert_eq!(insult, "", "Missing argument should become empty string");
+                assert_eq!(
+                    insult.as_str(),
+                    "",
+                    "Missing argument should become empty string"
+                );
             }
             _ => panic!("Expected ThrowInsult"),
         }
