@@ -45,8 +45,9 @@ use crate::server::constants::{
 };
 use rust_mcp_sdk::schema::CallToolRequestParams;
 use rust_mcp_sdk::schema::schema_utils::CallToolError;
-use serde::de::DeserializeOwned;
+use serde::de::{DeserializeOwned, IgnoredAny, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer};
+use std::fmt;
 
 /// Represents a parsed and validated tool action.
 ///
@@ -98,10 +99,71 @@ fn deserialize_lossy_string<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
     D: Deserializer<'de>,
 {
-    let v: serde_json::Value = Deserialize::deserialize(deserializer)?;
-    match v {
-        serde_json::Value::String(s) => Ok(s),
-        _ => Ok(String::new()),
+    deserializer.deserialize_any(LossyStringVisitor)
+}
+
+struct LossyStringVisitor;
+
+impl<'de> Visitor<'de> for LossyStringVisitor {
+    type Value = String;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a string or anything else (which becomes empty string)")
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E> {
+        Ok(v.to_owned())
+    }
+
+    fn visit_string<E>(self, v: String) -> Result<Self::Value, E> {
+        Ok(v)
+    }
+
+    fn visit_bool<E>(self, _v: bool) -> Result<Self::Value, E> {
+        Ok(String::new())
+    }
+
+    fn visit_i64<E>(self, _v: i64) -> Result<Self::Value, E> {
+        Ok(String::new())
+    }
+
+    fn visit_u64<E>(self, _v: u64) -> Result<Self::Value, E> {
+        Ok(String::new())
+    }
+
+    fn visit_f64<E>(self, _v: f64) -> Result<Self::Value, E> {
+        Ok(String::new())
+    }
+
+    fn visit_none<E>(self) -> Result<Self::Value, E> {
+        Ok(String::new())
+    }
+
+    fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_any(self)
+    }
+
+    fn visit_unit<E>(self) -> Result<Self::Value, E> {
+        Ok(String::new())
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    where
+        A: SeqAccess<'de>,
+    {
+        while let Some(_) = seq.next_element::<IgnoredAny>()? {}
+        Ok(String::new())
+    }
+
+    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+    where
+        A: MapAccess<'de>,
+    {
+        while let Some((_, _)) = map.next_entry::<IgnoredAny, IgnoredAny>()? {}
+        Ok(String::new())
     }
 }
 
@@ -249,6 +311,115 @@ mod tests {
                 );
             }
             _ => panic!("Expected ThrowInsult"),
+        }
+    }
+
+    #[test]
+    fn handles_deeply_nested_structure_gracefully() {
+        // Create a deeply nested structure that would cause large allocation
+        // if fully deserialized into Value.
+        // e.g., [[[[[[...]]]]]]
+        let mut nested = json!([]);
+        for _ in 0..100 {
+            nested = json!([nested]);
+        }
+
+        let mut args = serde_json::Map::new();
+        args.insert(ARG_INSULT.to_string(), nested);
+
+        let params = CallToolRequestParams {
+            name: THROW_INSULT.to_string(),
+            arguments: Some(args),
+            meta: None,
+            task: None,
+        };
+
+        let result = ToolAction::try_from(params);
+        assert!(result.is_ok(), "Should not fail on nested structure");
+
+        match result.unwrap() {
+            ToolAction::ThrowInsult { insult } => {
+                assert_eq!(insult.as_str(), "", "Should return empty string for array");
+            }
+            _ => panic!("Expected ThrowInsult action"),
+        }
+    }
+
+    #[test]
+    fn handles_complex_object_gracefully() {
+        // Create a large object structure
+        let complex = json!({
+            "foo": "bar",
+            "nested": {
+                "a": [1, 2, 3],
+                "b": { "x": "y" }
+            }
+        });
+
+        let mut args = serde_json::Map::new();
+        args.insert(ARG_INSULT.to_string(), complex);
+
+        let params = CallToolRequestParams {
+            name: THROW_INSULT.to_string(),
+            arguments: Some(args),
+            meta: None,
+            task: None,
+        };
+
+        let result = ToolAction::try_from(params);
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ToolAction::ThrowInsult { insult } => {
+                assert_eq!(insult.as_str(), "", "Should return empty string for object");
+            }
+            _ => panic!("Expected ThrowInsult action"),
+        }
+    }
+
+    #[test]
+    fn handles_null_gracefully() {
+        let mut args = serde_json::Map::new();
+        args.insert(ARG_INSULT.to_string(), serde_json::Value::Null);
+
+        let params = CallToolRequestParams {
+            name: THROW_INSULT.to_string(),
+            arguments: Some(args),
+            meta: None,
+            task: None,
+        };
+
+        let result = ToolAction::try_from(params);
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ToolAction::ThrowInsult { insult } => {
+                assert_eq!(insult.as_str(), "", "Should return empty string for null");
+            }
+            _ => panic!("Expected ThrowInsult action"),
+        }
+    }
+
+    #[test]
+    fn handles_boolean_gracefully() {
+        let mut args = serde_json::Map::new();
+        args.insert(ARG_INSULT.to_string(), json!(true));
+
+        let params = CallToolRequestParams {
+            name: THROW_INSULT.to_string(),
+            arguments: Some(args),
+            meta: None,
+            task: None,
+        };
+
+        let result = ToolAction::try_from(params);
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ToolAction::ThrowInsult { insult } => {
+                assert_eq!(insult.as_str(), "", "Should return empty string for boolean");
+            }
+            _ => panic!("Expected ThrowInsult action"),
         }
     }
 }
