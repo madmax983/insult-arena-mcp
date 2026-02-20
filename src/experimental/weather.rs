@@ -4,14 +4,14 @@ use serde::{Deserialize, Serialize};
 /// Represents the current environmental conditions of the arena.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum WeatherCondition {
-    /// A clear night, perfect for dueling.
+    /// A clear night, perfect for dueling. No gameplay effects.
     #[default]
     Clear,
-    /// Thick fog that obscures vision (and potentially hints).
+    /// Thick fog that obscures vision. Hints are hidden from players.
     Fog,
-    /// A raging storm that excites the crowd but makes it hard to hear.
+    /// A raging storm that excites the crowd. Hype changes are amplified (x1.5).
     Storm,
-    /// A sweltering heatwave that makes everyone sluggish.
+    /// A sweltering heatwave that makes everyone sluggish. Hype changes are dampened (x0.5).
     Heatwave,
 }
 
@@ -85,9 +85,18 @@ impl WeatherSystem {
 
     /// Modifies hype changes based on the weather.
     ///
-    /// * `Storm` amplifies crowd reactions (x1.5).
-    /// * `Heatwave` dampens crowd reactions (x0.5).
-    /// * `Fog` and `Clear` have no effect.
+    /// # Effects
+    ///
+    /// * **Storm**: Amplifies reactions by 1.5x (rounded down).
+    ///   - Example: +10 hype -> +15 hype.
+    /// * **Heatwave**: Dampens reactions by 0.5x (integer division).
+    ///   - Example: +10 hype -> +5 hype.
+    /// * **Clear / Fog**: No effect.
+    ///
+    /// # Safety
+    ///
+    /// Uses saturating arithmetic and explicit clamping to prevent integer overflow
+    /// when calculating the storm multiplier.
     #[must_use]
     #[allow(clippy::cast_possible_truncation)]
     pub const fn apply_hype_modifier(&self, hype_change: i32) -> i32 {

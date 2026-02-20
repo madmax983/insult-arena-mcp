@@ -3,6 +3,10 @@ use rand::Rng;
 
 /// The Sensei (AI) opponent in the Dojo.
 ///
+/// The Sensei is a simulated opponent with a configurable skill level.
+/// - **Low Skill**: Frequently makes mistakes.
+/// - **High Skill**: Almost never misses a comeback.
+///
 /// # Hero's Journey
 ///
 /// ```
@@ -30,9 +34,15 @@ pub struct Sensei {
 impl Sensei {
     /// Creates a new Sensei with the given skill level.
     ///
+    /// # Arguments
+    ///
+    /// * `skill` - A value between `0.0` (total novice) and `1.0` (perfect master).
+    ///   - Values outside this range are clamped.
+    ///   - `NaN` is treated as `0.0`.
+    ///
     /// # Panics
     ///
-    /// Does not panic. `NaN` values are treated as `0.0`.
+    /// Does not panic. Handles invalid floats gracefully.
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn new(skill: f64) -> Self {
@@ -44,6 +54,20 @@ impl Sensei {
     }
 
     /// Decides on an insult to throw.
+    ///
+    /// The Sensei always picks a valid insult from the bank.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::experimental::sensei::Sensei;
+    /// use insult_arena_mcp::InsultBank;
+    ///
+    /// let sensei = Sensei::new(0.5);
+    /// let bank = InsultBank::new();
+    /// let insult = sensei.attack(&bank);
+    /// assert!(!insult.is_empty());
+    /// ```
     #[must_use]
     pub fn attack(&self, bank: &InsultBank) -> String {
         // Sensei always picks a valid insult
@@ -51,6 +75,23 @@ impl Sensei {
     }
 
     /// Decides on a comeback response.
+    ///
+    /// The Sensei's success rate depends on their skill level.
+    /// - If the skill check passes, they return the correct comeback.
+    /// - If the skill check fails, they return a generic wrong answer.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::experimental::sensei::Sensei;
+    /// use insult_arena_mcp::InsultBank;
+    ///
+    /// let sensei = Sensei::new(1.0); // Perfect skill
+    /// let bank = InsultBank::new();
+    ///
+    /// let comeback = sensei.defend(&bank, "You fight like a dairy farmer!");
+    /// assert_eq!(comeback, "How appropriate. You fight like a cow!");
+    /// ```
     #[must_use]
     pub fn defend(&self, bank: &InsultBank, pending_insult: &str) -> String {
         let should_succeed = rand::thread_rng().gen_bool(self.skill);

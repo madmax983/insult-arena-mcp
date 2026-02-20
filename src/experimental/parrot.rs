@@ -39,7 +39,18 @@ impl Parrot {
     }
 
     /// Returns a hint for the given insult.
-    /// The hint masks all but the first letter of each word in the comeback.
+    ///
+    /// The hint masks all but the first letter of each word in the correct comeback.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::experimental::parrot::Parrot;
+    ///
+    /// let parrot = Parrot::new();
+    /// let hint = parrot.hint("You fight like a dairy farmer!");
+    /// assert!(hint.unwrap().starts_with("H__"));
+    /// ```
     #[must_use]
     pub fn hint(&self, insult: &str) -> Option<String> {
         let comeback = self.bank.find_comeback(insult)?;
@@ -47,6 +58,16 @@ impl Parrot {
     }
 
     /// SQUAWK! Returns a random pirate sound.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::experimental::parrot::Parrot;
+    ///
+    /// let parrot = Parrot::new();
+    /// let noise = parrot.squawk();
+    /// assert!(!noise.is_empty());
+    /// ```
     #[must_use]
     pub fn squawk(&self) -> &'static str {
         let squawks = [

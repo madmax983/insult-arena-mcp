@@ -1,3 +1,8 @@
+//! Narrative generation and match statistics.
+//!
+//! The Reporter module turns raw duel data into a story (`chronicle`) and extracts
+//! interesting statistics (`analyze`) for post-game summaries.
+
 use crate::{Duel, Duelist, ExchangeResult};
 use serde::{Deserialize, Serialize};
 use std::fmt::Write;
@@ -41,6 +46,8 @@ pub struct Reporter;
 
 impl Reporter {
     /// Analyzes a duel to produce statistics.
+    ///
+    /// Calculates total rounds, parry success rate, and captures the final result.
     #[must_use]
     #[allow(clippy::cast_precision_loss)]
     pub fn analyze(duel: &Duel) -> MatchStats {
@@ -67,6 +74,24 @@ impl Reporter {
     }
 
     /// Generates a narrative chronicle of the duel.
+    ///
+    /// The chronicle is a Markdown-formatted story describing every exchange in the duel,
+    /// complete with dramatic commentary.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use insult_arena_mcp::Duel;
+    /// use insult_arena_mcp::experimental::reporter::Reporter;
+    ///
+    /// let mut duel = Duel::new();
+    /// duel.throw_insult("You fight like a dairy farmer!".to_string()).unwrap();
+    /// duel.respond("wrong".to_string()).unwrap();
+    ///
+    /// let story = Reporter::chronicle(&duel);
+    /// assert!(story.contains("The Ballad of the Insult Arena"));
+    /// assert!(story.contains("Round 1"));
+    /// ```
     #[must_use]
     pub fn chronicle(duel: &Duel) -> String {
         let mut story = String::new();

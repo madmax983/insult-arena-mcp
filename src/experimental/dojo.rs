@@ -16,13 +16,25 @@ use crate::{Duel, DuelResult, DuelState, Duelist, ExchangeResult, InsultError};
 use serde::{Deserialize, Serialize};
 
 /// Events that occur during a Dojo turn.
+///
+/// These events describe the narrative flow of the match as the AI and player trade insults.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DojoEvent {
-    /// Result of the player's action.
-    PlayerAction { description: String, state: String },
-    /// The Sensei (AI) made a move.
-    SenseiMove { action: String, description: String },
-    /// The audience reacted to an exchange.
+    /// Result of the player's action (e.g., "You threw...", "Touché!").
+    PlayerAction {
+        /// Description of what happened.
+        description: String,
+        /// The new state of the duel.
+        state: String,
+    },
+    /// The Sensei (AI) made a move (e.g., "Sensei parries...", "Sensei throws...").
+    SenseiMove {
+        /// The type of action ("parry", "fail", "attack").
+        action: String,
+        /// Description of what happened.
+        description: String,
+    },
+    /// The audience reacted to an exchange (e.g., Cheer, Boo).
     AudienceReaction(Reaction),
     /// The duel has finished.
     GameOver(DuelResult),
@@ -87,9 +99,17 @@ impl Dojo {
     ///
     /// # Errors
     ///
-    /// Returns error if the move is invalid for the current state.
+    /// Returns error if:
+    /// - The input is too long (> [`MAX_INPUT_LENGTH`]).
+    /// - The move is invalid for the current state (e.g., throwing insult when waiting for comeback).
+    /// - The insult is unknown.
+    ///
+    /// # Panics
+    ///
+    /// This function may panic if the internal game state becomes inconsistent with the Sensei's logic
+    /// (e.g., if the Sensei tries to respond to a non-existent insult). This should not happen
+    /// under normal gameplay conditions.
     #[allow(clippy::expect_used)]
-    #[allow(clippy::missing_panics_doc)]
     pub fn turn(&mut self, input: &str) -> Result<Vec<DojoEvent>, ArenaError> {
         if input.len() > MAX_INPUT_LENGTH {
             return Err(ArenaError::InputTooLong(MAX_INPUT_LENGTH));
