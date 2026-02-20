@@ -25,7 +25,7 @@ use tokio::sync::Mutex;
 use tracing::{info, warn};
 
 use crate::announcer::Announcer;
-use crate::arena::{Arena, ArenaError, ArenaOutcome};
+use crate::arena::{Arena, ArenaError, ArenaOutcome, PlayerInput, SessionId};
 use crate::duel::{DuelStateView, Duelist};
 
 pub mod action;
@@ -174,13 +174,12 @@ impl InsultServer {
             .await
     }
 
-    async fn handle_register(&self, role: Duelist, session_id: Option<String>) -> DuelResponse {
+    async fn handle_register(&self, role: Duelist, session_id: SessionId) -> DuelResponse {
         let mut arena = self.arena.lock().await;
-        let session = session_id.unwrap_or_else(|| "unknown".to_string());
 
-        match arena.register(role, session.clone()) {
+        match arena.register(role, session_id.clone()) {
             Ok((outcome, state)) => {
-                info!("🎭 Session {:?} registered as {}", session, role);
+                info!("🎭 Session {:?} registered as {}", session_id, role);
                 DuelResponse::success_with_role(
                     Announcer::announce(&outcome, Some(&state)),
                     state,
@@ -191,18 +190,18 @@ impl InsultServer {
         }
     }
 
-    async fn handle_register_as_challenger(&self, session_id: Option<String>) -> DuelResponse {
+    async fn handle_register_as_challenger(&self, session_id: SessionId) -> DuelResponse {
         self.handle_register(Duelist::Challenger, session_id).await
     }
 
-    async fn handle_register_as_defender(&self, session_id: Option<String>) -> DuelResponse {
+    async fn handle_register_as_defender(&self, session_id: SessionId) -> DuelResponse {
         self.handle_register(Duelist::Defender, session_id).await
     }
 
-    async fn handle_get_duel_state(&self, session_id: Option<String>) -> DuelResponse {
+    async fn handle_get_duel_state(&self, session_id: Option<SessionId>) -> DuelResponse {
         let arena = self.arena.lock().await;
 
-        match arena.get_duel_state(session_id.as_deref()) {
+        match arena.get_duel_state(session_id.as_ref()) {
             Ok((view, role)) => {
                 if let Some(role_name) = role {
                     DuelResponse::success_with_role("Current duel state:", view, &role_name)
@@ -225,13 +224,17 @@ impl InsultServer {
         }
     }
 
-    async fn handle_throw_insult(&self, session_id: String, insult: String) -> DuelResponse {
+    async fn handle_throw_insult(
+        &self,
+        session_id: SessionId,
+        insult: PlayerInput,
+    ) -> DuelResponse {
         // ⚡ Bolt Optimization: Pass ownership of 'insult' to Arena to avoid allocation.
         self.execute_turn_action("Insult", |arena| arena.throw_insult(&session_id, insult))
             .await
     }
 
-    async fn handle_respond(&self, session_id: String, comeback: String) -> DuelResponse {
+    async fn handle_respond(&self, session_id: SessionId, comeback: PlayerInput) -> DuelResponse {
         info!("💬 COMEBACK ATTEMPT: {:?}", comeback);
 
         // ⚡ Bolt Optimization: Pass ownership of 'comeback' to Arena to avoid allocation.
@@ -239,7 +242,7 @@ impl InsultServer {
             .await
     }
 
-    async fn handle_get_hint(&self, session_id: String) -> DuelResponse {
+    async fn handle_get_hint(&self, session_id: SessionId) -> DuelResponse {
         let arena = self.arena.lock().await;
 
         match arena.get_hint(&session_id) {
@@ -281,24 +284,18 @@ impl ServerHandler for InsultServer {
     ) -> Result<CallToolResult, CallToolError> {
         // Get session ID for role tracking
         let session_id_opt = runtime.session_id();
-
-        // Hardening: Validate session ID length before allocation/cloning
-        if let Some(ref id) = session_id_opt {
-            // Apply stricter validation if needed, but for now just length check
-            if id.len() > crate::arena::MAX_SESSION_ID_LENGTH {
-                return Err(CallToolError::invalid_arguments(
-                    &params.name,
-                    Some(format!(
-                        "Session ID too long (max {} chars)",
-                        crate::arena::MAX_SESSION_ID_LENGTH
-                    )),
-                ));
-            }
-        }
-
         let session_id_str = session_id_opt
             .clone()
             .unwrap_or_else(|| "unknown".to_string());
+
+        // Validate session ID immediately
+        let session_id = SessionId::try_from(session_id_str).map_err(|e| match e {
+            ArenaError::SessionIdTooLong(limit) => CallToolError::invalid_arguments(
+                &params.name,
+                Some(format!("Session ID too long (max {limit} chars)")),
+            ),
+            _ => CallToolError::from_message("Unexpected session ID error"),
+        })?;
 
         // Parse and validate the action
         let action = ToolAction::try_from(params)?;
@@ -306,21 +303,15 @@ impl ServerHandler for InsultServer {
         // Execute the action
         let response = match action {
             ToolAction::StartDuel => self.handle_start_duel().await,
-            ToolAction::RegisterChallenger => {
-                self.handle_register_as_challenger(session_id_opt.clone())
-                    .await
-            }
-            ToolAction::RegisterDefender => {
-                self.handle_register_as_defender(session_id_opt.clone())
-                    .await
-            }
-            ToolAction::GetDuelState => self.handle_get_duel_state(session_id_opt).await,
+            ToolAction::RegisterChallenger => self.handle_register_as_challenger(session_id).await,
+            ToolAction::RegisterDefender => self.handle_register_as_defender(session_id).await,
+            ToolAction::GetDuelState => self.handle_get_duel_state(Some(session_id)).await,
             ToolAction::ListInsults => self.handle_list_insults().await,
             ToolAction::ThrowInsult { insult } => {
-                self.handle_throw_insult(session_id_str, insult).await
+                self.handle_throw_insult(session_id, insult).await
             }
-            ToolAction::Respond { comeback } => self.handle_respond(session_id_str, comeback).await,
-            ToolAction::GetHint => self.handle_get_hint(session_id_str).await,
+            ToolAction::Respond { comeback } => self.handle_respond(session_id, comeback).await,
+            ToolAction::GetHint => self.handle_get_hint(session_id).await,
         };
 
         Ok(CallToolResult {
@@ -374,56 +365,12 @@ mod security_tests {
         // This will fail validation (unknown insult) but be logged in the error path
         let malicious_insult = "Invalid Insult\nINJECTED_LOG: FAKE_ENTRY";
 
-        let _ = server
-            .handle_throw_insult("attacker".to_string(), malicious_insult.to_string())
-            .await;
+        let session_id = SessionId::try_from("attacker".to_string()).unwrap();
+        let insult = PlayerInput::try_from(malicious_insult.to_string()).unwrap();
+
+        let _ = server.handle_throw_insult(session_id, insult).await;
 
         let logs = buffer.0.lock().unwrap().join("");
-
-        // If vulnerable, the log will contain the literal newline character followed by INJECTED_LOG
-        // The format is: ❌ Insult error: "{}"
-        // So we expect: ❌ Insult error: "Invalid Insult\nINJECTED_LOG: FAKE_ENTRY"
-
-        // We assert that the log does NOT contain the raw newline inside the message
-        // However, since we want to FAIL first if it IS vulnerable, we check for what we DON'T want.
-
-        // Wait, standard practice: Test fails if vulnerability exists?
-        // No, standard practice: Test asserts correct behavior. If code is wrong, test fails.
-        // Correct behavior: Newline is escaped.
-        // So we assert that logs do NOT contain "\nINJECTED_LOG".
-
-        // If vulnerable: logs contain "Invalid Insult\nINJECTED_LOG"
-        // If secure (Debug): logs contain "Invalid Insult\\nINJECTED_LOG" (escaped)
-
-        // Let's assert that we see the escaped version, or at least that we DON'T see the raw version acting as a newline.
-
-        println!("Captured logs:\n{logs}");
-
-        // In the vulnerable version, the log line will be split.
-        // But since we capture all output into a string, we just look for the sequence.
-
-        // We want to ensure it is ESCAPED.
-        // The Debug format {:?} will produce "Invalid Insult\nINJECTED_LOG" -> "Invalid Insult\\nINJECTED_LOG"
-
-        // The error message format is: ❌ Insult error: "{}"
-        // If fixed, it becomes: ❌ Insult error: "{:?}" -> ❌ Insult error: "..."
-        // Or if I just change {} to {:?}, it becomes: ❌ Insult error: "Error("...")"
-
-        // Wait, e is `ArenaError::UnknownInsult(String)`.
-        // ArenaError's Display: "Unknown insult: \"{0}\". Use list_insults to see valid options."
-        // So e.to_string() contains the raw insult string inside quotes.
-
-        // Vulnerable: warn!("❌ Insult error: \"{}\"", e);
-        // e.to_string() -> Unknown insult: "Invalid Insult\nINJECTED_LOG: FAKE_ENTRY". ...
-        // Log output -> ❌ Insult error: "Unknown insult: "Invalid Insult
-        // INJECTED_LOG: FAKE_ENTRY". ..."
-
-        // Secure: warn!("❌ Insult error: {:?}", e);
-        // e matches ArenaError::UnknownInsult
-        // Debug output -> UnknownInsult("Invalid Insult\nINJECTED_LOG: FAKE_ENTRY")
-        // Which escapes the inner string.
-
-        // So if secure, we should NOT find "Invalid Insult\nINJECTED_LOG".
 
         assert!(
             !logs.contains("Invalid Insult\nINJECTED_LOG"),

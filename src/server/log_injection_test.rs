@@ -2,6 +2,7 @@
 #![allow(clippy::expect_used)]
 
 use super::*;
+use crate::arena::{PlayerInput, SessionId};
 use std::sync::{Arc, Mutex};
 
 struct LogWriter(Arc<Mutex<String>>);
@@ -38,19 +39,20 @@ fn test_log_injection_throw_insult() {
         rt.block_on(async {
             let server = InsultServer::new();
             let _ = server.handle_start_duel().await;
-            let _ = server
-                .handle_register_as_challenger(Some("session".to_string()))
-                .await;
+
+            let session = SessionId::try_from("session".to_string()).unwrap();
+            let _ = server.handle_register_as_challenger(session.clone()).await;
 
             // We attempt to throw an insult.
             // If the insult is unknown, it returns an error containing the input.
             // This will trigger the error path in `handle_throw_insult`.
             let malicious_input = "malicious\nINJECTED_LOG";
 
+            // Note: PlayerInput validation ensures length, but allows newlines.
+            let input = PlayerInput::try_from(malicious_input.to_string()).unwrap();
+
             tracing::warn!("TEST LOG");
-            let _ = server
-                .handle_throw_insult("session".to_string(), malicious_input.to_string())
-                .await;
+            let _ = server.handle_throw_insult(session, input).await;
         });
     });
 
