@@ -81,29 +81,38 @@ impl Announcer {
         let mut f = String::with_capacity(256);
 
         match outcome {
-            ArenaOutcome::DuelStarted => {
-                f.push_str(
-                    "⚔️ En garde! A new duel begins. Challenger, throw the first insult! 🏴‍☠️",
-                );
-            }
-            ArenaOutcome::RoleRegistered { role } => match role {
-                Duelist::Challenger => {
-                    f.push_str("🏴‍☠️ You are the CHALLENGER! Sharpen your tongue and throw the first insult!");
-                }
-                Duelist::Defender => {
-                    f.push_str("🛡️ You are the DEFENDER! Brace yourself for insults and retort with a comeback!");
-                }
-            },
-            ArenaOutcome::InsultThrown { insult } => {
-                // Using unwrap() as writing to String is infallible (barring OOM).
-                #[allow(clippy::unwrap_used)]
-                write!(f, "🗣️ You bellow: \"{insult}\" ... awaiting comeback!").unwrap();
-            }
+            ArenaOutcome::DuelStarted => Self::announce_started(&mut f),
+            ArenaOutcome::RoleRegistered { role } => Self::announce_registered(&mut f, *role),
+            ArenaOutcome::InsultThrown { insult } => Self::announce_insult(&mut f, insult),
             ArenaOutcome::ExchangeProcessed { exchange } => {
                 Self::format_exchange(&mut f, exchange, view);
             }
         }
         f
+    }
+
+    fn announce_started(f: &mut String) {
+        f.push_str("⚔️ En garde! A new duel begins. Challenger, throw the first insult! 🏴‍☠️");
+    }
+
+    fn announce_registered(f: &mut String, role: Duelist) {
+        match role {
+            Duelist::Challenger => {
+                f.push_str(
+                    "🏴‍☠️ You are the CHALLENGER! Sharpen your tongue and throw the first insult!",
+                );
+            }
+            Duelist::Defender => {
+                f.push_str(
+                    "🛡️ You are the DEFENDER! Brace yourself for insults and retort with a comeback!",
+                );
+            }
+        }
+    }
+
+    #[allow(clippy::unwrap_used)]
+    fn announce_insult(f: &mut String, insult: &str) {
+        write!(f, "🗣️ You bellow: \"{insult}\" ... awaiting comeback!").unwrap();
     }
 
     fn format_exchange(
@@ -113,7 +122,7 @@ impl Announcer {
     ) {
         let is_finished = view.is_some_and(|v| v.phase == "finished");
 
-        Self::format_result_text(f, exchange, is_finished);
+        Self::append_outcome_description(f, exchange, is_finished);
 
         let scores = view.map(|v| (v.challenger_score, v.defender_score));
         Self::format_score_text(f, scores);
@@ -131,30 +140,37 @@ impl Announcer {
 
     /// Helper to format the result of the exchange (Victory, Touché, or Oof).
     #[allow(clippy::unwrap_used)]
-    fn format_result_text(f: &mut String, exchange: &crate::duel::Exchange, is_finished: bool) {
-        if exchange.result.is_parried() {
-            if is_finished {
-                write!(f, "🏆 VICTORY! {} has won the duel! ", exchange.winner).unwrap();
-            } else {
+    fn append_outcome_description(
+        f: &mut String,
+        exchange: &crate::duel::Exchange,
+        is_finished: bool,
+    ) {
+        let winner = exchange.winner;
+        let is_parried = exchange.result.is_parried();
+
+        // 1. Describe the exchange
+        if is_parried {
+            if !is_finished {
                 write!(
                     f,
-                    "⚔️ TOUCHÉ! A sharp wit! {} wins the exchange and attacks next! ",
-                    exchange.winner
+                    "⚔️ TOUCHÉ! A sharp wit! {winner} wins the exchange and attacks next! "
                 )
                 .unwrap();
             }
         } else {
             f.push_str("💥 OOF! That didn't land! ");
-            if is_finished {
-                write!(f, "{} wins the duel! ", exchange.winner).unwrap();
+        }
+
+        // 2. Describe the final outcome (if finished) or if failed but continues (logic from original)
+        if is_finished {
+            if is_parried {
+                write!(f, "🏆 VICTORY! {winner} has won the duel! ").unwrap();
             } else {
-                write!(
-                    f,
-                    "{} wins the exchange and attacks again! ",
-                    exchange.winner
-                )
-                .unwrap();
+                write!(f, "{winner} wins the duel! ").unwrap();
             }
+        } else if !is_parried {
+            // Failed and not finished
+            write!(f, "{winner} wins the exchange and attacks again! ").unwrap();
         }
     }
 
