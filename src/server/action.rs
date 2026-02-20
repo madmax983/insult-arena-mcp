@@ -154,7 +154,7 @@ impl<'de> Visitor<'de> for LossyStringVisitor {
     where
         A: SeqAccess<'de>,
     {
-        while let Some(_) = seq.next_element::<IgnoredAny>()? {}
+        while seq.next_element::<IgnoredAny>()?.is_some() {}
         Ok(String::new())
     }
 
@@ -162,7 +162,7 @@ impl<'de> Visitor<'de> for LossyStringVisitor {
     where
         A: MapAccess<'de>,
     {
-        while let Some((_, _)) = map.next_entry::<IgnoredAny, IgnoredAny>()? {}
+        while map.next_entry::<IgnoredAny, IgnoredAny>()?.is_some() {}
         Ok(String::new())
     }
 }
@@ -417,7 +417,11 @@ mod tests {
 
         match result.unwrap() {
             ToolAction::ThrowInsult { insult } => {
-                assert_eq!(insult.as_str(), "", "Should return empty string for boolean");
+                assert_eq!(
+                    insult.as_str(),
+                    "",
+                    "Should return empty string for boolean"
+                );
             }
             _ => panic!("Expected ThrowInsult action"),
         }
