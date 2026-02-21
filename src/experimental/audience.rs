@@ -1,3 +1,9 @@
+//! Crowd psychology and hype tracking.
+//!
+//! The Audience module simulates the reaction of a virtual crowd to the duel.
+//! It tracks the "hype" level, which fluctuates based on successful parries,
+//! failures, and repetition.
+
 use std::collections::VecDeque;
 
 use crate::experimental::weather::WeatherSystem;

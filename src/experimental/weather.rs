@@ -1,3 +1,9 @@
+//! Environmental conditions that affect gameplay.
+//!
+//! The Weather system adds a layer of unpredictability to the duel.
+//! Different weather conditions can amplify or dampen the crowd's reaction (hype),
+//! or obscure hints.
+
 use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 
@@ -37,6 +43,7 @@ pub enum WeatherCondition {
 /// ```
 #[derive(Debug, Clone)]
 pub struct WeatherSystem {
+    /// The current weather condition in the arena.
     pub current: WeatherCondition,
 }
 

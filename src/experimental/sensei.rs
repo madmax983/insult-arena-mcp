@@ -1,3 +1,8 @@
+//! AI Logic for the Dojo opponent.
+//!
+//! The Sensei is a computer-controlled opponent that can duel the player in the Dojo.
+//! It has a configurable skill level that determines its probability of making a correct move.
+
 use crate::InsultBank;
 use rand::Rng;
 
