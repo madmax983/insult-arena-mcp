@@ -213,7 +213,7 @@ mod tests {
 
     fn make_view(c_score: u8, d_score: u8, finished: bool) -> DuelStateView {
         DuelStateView {
-            phase: if finished { "finished" } else { "active" }.to_string(),
+            phase: std::borrow::Cow::Borrowed(if finished { "finished" } else { "active" }),
             next_to_act: None,
             pending_insult: None,
             challenger_score: c_score,

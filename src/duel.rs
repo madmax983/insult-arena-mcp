@@ -159,13 +159,13 @@ pub struct DuelResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DuelStateView {
     /// Current phase of the duel.
-    pub phase: String,
+    pub phase: Cow<'static, str>,
     /// Who should act next (if applicable).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub next_to_act: Option<String>,
+    pub next_to_act: Option<Cow<'static, str>>,
     /// The pending insult waiting for a comeback.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub pending_insult: Option<String>,
+    pub pending_insult: Option<Cow<'static, str>>,
     /// Challenger's score.
     pub challenger_score: u8,
     /// Defender's score.
@@ -174,26 +174,26 @@ pub struct DuelStateView {
     pub wins_needed: u8,
     /// The winner (if duel is over).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub winner: Option<String>,
+    pub winner: Option<Cow<'static, str>>,
 }
 
 impl From<&Duel> for DuelStateView {
     fn from(duel: &Duel) -> Self {
         let (phase, next_to_act, winner) = match duel.state() {
             DuelState::AwaitingInsult { attacker } => (
-                "awaiting_insult".to_string(),
-                Some(attacker.as_str().to_string()),
+                Cow::Borrowed("awaiting_insult"),
+                Some(Cow::Borrowed(attacker.as_str())),
                 None,
             ),
             DuelState::AwaitingComeback { attacker } => (
-                "awaiting_comeback".to_string(),
-                Some(attacker.opponent().as_str().to_string()),
+                Cow::Borrowed("awaiting_comeback"),
+                Some(Cow::Borrowed(attacker.opponent().as_str())),
                 None,
             ),
             DuelState::Finished { winner } => (
-                "finished".to_string(),
+                Cow::Borrowed("finished"),
                 None,
-                Some(winner.as_str().to_string()),
+                Some(Cow::Borrowed(winner.as_str())),
             ),
         };
 
@@ -202,7 +202,7 @@ impl From<&Duel> for DuelStateView {
         Self {
             phase,
             next_to_act,
-            pending_insult: duel.pending_insult().map(String::from),
+            pending_insult: duel.pending_insult().map(Cow::Borrowed),
             challenger_score,
             defender_score,
             wins_needed: duel.wins_needed(),
@@ -278,7 +278,7 @@ impl Duel {
 
     /// Returns the pending insult if waiting for a comeback.
     #[must_use]
-    pub fn pending_insult(&self) -> Option<&str> {
+    pub fn pending_insult(&self) -> Option<&'static str> {
         self.pending_insult.map(|p| p.insult)
     }
 

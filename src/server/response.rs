@@ -23,7 +23,7 @@
 //!
 //! // 1. Construct a success response
 //! let view = DuelStateView {
-//!     phase: "active".to_string(),
+//!     phase: std::borrow::Cow::Borrowed("active"),
 //!     challenger_score: 0,
 //!     defender_score: 0,
 //!     wins_needed: 3,
