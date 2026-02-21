@@ -122,7 +122,7 @@ impl Announcer {
     ) {
         let is_finished = view.is_some_and(|v| v.phase == "finished");
 
-        Self::append_outcome_description(f, exchange, is_finished);
+        Self::describe_exchange_result(f, exchange, is_finished);
 
         let scores = view.map(|v| (v.challenger_score, v.defender_score));
         Self::format_score_text(f, scores);
@@ -140,7 +140,7 @@ impl Announcer {
 
     /// Helper to format the result of the exchange (Victory, Touché, or Oof).
     #[allow(clippy::unwrap_used)]
-    fn append_outcome_description(
+    fn describe_exchange_result(
         f: &mut String,
         exchange: &crate::duel::Exchange,
         is_finished: bool,
@@ -148,29 +148,25 @@ impl Announcer {
         let winner = exchange.winner;
         let is_parried = exchange.result.is_parried();
 
-        // 1. Describe the exchange
-        if is_parried {
-            if !is_finished {
-                write!(
-                    f,
-                    "⚔️ TOUCHÉ! A sharp wit! {winner} wins the exchange and attacks next! "
-                )
-                .unwrap();
-            }
-        } else {
+        // 1. Exchange Prefix
+        if !is_parried {
             f.push_str("💥 OOF! That didn't land! ");
+        } else if !is_finished {
+            // Only say Touche if the game continues
+            write!(f, "⚔️ TOUCHÉ! A sharp wit! ").unwrap();
         }
 
-        // 2. Describe the final outcome (if finished) or if failed but continues (logic from original)
+        // 2. Result Description
         if is_finished {
             if is_parried {
                 write!(f, "🏆 VICTORY! {winner} has won the duel! ").unwrap();
             } else {
                 write!(f, "{winner} wins the duel! ").unwrap();
             }
-        } else if !is_parried {
-            // Failed and not finished
-            write!(f, "{winner} wins the exchange and attacks again! ").unwrap();
+        } else {
+            // Game continues
+            let next_action = if is_parried { "next" } else { "again" };
+            write!(f, "{winner} wins the exchange and attacks {next_action}! ").unwrap();
         }
     }
 
