@@ -144,7 +144,7 @@ impl Dojo {
                     return Err(InsultError::WaitingForComeback.into());
                 }
                 let exchange = self.duel.respond(input.to_string())?;
-                let reaction = self.audience.react(&exchange);
+                let reaction = self.audience.react(&exchange, None);
                 events.push(DojoEvent::AudienceReaction(reaction));
 
                 match exchange.result {
@@ -210,7 +210,9 @@ impl Dojo {
                             description,
                         });
 
-                        events.push(DojoEvent::AudienceReaction(self.audience.react(&exchange)));
+                        events.push(DojoEvent::AudienceReaction(
+                            self.audience.react(&exchange, None),
+                        ));
                     } else {
                         break;
                     }

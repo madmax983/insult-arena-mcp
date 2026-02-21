@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 
+use crate::experimental::weather::WeatherSystem;
 use crate::{Exchange, ExchangeResult};
 use serde::{Deserialize, Serialize};
 
@@ -53,7 +54,7 @@ pub enum Reaction {
 /// };
 ///
 /// // 3. React!
-/// let reaction = audience.react(&exchange);
+/// let reaction = audience.react(&exchange, None);
 /// match reaction {
 ///     Reaction::Cheer(msg) => println!("👏 Crowd Cheers: {}", msg),
 ///     Reaction::Laugh(msg) => println!("😂 Crowd Laughs: {}", msg),
@@ -140,10 +141,10 @@ impl Audience {
     ///     }
     /// };
     ///
-    /// let reaction = audience.react(&exchange);
+    /// let reaction = audience.react(&exchange, None);
     /// assert!(matches!(reaction, Reaction::Cheer(_)));
     /// ```
-    pub fn react(&mut self, exchange: &Exchange) -> Reaction {
+    pub fn react(&mut self, exchange: &Exchange, weather: Option<&WeatherSystem>) -> Reaction {
         let insult = match &exchange.result {
             ExchangeResult::Parried { insult, .. } | ExchangeResult::Failed { insult, .. } => {
                 insult
@@ -154,6 +155,7 @@ impl Audience {
 
         // Check for repetition
         if self.history.contains(&normalized) {
+            // Repetition is bad regardless of weather
             self.hype = (self.hype - 20).max(0);
             return Reaction::Boo("Get new material!".into());
         }
@@ -166,11 +168,15 @@ impl Audience {
 
         match &exchange.result {
             ExchangeResult::Parried { .. } => {
-                self.hype = (self.hype + 10).min(100);
+                let change = 10;
+                let modified = weather.map_or(change, |w| w.apply_hype_modifier(change));
+                self.hype = (self.hype + modified).min(100);
                 Reaction::Cheer("OOH! SICK BURN!".into())
             }
             ExchangeResult::Failed { .. } => {
-                self.hype = (self.hype - 10).max(0);
+                let change = -10;
+                let modified = weather.map_or(change, |w| w.apply_hype_modifier(change));
+                self.hype = (self.hype + modified).max(0);
                 Reaction::Laugh("LOL! FAIL!".into())
             }
         }
@@ -196,7 +202,7 @@ mod tests {
             winner: Duelist::Defender,
         };
 
-        let reaction = audience.react(&exchange);
+        let reaction = audience.react(&exchange, None);
 
         assert!(
             audience.hype > initial_hype,
@@ -223,7 +229,7 @@ mod tests {
             winner: Duelist::Challenger,
         };
 
-        let reaction = audience.react(&exchange);
+        let reaction = audience.react(&exchange, None);
 
         assert!(audience.hype < initial_hype, "Hype should decrease on fail");
         assert!(
@@ -245,11 +251,11 @@ mod tests {
             },
             winner: Duelist::Defender,
         };
-        audience.react(&exchange);
+        audience.react(&exchange, None);
 
         // Second time should boo
         let initial_hype = audience.hype;
-        let reaction = audience.react(&exchange);
+        let reaction = audience.react(&exchange, None);
 
         assert!(
             audience.hype < initial_hype,
@@ -280,7 +286,7 @@ mod sentry_repro_tests {
             },
             winner: Duelist::Defender,
         };
-        audience.react(&exchange1);
+        audience.react(&exchange1, None);
 
         // 2. Second usage: "YOU FIGHT LIKE A DAIRY FARMER!" (Different case)
         let exchange2 = Exchange {
@@ -291,7 +297,7 @@ mod sentry_repro_tests {
             },
             winner: Duelist::Defender,
         };
-        let reaction = audience.react(&exchange2);
+        let reaction = audience.react(&exchange2, None);
 
         // EXPECTATION: Audience should Boo because it's the same insult.
         // CURRENT BUG: Audience will likely Cheer because "You fight..." != "YOU FIGHT..."
@@ -315,7 +321,7 @@ mod sentry_repro_tests {
                 },
                 winner: Duelist::Defender,
             };
-            audience.react(&exchange);
+            audience.react(&exchange, None);
         }
 
         // 2. Reuse the oldest insult ("insult 0")
@@ -328,7 +334,7 @@ mod sentry_repro_tests {
             },
             winner: Duelist::Defender,
         };
-        let reaction = audience.react(&exchange);
+        let reaction = audience.react(&exchange, None);
 
         // EXPECTATION: Should NOT Boo if history is bounded.
         // CURRENT BUG: Returns Boo because history is unbounded.
