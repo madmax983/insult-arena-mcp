@@ -47,3 +47,7 @@
 **2026-03-02 - DoS: Notification Worker Hang**
 **Threat:** Slow clients can block the notification semaphore indefinitely by failing to read from the SSE stream, causing the worker loop to stall waiting for permits and stopping all notifications.
 **Defense:** Added 5s timeout to `notify_custom` calls in `src/server/notifications.rs` to ensure worker tasks eventually release their semaphore permits.
+
+**2026-03-03 - DoS: Unbounded Input Allocation in Deserialization**
+**Threat:** The `deserialize_lossy_string` helper in `src/server/action.rs` allocated full-length strings from JSON inputs before validation. An attacker could send a massive string (e.g. 1GB), causing memory exhaustion (DoS) during the `to_owned()` call in `visit_str` or holding the string in `visit_string`.
+**Defense:** Modified `LossyStringVisitor` to enforce `MAX_INPUT_LENGTH` check during deserialization. Inputs exceeding the limit are truncated to `MAX_INPUT_LENGTH + 1` (to trigger downstream validation errors) and the excess memory is freed immediately.

@@ -38,7 +38,7 @@
 //! }
 //! ```
 
-use crate::arena::{ArenaError, PlayerInput};
+use crate::arena::{ArenaError, PlayerInput, MAX_INPUT_LENGTH};
 use crate::server::constants::{
     GET_DUEL_STATE, GET_HINT, LIST_INSULTS, REGISTER_CHALLENGER, REGISTER_DEFENDER, RESPOND,
     START_DUEL, THROW_INSULT,
@@ -112,11 +112,23 @@ impl<'de> Visitor<'de> for LossyStringVisitor {
     }
 
     fn visit_str<E>(self, v: &str) -> Result<Self::Value, E> {
-        Ok(v.to_owned())
+        if v.len() > MAX_INPUT_LENGTH {
+            // Truncate to limit + 1 to trigger proper error downstream
+            // without allocating the massive string.
+            Ok(v.chars().take(MAX_INPUT_LENGTH + 1).collect())
+        } else {
+            Ok(v.to_owned())
+        }
     }
 
     fn visit_string<E>(self, v: String) -> Result<Self::Value, E> {
-        Ok(v)
+        if v.len() > MAX_INPUT_LENGTH {
+            // If we already own the string (e.g. from JSON source),
+            // truncate it to release memory.
+            Ok(v.chars().take(MAX_INPUT_LENGTH + 1).collect())
+        } else {
+            Ok(v)
+        }
     }
 
     fn visit_bool<E>(self, _v: bool) -> Result<Self::Value, E> {
@@ -425,5 +437,28 @@ mod tests {
             }
             _ => panic!("Expected ThrowInsult action"),
         }
+    }
+
+    #[test]
+    fn deserialization_truncates_input() {
+        // This test ensures that the deserializer itself truncates overly long inputs,
+        // preventing massive strings from being held in memory even temporarily.
+        let limit = crate::arena::MAX_INPUT_LENGTH;
+        let long_string = "a".repeat(limit + 50);
+
+        let args_val = json!({
+            "insult": long_string
+        });
+
+        // We deserialize directly into the internal struct to test the visitor behavior
+        let args: ThrowInsultArgs = serde_json::from_value(args_val).unwrap();
+
+        // The length should be truncated to limit + 1 (to trigger the "too long" error later)
+        // instead of holding the full length.
+        assert_eq!(
+            args.insult.len(),
+            limit + 1,
+            "String should be truncated to MAX_INPUT_LENGTH + 1 during deserialization"
+        );
     }
 }
