@@ -28,3 +28,7 @@
 **[Bounded Audience History]**
 **Tangle:** `Audience` struct in `src/experimental/audience.rs` used an unbounded `Vec<String>` for history, allowing indefinite memory growth (DoS vulnerability) during long sessions.
 **Blueprint:** Switched `history` to `VecDeque<String>` and enforced a hard limit of 50 items (FIFO eviction). This prevents memory exhaustion while maintaining the "repetition penalty" mechanic.
+
+**[Refactoring Arena Logic]**
+**Tangle:** `src/arena.rs` had become a "Blob" mixing Core Domain Types (`SessionId`, `PlayerInput`), Session Management (`DuelSessions`), and Game Orchestration (`Arena`).
+**Blueprint:** Refactored `src/arena.rs` into `src/arena/mod.rs` with submodules `types` (for shared types) and `sessions` (for session logic). `Arena` now focuses on orchestration, delegating session concerns to `DuelSessions` and using shared types from `types`. This improves separation of concerns and testability.
