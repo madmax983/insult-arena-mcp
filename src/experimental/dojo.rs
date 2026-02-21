@@ -210,7 +210,9 @@ impl Dojo {
                             description,
                         });
 
-                        events.push(DojoEvent::AudienceReaction(self.audience.react(&exchange, None)));
+                        events.push(DojoEvent::AudienceReaction(
+                            self.audience.react(&exchange, None),
+                        ));
                     } else {
                         break;
                     }
