@@ -17,7 +17,7 @@ fn test_audience_unicode_normalization_dedupes() {
         },
         winner: Duelist::Defender,
     };
-    let reaction1 = audience.react(&exchange1);
+    let reaction1 = audience.react(&exchange1, None);
     assert!(
         matches!(reaction1, Reaction::Cheer(_)),
         "First use should cheer"
@@ -35,7 +35,7 @@ fn test_audience_unicode_normalization_dedupes() {
         },
         winner: Duelist::Defender,
     };
-    let reaction2 = audience.react(&exchange2);
+    let reaction2 = audience.react(&exchange2, None);
 
     assert!(
         matches!(reaction2, Reaction::Boo(_)),
@@ -56,7 +56,7 @@ fn test_audience_unicode_different_languages_unique() {
         },
         winner: Duelist::Defender,
     };
-    audience.react(&exchange1);
+    audience.react(&exchange1, None);
 
     // 2. "Bonjour" (French)
     let exchange2 = Exchange {
@@ -67,7 +67,7 @@ fn test_audience_unicode_different_languages_unique() {
         },
         winner: Duelist::Defender,
     };
-    let reaction = audience.react(&exchange2);
+    let reaction = audience.react(&exchange2, None);
 
     assert!(
         matches!(reaction, Reaction::Cheer(_)),
@@ -137,7 +137,7 @@ fn test_audience_history_limit_strict() {
             },
             winner: Duelist::Defender,
         };
-        let reaction = audience.react(&exchange);
+        let reaction = audience.react(&exchange, None);
         assert!(
             matches!(reaction, Reaction::Cheer(_)),
             "Should cheer unique insult {i}"
@@ -153,7 +153,7 @@ fn test_audience_history_limit_strict() {
         },
         winner: Duelist::Defender,
     };
-    audience.react(&exchange_overflow);
+    audience.react(&exchange_overflow, None);
 
     // Verify "Unique insult 0" is forgotten (can use it again without booing)
     let exchange_reuse = Exchange {
@@ -164,7 +164,7 @@ fn test_audience_history_limit_strict() {
         },
         winner: Duelist::Defender,
     };
-    let reaction = audience.react(&exchange_reuse);
+    let reaction = audience.react(&exchange_reuse, None);
 
     assert!(
         matches!(reaction, Reaction::Cheer(_)),
