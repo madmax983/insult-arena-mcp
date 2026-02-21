@@ -252,7 +252,7 @@ mod tests {
             TestCase {
                 name: "Insult Thrown",
                 outcome: ArenaOutcome::InsultThrown {
-                    insult: "You fight like a dairy farmer!".to_string(),
+                    insult: "You fight like a dairy farmer!".into(),
                 },
                 view: None,
                 expected_contains: vec!["You bellow", "You fight like a dairy farmer!"],

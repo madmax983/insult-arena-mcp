@@ -36,6 +36,7 @@
 //! assert_eq!(view.defender_score, 1);
 //! ```
 
+use std::borrow::Cow;
 use std::time::{Duration, Instant};
 
 use tracing::warn;
@@ -173,7 +174,7 @@ pub enum ArenaOutcome {
     /// An insult was successfully thrown.
     InsultThrown {
         /// The insult that was thrown.
-        insult: String,
+        insult: Cow<'static, str>,
     },
     /// An exchange (insult + comeback) was completed.
     ExchangeProcessed {
@@ -503,13 +504,16 @@ impl Arena {
         match duel.throw_insult_ref(insult.as_str()) {
             Ok(canonical) => {
                 self.last_active = Instant::now();
-                // Reuse the existing allocation to store the canonical string.
-                let mut insult = insult.into_inner();
-                insult.clear();
-                insult.push_str(canonical);
+                // ⚡ Bolt: No allocation needed! 'canonical' is &'static str.
+                // We drop the input string (insult) and just reference the static data.
 
                 let view = DuelStateView::from(&*duel);
-                Ok((ArenaOutcome::InsultThrown { insult }, view))
+                Ok((
+                    ArenaOutcome::InsultThrown {
+                        insult: Cow::Borrowed(canonical),
+                    },
+                    view,
+                ))
             }
             Err(e) => Err(Self::map_insult_check_error(e, insult.into_inner())),
         }
