@@ -1,3 +1,4 @@
+#![cfg(feature = "nova")]
 #![allow(clippy::unwrap_used)]
 
 use insult_arena_mcp::experimental::audience::{Audience, HISTORY_LIMIT, Reaction};
