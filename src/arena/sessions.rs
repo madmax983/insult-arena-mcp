@@ -46,7 +46,13 @@ impl DuelSessions {
             Duelist::Defender => self.defender.as_ref(),
         };
 
-        if expected_session.is_some_and(|expected| expected != session_id) {
+        // Sentry Check: Ensure the role is actually registered!
+        // Prevents unregistered sessions from hijacking an empty role.
+        let Some(expected) = expected_session else {
+            return Err(ArenaError::NotYourTurn(actor.to_string()));
+        };
+
+        if expected != session_id {
             return Err(ArenaError::NotYourTurn(actor.to_string()));
         }
         Ok(())
