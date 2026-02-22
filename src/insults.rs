@@ -134,13 +134,12 @@ pub fn normalized_eq(a: &str, b: &str) -> bool {
 fn matches_normalized_ascii(text: &str, normalized_pattern: &[u8]) -> bool {
     let mut text_iter = text
         .bytes()
-        .filter(|b| b.is_ascii_alphanumeric())
+        .filter(u8::is_ascii_alphanumeric)
         .map(|b| b.to_ascii_lowercase());
 
     for &p in normalized_pattern {
-        match text_iter.next() {
-            Some(t) if t == p => continue,
-            _ => return false,
+        if text_iter.next() != Some(p) {
+            return false;
         }
     }
 
@@ -773,19 +772,13 @@ mod sentry_tests {
         assert!(bank.find_pair(&long_input).is_none());
 
         // 2. Exact match check
-        assert!(bank
-            .find_pair("You fight like a dairy farmer!")
-            .is_some());
+        assert!(bank.find_pair("You fight like a dairy farmer!").is_some());
 
         // 3. Case insensitive
-        assert!(bank
-            .find_pair("you fight like a dairy farmer!")
-            .is_some());
+        assert!(bank.find_pair("you fight like a dairy farmer!").is_some());
 
         // 4. Punctuation
-        assert!(bank
-            .find_pair("you fight like a dairy farmer...")
-            .is_some());
+        assert!(bank.find_pair("you fight like a dairy farmer...").is_some());
     }
 
     #[test]
