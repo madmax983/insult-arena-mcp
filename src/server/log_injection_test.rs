@@ -2,8 +2,19 @@
 #![allow(clippy::expect_used)]
 
 use super::*;
-use crate::arena::{PlayerInput, SessionId};
 use std::sync::{Arc, Mutex};
+use rust_mcp_sdk::McpServer;
+use rust_mcp_sdk::schema::{CallToolRequestParams, CustomRequest};
+use rust_mcp_sdk::auth::AuthInfo;
+use rust_mcp_sdk::error::McpSdkError;
+use rust_mcp_sdk::schema::{
+    ClientJsonrpcRequest, ClientMessage, InitializeRequestParams,
+    InitializeResult, MessageFromServer, RequestId, ResultFromClient, ResultFromServer,
+    ServerJsonrpcRequest, ServerMessage,
+};
+use rust_mcp_sdk::task_store::TaskStore;
+use std::time::Duration;
+use async_trait::async_trait;
 
 struct LogWriter(Arc<Mutex<String>>);
 
@@ -15,6 +26,74 @@ impl std::io::Write for LogWriter {
     }
     fn flush(&mut self) -> std::io::Result<()> {
         Ok(())
+    }
+}
+
+struct MockMcpServer {
+    session_id: Option<String>,
+}
+
+#[async_trait]
+impl McpServer for MockMcpServer {
+    fn session_id(&self) -> Option<String> {
+        self.session_id.clone()
+    }
+
+    async fn notify_custom(&self, _notification: CustomRequest) -> Result<(), McpSdkError> {
+        Ok(())
+    }
+
+    async fn start(self: Arc<Self>) -> Result<(), McpSdkError> {
+        unimplemented!()
+    }
+    async fn set_client_details(&self, _: InitializeRequestParams) -> Result<(), McpSdkError> {
+        unimplemented!()
+    }
+    fn server_info(&self) -> &InitializeResult {
+        unimplemented!()
+    }
+    fn client_info(&self) -> Option<InitializeRequestParams> {
+        unimplemented!()
+    }
+    async fn auth_info(&self) -> tokio::sync::RwLockReadGuard<'_, Option<AuthInfo>> {
+        unimplemented!()
+    }
+    async fn auth_info_cloned(&self) -> Option<AuthInfo> {
+        unimplemented!()
+    }
+    async fn update_auth_info(&self, _: Option<AuthInfo>) {
+        unimplemented!()
+    }
+    async fn wait_for_initialization(&self) {
+        unimplemented!()
+    }
+    fn task_store(
+        &self,
+    ) -> Option<Arc<dyn TaskStore<ClientJsonrpcRequest, ResultFromServer> + 'static>> {
+        unimplemented!()
+    }
+    fn client_task_store(
+        &self,
+    ) -> Option<Arc<dyn TaskStore<ServerJsonrpcRequest, ResultFromClient> + 'static>> {
+        unimplemented!()
+    }
+    async fn stderr_message(&self, _: String) -> Result<(), McpSdkError> {
+        unimplemented!()
+    }
+    async fn send(
+        &self,
+        _: MessageFromServer,
+        _: Option<RequestId>,
+        _: Option<Duration>,
+    ) -> Result<Option<ClientMessage>, McpSdkError> {
+        unimplemented!()
+    }
+    async fn send_batch(
+        &self,
+        _: Vec<ServerMessage>,
+        _: Option<Duration>,
+    ) -> Result<Option<Vec<ClientMessage>>, McpSdkError> {
+        unimplemented!()
     }
 }
 
@@ -38,21 +117,43 @@ fn test_log_injection_throw_insult() {
 
         rt.block_on(async {
             let server = InsultServer::new();
-            let _ = server.handle_start_duel().await;
+            let mock_server = Arc::new(MockMcpServer { session_id: Some("session".to_string()) });
 
-            let session = SessionId::try_from("session".to_string()).unwrap();
-            let _ = server.handle_register_as_challenger(session.clone()).await;
+            // Start duel first
+            let start_params = CallToolRequestParams {
+                name: "start_duel".to_string(),
+                arguments: None,
+                meta: None,
+                task: None,
+            };
+            let _ = server.handle_call_tool_request(start_params, mock_server.clone()).await;
+
+            // Register challenger
+            let register_params = CallToolRequestParams {
+                name: "register_as_challenger".to_string(),
+                arguments: None,
+                meta: None,
+                task: None,
+            };
+            let _ = server.handle_call_tool_request(register_params, mock_server.clone()).await;
 
             // We attempt to throw an insult.
             // If the insult is unknown, it returns an error containing the input.
-            // This will trigger the error path in `handle_throw_insult`.
+            // This will trigger the error path in `ThrowInsult::execute`.
             let malicious_input = "malicious\nINJECTED_LOG";
 
-            // Note: PlayerInput validation ensures length, but allows newlines.
-            let input = PlayerInput::try_from(malicious_input.to_string()).unwrap();
+            let mut args = serde_json::Map::new();
+            args.insert("insult".to_string(), serde_json::Value::String(malicious_input.to_string()));
+
+            let throw_params = CallToolRequestParams {
+                name: "throw_insult".to_string(),
+                arguments: Some(args),
+                meta: None,
+                task: None,
+            };
 
             tracing::warn!("TEST LOG");
-            let _ = server.handle_throw_insult(session, input).await;
+            let _ = server.handle_call_tool_request(throw_params, mock_server.clone()).await;
         });
     });
 

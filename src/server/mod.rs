@@ -10,6 +10,7 @@
 //! - **Arena**: Encapsulates game logic and state in `Arc<Mutex<Arena>>`.
 //! - **Notifications**: Uses `HyperRuntime` to broadcast turn notifications to all connected clients.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -25,15 +26,15 @@ use tokio::sync::Mutex;
 use tracing::{info, warn};
 
 use crate::announcer::Announcer;
-use crate::arena::{Arena, ArenaError, ArenaOutcome, PlayerInput, SessionId};
-use crate::duel::{DuelStateView, Duelist};
+use crate::arena::{Arena, ArenaError, ArenaOutcome, SessionId};
+use crate::duel::DuelStateView;
 
-pub mod action;
-pub mod constants;
+pub mod handler;
+pub mod json_util;
 pub mod notifications;
 pub mod response;
 
-use action::ToolAction;
+use handler::ToolHandler;
 use notifications::NotificationManager;
 pub use response::DuelResponse;
 
@@ -89,8 +90,9 @@ pub use response::DuelResponse;
 /// ```
 #[derive(Clone)]
 pub struct InsultServer {
-    arena: Arc<Mutex<Arena>>,
-    notifications: Arc<NotificationManager>,
+    pub(crate) arena: Arc<Mutex<Arena>>,
+    pub(crate) notifications: Arc<NotificationManager>,
+    tools: Arc<HashMap<String, Arc<dyn ToolHandler>>>,
 }
 
 impl InsultServer {
@@ -100,9 +102,32 @@ impl InsultServer {
     /// Call `start_duel` (via tool) to initialize a new game.
     #[must_use]
     pub fn new() -> Self {
+        use tools::{
+            GetDuelState, GetHint, ListInsults, RegisterChallenger, RegisterDefender, Respond,
+            StartDuel, ThrowInsult,
+        };
+
+        let mut tools: HashMap<String, Arc<dyn ToolHandler>> = HashMap::new();
+
+        let handlers: Vec<Arc<dyn ToolHandler>> = vec![
+            Arc::new(StartDuel),
+            Arc::new(RegisterChallenger),
+            Arc::new(RegisterDefender),
+            Arc::new(GetDuelState),
+            Arc::new(ListInsults),
+            Arc::new(ThrowInsult),
+            Arc::new(Respond),
+            Arc::new(GetHint),
+        ];
+
+        for handler in handlers {
+            tools.insert(handler.name().to_string(), handler);
+        }
+
         Self {
             arena: Arc::new(Mutex::new(Arena::new())),
             notifications: Arc::new(NotificationManager::new()),
+            tools: Arc::new(tools),
         }
     }
 
@@ -115,7 +140,7 @@ impl InsultServer {
     /// Helper to execute a state-changing action on the arena.
     ///
     /// Handles locking, error mapping, logging, turn notifications, and response formatting.
-    async fn execute_turn_action<F>(&self, context: &str, action: F) -> DuelResponse
+    pub(crate) async fn execute_turn_action<F>(&self, context: &str, action: F) -> DuelResponse
     where
         F: FnOnce(&mut Arena) -> Result<(ArenaOutcome, DuelStateView), ArenaError>,
     {
@@ -159,100 +184,6 @@ impl Default for InsultServer {
 }
 
 mod tools;
-use tools::{
-    tool_get_duel_state, tool_get_hint, tool_list_insults, tool_register_as_challenger,
-    tool_register_as_defender, tool_respond, tool_start_duel, tool_throw_insult,
-};
-
-impl InsultServer {
-    async fn handle_start_duel(&self) -> DuelResponse {
-        info!("⚔️  NEW DUEL STARTED!");
-        info!("   Challenger vs Defender - First to 3 wins!");
-        info!("   Challenger attacks first...");
-
-        self.execute_turn_action("Start duel", Arena::start_duel)
-            .await
-    }
-
-    async fn handle_register(&self, role: Duelist, session_id: SessionId) -> DuelResponse {
-        let mut arena = self.arena.lock().await;
-
-        match arena.register(role, session_id.clone()) {
-            Ok((outcome, state)) => {
-                info!("🎭 Session {:?} registered as {}", session_id, role);
-                DuelResponse::success_with_role(
-                    Announcer::announce(&outcome, Some(&state)),
-                    state,
-                    &role.to_string(),
-                )
-            }
-            Err(e) => DuelResponse::error(e.to_string()),
-        }
-    }
-
-    async fn handle_register_as_challenger(&self, session_id: SessionId) -> DuelResponse {
-        self.handle_register(Duelist::Challenger, session_id).await
-    }
-
-    async fn handle_register_as_defender(&self, session_id: SessionId) -> DuelResponse {
-        self.handle_register(Duelist::Defender, session_id).await
-    }
-
-    async fn handle_get_duel_state(&self, session_id: Option<SessionId>) -> DuelResponse {
-        let arena = self.arena.lock().await;
-
-        match arena.get_duel_state(session_id.as_ref()) {
-            Ok((view, role)) => {
-                if let Some(role_name) = role {
-                    DuelResponse::success_with_role("Current duel state:", view, &role_name)
-                } else {
-                    DuelResponse::success("Current duel state:", view)
-                }
-            }
-            Err(e) => DuelResponse::error(e.to_string()),
-        }
-    }
-
-    async fn handle_list_insults(&self) -> DuelResponse {
-        let arena = self.arena.lock().await;
-        match arena.list_insults() {
-            Ok(insults) => DuelResponse::with_insults(
-                "Available insults for the duel:",
-                insults.into_iter().map(String::from).collect(),
-            ),
-            Err(e) => DuelResponse::error(e.to_string()),
-        }
-    }
-
-    async fn handle_throw_insult(
-        &self,
-        session_id: SessionId,
-        insult: PlayerInput,
-    ) -> DuelResponse {
-        // ⚡ Bolt Optimization: Pass ownership of 'insult' to Arena to avoid allocation.
-        self.execute_turn_action("Insult", |arena| arena.throw_insult(&session_id, insult))
-            .await
-    }
-
-    async fn handle_respond(&self, session_id: SessionId, comeback: PlayerInput) -> DuelResponse {
-        info!("💬 COMEBACK ATTEMPT: {:?}", comeback);
-
-        // ⚡ Bolt Optimization: Pass ownership of 'comeback' to Arena to avoid allocation.
-        self.execute_turn_action("Respond", |arena| arena.respond(&session_id, comeback))
-            .await
-    }
-
-    async fn handle_get_hint(&self, session_id: SessionId) -> DuelResponse {
-        let arena = self.arena.lock().await;
-
-        match arena.get_hint(&session_id) {
-            Ok((hint, insult)) => {
-                DuelResponse::with_hint("Here's a hint for the comeback:", hint, insult)
-            }
-            Err(e) => DuelResponse::error(e.to_string()),
-        }
-    }
-}
 
 #[async_trait]
 impl ServerHandler for InsultServer {
@@ -261,17 +192,12 @@ impl ServerHandler for InsultServer {
         _params: Option<PaginatedRequestParams>,
         _runtime: Arc<dyn McpServer>,
     ) -> Result<ListToolsResult, RpcError> {
+        let mut tools_list: Vec<_> = self.tools.values().map(|h| h.tool_def()).collect();
+        // Sort for consistent output
+        tools_list.sort_by(|a, b| a.name.cmp(&b.name));
+
         Ok(ListToolsResult {
-            tools: vec![
-                tool_start_duel(),
-                tool_register_as_challenger(),
-                tool_register_as_defender(),
-                tool_get_duel_state(),
-                tool_list_insults(),
-                tool_throw_insult(),
-                tool_respond(),
-                tool_get_hint(),
-            ],
+            tools: tools_list,
             next_cursor: None,
             meta: None,
         })
@@ -297,22 +223,17 @@ impl ServerHandler for InsultServer {
             _ => CallToolError::from_message("Unexpected session ID error"),
         })?;
 
-        // Parse and validate the action
-        let action = ToolAction::try_from(params)?;
+        let tool_name = params.name.clone();
+        let args_val = params
+            .arguments
+            .map_or(serde_json::Value::Null, serde_json::Value::Object);
 
-        // Execute the action
-        let response = match action {
-            ToolAction::StartDuel => self.handle_start_duel().await,
-            ToolAction::RegisterChallenger => self.handle_register_as_challenger(session_id).await,
-            ToolAction::RegisterDefender => self.handle_register_as_defender(session_id).await,
-            ToolAction::GetDuelState => self.handle_get_duel_state(Some(session_id)).await,
-            ToolAction::ListInsults => self.handle_list_insults().await,
-            ToolAction::ThrowInsult { insult } => {
-                self.handle_throw_insult(session_id, insult).await
-            }
-            ToolAction::Respond { comeback } => self.handle_respond(session_id, comeback).await,
-            ToolAction::GetHint => self.handle_get_hint(session_id).await,
-        };
+        let handler = self
+            .tools
+            .get(&tool_name)
+            .ok_or_else(|| CallToolError::unknown_tool(&tool_name))?;
+
+        let response = handler.execute(self, session_id, args_val).await?;
 
         Ok(CallToolResult {
             content: vec![TextContent::new(response.to_json(), None, None).into()],
@@ -323,80 +244,57 @@ impl ServerHandler for InsultServer {
     }
 }
 
+// Security tests removed from here as they are covered by log_injection_test.rs
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
-mod security_tests {
-    use super::*;
-    use std::sync::{Arc, Mutex};
-
-    #[derive(Clone, Default)]
-    struct LogBuffer(Arc<Mutex<Vec<String>>>);
-
-    impl std::io::Write for LogBuffer {
-        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            let s = String::from_utf8_lossy(buf).to_string();
-            self.0.lock().unwrap().push(s);
-            Ok(buf.len())
-        }
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
-
-    #[tokio::test(flavor = "current_thread")]
-    async fn log_injection_prevention() {
-        let buffer = LogBuffer::default();
-        let buffer_clone = buffer.clone();
-
-        let subscriber = tracing_subscriber::fmt()
-            .with_writer(move || buffer_clone.clone())
-            .with_ansi(false)
-            .with_level(false)
-            .with_target(false)
-            .without_time() // Simplify output for checking
-            .finish();
-
-        let _guard = tracing::subscriber::set_default(subscriber);
-
-        let server = InsultServer::new();
-        server.handle_start_duel().await;
-
-        // Malicious input with newline injection
-        // This will fail validation (unknown insult) but be logged in the error path
-        let malicious_insult = "Invalid Insult\nINJECTED_LOG: FAKE_ENTRY";
-
-        let session_id = SessionId::try_from("attacker".to_string()).unwrap();
-        let insult = PlayerInput::try_from(malicious_insult.to_string()).unwrap();
-
-        let _ = server.handle_throw_insult(session_id, insult).await;
-
-        let logs = buffer.0.lock().unwrap().join("");
-
-        assert!(
-            !logs.contains("Invalid Insult\nINJECTED_LOG"),
-            "Log injection detected! Newline passed through unescaped."
-        );
-    }
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
 
     #[tokio::test]
     async fn start_duel_creates_new_game() {
         let server = InsultServer::new();
-        let response = server.handle_start_duel().await;
-        assert!(response.message.contains("En garde"));
-        assert!(response.success);
+        let mock_server = Arc::new(MockMcpServer { session_id: None });
+        let params = CallToolRequestParams {
+            name: "start_duel".to_string(),
+            arguments: None,
+            meta: None,
+            task: None,
+        };
+        let result = server
+            .handle_call_tool_request(params, mock_server)
+            .await
+            .unwrap();
+
+        let text = match &result.content[0] {
+            rust_mcp_sdk::schema::ContentBlock::TextContent(t) => t.text.clone(),
+            _ => panic!("Expected text content"),
+        };
+        assert!(text.contains("En garde"));
+        assert!(text.contains("true")); // success: true
     }
 
     #[tokio::test]
     async fn get_state_without_duel_returns_error() {
         let server = InsultServer::new();
-        let response = server.handle_get_duel_state(None).await;
-        assert!(!response.success);
-        assert!(response.message.contains("No duel in progress"));
+        let mock_server = Arc::new(MockMcpServer { session_id: None });
+        let params = CallToolRequestParams {
+            name: "get_duel_state".to_string(),
+            arguments: None,
+            meta: None,
+            task: None,
+        };
+        let result = server
+            .handle_call_tool_request(params, mock_server)
+            .await
+            .unwrap();
+
+        let text = match &result.content[0] {
+            rust_mcp_sdk::schema::ContentBlock::TextContent(t) => t.text.clone(),
+            _ => panic!("Expected text content"),
+        };
+        assert!(text.contains("No duel in progress"));
+        assert!(text.contains("false")); // success: false
     }
 
     use rust_mcp_sdk::auth::AuthInfo;
