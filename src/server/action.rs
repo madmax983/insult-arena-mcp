@@ -104,6 +104,16 @@ where
 
 struct LossyStringVisitor;
 
+macro_rules! visit_empty {
+    ($($name:ident: $type:ty),*) => {
+        $(
+            fn $name<E>(self, _v: $type) -> Result<Self::Value, E> {
+                Ok(String::new())
+            }
+        )*
+    }
+}
+
 impl<'de> Visitor<'de> for LossyStringVisitor {
     type Value = String;
 
@@ -119,31 +129,22 @@ impl<'de> Visitor<'de> for LossyStringVisitor {
         Ok(v)
     }
 
-    fn visit_bool<E>(self, _v: bool) -> Result<Self::Value, E> {
-        Ok(String::new())
-    }
-
-    fn visit_i64<E>(self, _v: i64) -> Result<Self::Value, E> {
-        Ok(String::new())
-    }
-
-    fn visit_u64<E>(self, _v: u64) -> Result<Self::Value, E> {
-        Ok(String::new())
-    }
-
-    fn visit_f64<E>(self, _v: f64) -> Result<Self::Value, E> {
-        Ok(String::new())
-    }
-
-    fn visit_none<E>(self) -> Result<Self::Value, E> {
-        Ok(String::new())
-    }
-
     fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
     where
         D: Deserializer<'de>,
     {
         deserializer.deserialize_any(self)
+    }
+
+    visit_empty! {
+        visit_bool: bool,
+        visit_i64: i64,
+        visit_u64: u64,
+        visit_f64: f64
+    }
+
+    fn visit_none<E>(self) -> Result<Self::Value, E> {
+        Ok(String::new())
     }
 
     fn visit_unit<E>(self) -> Result<Self::Value, E> {
@@ -181,6 +182,22 @@ struct RespondArgs {
     comeback: String,
 }
 
+trait HasSingleStringArg {
+    fn into_value(self) -> String;
+}
+
+impl HasSingleStringArg for ThrowInsultArgs {
+    fn into_value(self) -> String {
+        self.insult
+    }
+}
+
+impl HasSingleStringArg for RespondArgs {
+    fn into_value(self) -> String {
+        self.comeback
+    }
+}
+
 impl ToolAction {
     fn map_validation_error(e: &ArenaError, field: &str, tool: &str) -> CallToolError {
         match e {
@@ -198,6 +215,20 @@ impl ToolAction {
     /// though `serde_json::from_value` usually handles type mismatches if strict types aren't used.
     fn parse_args_or_default<T: DeserializeOwned + Default>(value: serde_json::Value) -> T {
         serde_json::from_value(value).unwrap_or_else(|_| T::default())
+    }
+
+    /// Generic helper to parse a single string argument from tool parameters.
+    fn parse_string_arg<T>(
+        value: serde_json::Value,
+        field_name: &str,
+        tool_name: &str,
+    ) -> Result<PlayerInput, CallToolError>
+    where
+        T: DeserializeOwned + Default + HasSingleStringArg,
+    {
+        let args: T = Self::parse_args_or_default(value);
+        PlayerInput::try_from(args.into_value())
+            .map_err(|e| Self::map_validation_error(&e, field_name, tool_name))
     }
 }
 
@@ -220,23 +251,13 @@ impl TryFrom<CallToolRequestParams> for ToolAction {
             LIST_INSULTS => Ok(Self::ListInsults),
             GET_HINT => Ok(Self::GetHint),
 
-            THROW_INSULT => {
-                let args: ThrowInsultArgs = Self::parse_args_or_default(args_val);
+            THROW_INSULT => Ok(Self::ThrowInsult {
+                insult: Self::parse_string_arg::<ThrowInsultArgs>(args_val, "Insult", &tool_name)?,
+            }),
 
-                let insult = PlayerInput::try_from(args.insult)
-                    .map_err(|e| Self::map_validation_error(&e, "Insult", &tool_name))?;
-
-                Ok(Self::ThrowInsult { insult })
-            }
-
-            RESPOND => {
-                let args: RespondArgs = Self::parse_args_or_default(args_val);
-
-                let comeback = PlayerInput::try_from(args.comeback)
-                    .map_err(|e| Self::map_validation_error(&e, "Comeback", &tool_name))?;
-
-                Ok(Self::Respond { comeback })
-            }
+            RESPOND => Ok(Self::Respond {
+                comeback: Self::parse_string_arg::<RespondArgs>(args_val, "Comeback", &tool_name)?,
+            }),
 
             _ => Err(CallToolError::unknown_tool(&tool_name)),
         }
