@@ -1,3 +1,8 @@
+//! A helpful companion for hints.
+//!
+//! The Parrot module provides a hint system for players who are stuck.
+//! It can mask the correct comeback, revealing only the first letter of each word.
+
 use crate::insults::InsultBank;
 use rand::seq::SliceRandom;
 
