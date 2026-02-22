@@ -299,6 +299,11 @@ impl InsultBank {
     /// Returns the matching pair if found.
     /// Normalizes both insult and comeback (lowercase, alphanumeric only) before comparing.
     ///
+    /// # Arguments
+    ///
+    /// * `insult` - The insult thrown by the attacker.
+    /// * `comeback` - The comeback attempted by the defender.
+    ///
     /// # Examples
     ///
     /// ```
@@ -328,6 +333,10 @@ impl InsultBank {
 
     /// Finds the correct comeback for an insult.
     ///
+    /// # Arguments
+    ///
+    /// * `insult` - The insult to find a comeback for.
+    ///
     /// # Examples
     ///
     /// ```
@@ -345,6 +354,10 @@ impl InsultBank {
     /// Finds the `InsultPair` matching the insult.
     ///
     /// Returns the canonical pair from the bank if the input insult matches.
+    ///
+    /// # Arguments
+    ///
+    /// * `insult` - The insult to search for.
     #[must_use]
     pub fn find_pair(&self, insult: &str) -> Option<&'static InsultPair> {
         self.pairs
@@ -353,6 +366,10 @@ impl InsultBank {
     }
 
     /// Finds insults that match a partial string (for learning mode).
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - The search query string. Case-insensitive.
     ///
     /// # Examples
     ///

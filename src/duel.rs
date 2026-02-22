@@ -296,6 +296,10 @@ impl Duel {
 
     /// Throws an insult. Returns error if not the right time.
     ///
+    /// # Arguments
+    ///
+    /// * `insult` - The insult string to throw. Must match one of the classic insults.
+    ///
     /// # Errors
     ///
     /// Returns an error if:
@@ -358,6 +362,10 @@ impl Duel {
     }
 
     /// Responds with a comeback. Returns the exchange result.
+    ///
+    /// # Arguments
+    ///
+    /// * `comeback` - The comeback string to use.
     ///
     /// # Errors
     ///
