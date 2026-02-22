@@ -125,6 +125,27 @@ pub fn normalized_eq(a: &str, b: &str) -> bool {
     a_iter.eq(b_iter)
 }
 
+/// Helper to check if a text matches a normalized ASCII byte slice.
+///
+/// The `text` is normalized on the fly (alphanumeric only, lowercase)
+/// and compared byte-by-byte with `normalized_pattern`.
+///
+/// Returns true if they match exactly.
+fn matches_normalized_ascii(text: &str, normalized_pattern: &[u8]) -> bool {
+    let mut text_iter = text
+        .bytes()
+        .filter(u8::is_ascii_alphanumeric)
+        .map(|b| b.to_ascii_lowercase());
+
+    for &p in normalized_pattern {
+        if text_iter.next() != Some(p) {
+            return false;
+        }
+    }
+
+    text_iter.next().is_none()
+}
+
 /// Helper to check if a haystack contains a needle, ignoring case.
 ///
 /// Used only for testing.
@@ -321,9 +342,13 @@ impl InsultBank {
     /// ```
     #[must_use]
     pub fn check_comeback(&self, insult: &str, comeback: &str) -> Option<&InsultPair> {
-        self.pairs.iter().find(|pair| {
-            normalized_eq(pair.insult, insult) && normalized_eq(pair.comeback, comeback)
-        })
+        let pair = self.find_pair(insult)?;
+
+        if normalized_eq(pair.comeback, comeback) {
+            Some(pair)
+        } else {
+            None
+        }
     }
 
     /// Finds the correct comeback for an insult.
@@ -347,6 +372,38 @@ impl InsultBank {
     /// Returns the canonical pair from the bank if the input insult matches.
     #[must_use]
     pub fn find_pair(&self, insult: &str) -> Option<&'static InsultPair> {
+        // ⚡ Bolt Optimization: Zero-allocation normalization for ASCII inputs.
+        // We normalize the user input *once* into a stack buffer, then compare against
+        // bank entries using `matches_normalized_ascii`.
+
+        // Buffer size: Max insult length is ~60 chars.
+        // 256 is plenty and stack-safe.
+        const NORM_BUFFER_SIZE: usize = 256;
+
+        if insult.is_ascii() {
+            let mut buffer = [0u8; NORM_BUFFER_SIZE];
+            let mut len = 0;
+
+            for b in insult.bytes() {
+                if b.is_ascii_alphanumeric() {
+                    if len >= NORM_BUFFER_SIZE {
+                        // Input is way longer than any valid insult (even normalized).
+                        // Fail early.
+                        return None;
+                    }
+                    buffer[len] = b.to_ascii_lowercase();
+                    len += 1;
+                }
+            }
+            let snapshot = &buffer[..len];
+
+            return self
+                .pairs
+                .iter()
+                .find(|pair| matches_normalized_ascii(pair.insult, snapshot));
+        }
+
+        // Fallback for non-ASCII inputs
         self.pairs
             .iter()
             .find(|pair| normalized_eq(pair.insult, insult))
@@ -704,6 +761,36 @@ mod sentry_tests {
             !normalized_eq("abc", "def"),
             "Different text should not match"
         );
+    }
+
+    #[test]
+    fn test_find_pair_optimization_edge_cases() {
+        let bank = InsultBank::new();
+
+        // 1. Long garbage input - should return None quickly
+        let long_input = "a".repeat(500);
+        assert!(bank.find_pair(&long_input).is_none());
+
+        // 2. Exact match check
+        assert!(bank.find_pair("You fight like a dairy farmer!").is_some());
+
+        // 3. Case insensitive
+        assert!(bank.find_pair("you fight like a dairy farmer!").is_some());
+
+        // 4. Punctuation
+        assert!(bank.find_pair("you fight like a dairy farmer...").is_some());
+    }
+
+    #[test]
+    fn test_matches_normalized_ascii() {
+        // "abc" normalized
+        let pattern = b"abc";
+        assert!(matches_normalized_ascii("abc", pattern));
+        assert!(matches_normalized_ascii("A B C", pattern));
+        assert!(matches_normalized_ascii("...abc...", pattern));
+        assert!(!matches_normalized_ascii("ab", pattern));
+        assert!(!matches_normalized_ascii("abcd", pattern));
+        assert!(!matches_normalized_ascii("xyz", pattern));
     }
 }
 
