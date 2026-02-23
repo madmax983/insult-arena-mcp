@@ -188,8 +188,5 @@ fn test_search_insults_ignores_punctuation() {
     );
 
     let results = bank.search_insults("dairy farmer");
-    assert!(
-        !results.is_empty(),
-        "Should find 'dairy farmer' with space"
-    );
+    assert!(!results.is_empty(), "Should find 'dairy farmer' with space");
 }

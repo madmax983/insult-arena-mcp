@@ -174,7 +174,12 @@ fn matches_normalized_ascii(text: &str, normalized_pattern: &[u8]) -> bool {
 #[cfg(test)]
 fn contains_ignore_case(haystack: &str, needle: &str) -> bool {
     // For tests, heap allocation is acceptable to keep test code simple
-    let needle_chars: Vec<char> = needle.chars().flat_map(char::to_lowercase).collect();
+    // 🛡️ SENTRY: Normalize needle (filter non-alphanumeric) to match haystack normalization.
+    let needle_chars: Vec<char> = needle
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect();
     contains_ignore_case_char_slice(haystack, &needle_chars)
 }
 
