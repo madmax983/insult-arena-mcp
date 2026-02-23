@@ -147,6 +147,11 @@ impl Arena {
 
     /// Register a session for a specific role.
     ///
+    /// # Arguments
+    ///
+    /// * `role` - The role to register for ([`Duelist::Challenger`] or [`Duelist::Defender`]).
+    /// * `session_id` - The session ID of the player.
+    ///
     /// # Errors
     /// Returns error if the role is already taken, session ID is invalid,
     /// or no duel is in progress.
@@ -169,6 +174,10 @@ impl Arena {
     }
 
     /// Register a session as the challenger.
+    ///
+    /// # Arguments
+    ///
+    /// * `session_id` - The session ID of the player registering.
     ///
     /// # Errors
     /// Returns error if the role is already taken or no duel is in progress.
@@ -194,6 +203,10 @@ impl Arena {
     }
 
     /// Register a session as the defender.
+    ///
+    /// # Arguments
+    ///
+    /// * `session_id` - The session ID of the player registering.
     ///
     /// # Errors
     /// Returns error if the role is already taken or no duel is in progress.
@@ -241,6 +254,10 @@ impl Arena {
 
     /// Get the current state of the duel.
     ///
+    /// # Arguments
+    ///
+    /// * `session_id` - The optional session ID of the requestor. Used to return role information.
+    ///
     /// # Returns
     ///
     /// A tuple containing:
@@ -281,6 +298,11 @@ impl Arena {
     }
 
     /// Throw an insult.
+    ///
+    /// # Arguments
+    ///
+    /// * `session_id` - The session ID of the player throwing the insult.
+    /// * `insult` - The insult string.
     ///
     /// # Errors
     /// Returns error if:
@@ -349,6 +371,11 @@ impl Arena {
 
     /// Respond to an insult with a comeback.
     ///
+    /// # Arguments
+    ///
+    /// * `session_id` - The session ID of the player responding.
+    /// * `comeback` - The comeback string.
+    ///
     /// # Errors
     /// Returns error if:
     /// - Input is too long.
@@ -406,6 +433,10 @@ impl Arena {
     }
 
     /// Get a hint for the current pending insult.
+    ///
+    /// # Arguments
+    ///
+    /// * `session_id` - The session ID of the player requesting the hint.
     ///
     /// # Errors
     /// Returns error if:
