@@ -2,19 +2,19 @@
 #![allow(clippy::expect_used)]
 
 use super::*;
-use std::sync::{Arc, Mutex};
+use async_trait::async_trait;
 use rust_mcp_sdk::McpServer;
-use rust_mcp_sdk::schema::{CallToolRequestParams, CustomRequest};
 use rust_mcp_sdk::auth::AuthInfo;
 use rust_mcp_sdk::error::McpSdkError;
+use rust_mcp_sdk::schema::{CallToolRequestParams, CustomRequest};
 use rust_mcp_sdk::schema::{
-    ClientJsonrpcRequest, ClientMessage, InitializeRequestParams,
-    InitializeResult, MessageFromServer, RequestId, ResultFromClient, ResultFromServer,
-    ServerJsonrpcRequest, ServerMessage,
+    ClientJsonrpcRequest, ClientMessage, InitializeRequestParams, InitializeResult,
+    MessageFromServer, RequestId, ResultFromClient, ResultFromServer, ServerJsonrpcRequest,
+    ServerMessage,
 };
 use rust_mcp_sdk::task_store::TaskStore;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use async_trait::async_trait;
 
 struct LogWriter(Arc<Mutex<String>>);
 
@@ -117,7 +117,9 @@ fn test_log_injection_throw_insult() {
 
         rt.block_on(async {
             let server = InsultServer::new();
-            let mock_server = Arc::new(MockMcpServer { session_id: Some("session".to_string()) });
+            let mock_server = Arc::new(MockMcpServer {
+                session_id: Some("session".to_string()),
+            });
 
             // Start duel first
             let start_params = CallToolRequestParams {
@@ -126,7 +128,9 @@ fn test_log_injection_throw_insult() {
                 meta: None,
                 task: None,
             };
-            let _ = server.handle_call_tool_request(start_params, mock_server.clone()).await;
+            let _ = server
+                .handle_call_tool_request(start_params, mock_server.clone())
+                .await;
 
             // Register challenger
             let register_params = CallToolRequestParams {
@@ -135,7 +139,9 @@ fn test_log_injection_throw_insult() {
                 meta: None,
                 task: None,
             };
-            let _ = server.handle_call_tool_request(register_params, mock_server.clone()).await;
+            let _ = server
+                .handle_call_tool_request(register_params, mock_server.clone())
+                .await;
 
             // We attempt to throw an insult.
             // If the insult is unknown, it returns an error containing the input.
@@ -143,7 +149,10 @@ fn test_log_injection_throw_insult() {
             let malicious_input = "malicious\nINJECTED_LOG";
 
             let mut args = serde_json::Map::new();
-            args.insert("insult".to_string(), serde_json::Value::String(malicious_input.to_string()));
+            args.insert(
+                "insult".to_string(),
+                serde_json::Value::String(malicious_input.to_string()),
+            );
 
             let throw_params = CallToolRequestParams {
                 name: "throw_insult".to_string(),
@@ -153,7 +162,9 @@ fn test_log_injection_throw_insult() {
             };
 
             tracing::warn!("TEST LOG");
-            let _ = server.handle_call_tool_request(throw_params, mock_server.clone()).await;
+            let _ = server
+                .handle_call_tool_request(throw_params, mock_server.clone())
+                .await;
         });
     });
 

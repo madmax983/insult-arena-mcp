@@ -1,7 +1,7 @@
 //! JSON utilities for the server.
 
-use serde::de::{IgnoredAny, MapAccess, SeqAccess, Visitor};
 use serde::Deserializer;
+use serde::de::{IgnoredAny, MapAccess, SeqAccess, Visitor};
 use std::fmt;
 
 /// Helper for lossy string deserialization.

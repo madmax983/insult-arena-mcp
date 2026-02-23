@@ -1,8 +1,8 @@
 //! Tool handler trait definition.
 
 use async_trait::async_trait;
-use rust_mcp_sdk::schema::schema_utils::CallToolError;
 use rust_mcp_sdk::schema::Tool;
+use rust_mcp_sdk::schema::schema_utils::CallToolError;
 use serde_json::Value;
 
 use crate::arena::SessionId;

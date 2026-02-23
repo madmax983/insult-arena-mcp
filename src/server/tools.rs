@@ -92,7 +92,9 @@ impl ToolHandler for StartDuel {
         info!("   Challenger vs Defender - First to 3 wins!");
         info!("   Challenger attacks first...");
 
-        Ok(server.execute_turn_action("Start duel", Arena::start_duel).await)
+        Ok(server
+            .execute_turn_action("Start duel", Arena::start_duel)
+            .await)
     }
 }
 
@@ -195,7 +197,11 @@ impl ToolHandler for GetDuelState {
         match arena.get_duel_state(Some(&session_id)) {
             Ok((view, role)) => {
                 if let Some(role_name) = role {
-                    Ok(DuelResponse::success_with_role("Current duel state:", view, &role_name))
+                    Ok(DuelResponse::success_with_role(
+                        "Current duel state:",
+                        view,
+                        &role_name,
+                    ))
                 } else {
                     Ok(DuelResponse::success("Current duel state:", view))
                 }
@@ -271,7 +277,9 @@ impl ToolHandler for ThrowInsult {
             .map_err(|e| map_validation_error(&e, "Insult", self.name()))?;
 
         // ⚡ Bolt Optimization: Pass ownership of 'insult' to Arena to avoid allocation.
-        Ok(server.execute_turn_action("Insult", |arena| arena.throw_insult(&session_id, insult)).await)
+        Ok(server
+            .execute_turn_action("Insult", |arena| arena.throw_insult(&session_id, insult))
+            .await)
     }
 }
 
@@ -310,7 +318,9 @@ impl ToolHandler for Respond {
         info!("💬 COMEBACK ATTEMPT: {:?}", comeback);
 
         // ⚡ Bolt Optimization: Pass ownership of 'comeback' to Arena to avoid allocation.
-        Ok(server.execute_turn_action("Respond", |arena| arena.respond(&session_id, comeback)).await)
+        Ok(server
+            .execute_turn_action("Respond", |arena| arena.respond(&session_id, comeback))
+            .await)
     }
 }
 
@@ -339,9 +349,11 @@ impl ToolHandler for GetHint {
         let arena = server.arena.lock().await;
 
         match arena.get_hint(&session_id) {
-            Ok((hint, insult)) => {
-                Ok(DuelResponse::with_hint("Here's a hint for the comeback:", hint, insult))
-            }
+            Ok((hint, insult)) => Ok(DuelResponse::with_hint(
+                "Here's a hint for the comeback:",
+                hint,
+                insult,
+            )),
             Err(e) => Ok(DuelResponse::error(e.to_string())),
         }
     }
