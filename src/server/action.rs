@@ -38,7 +38,7 @@
 //! }
 //! ```
 
-use crate::arena::{ArenaError, PlayerInput};
+use crate::arena::{ArenaError, MAX_INPUT_LENGTH, PlayerInput};
 use crate::server::constants::{
     GET_DUEL_STATE, GET_HINT, LIST_INSULTS, REGISTER_CHALLENGER, REGISTER_DEFENDER, RESPOND,
     START_DUEL, THROW_INSULT,
@@ -122,10 +122,25 @@ impl<'de> Visitor<'de> for LossyStringVisitor {
     }
 
     fn visit_str<E>(self, v: &str) -> Result<Self::Value, E> {
-        Ok(v.to_owned())
+        if v.len() > MAX_INPUT_LENGTH + 1 {
+            let mut end = MAX_INPUT_LENGTH + 1;
+            while !v.is_char_boundary(end) {
+                end -= 1;
+            }
+            Ok(v[..end].to_owned())
+        } else {
+            Ok(v.to_owned())
+        }
     }
 
-    fn visit_string<E>(self, v: String) -> Result<Self::Value, E> {
+    fn visit_string<E>(self, mut v: String) -> Result<Self::Value, E> {
+        if v.len() > MAX_INPUT_LENGTH + 1 {
+            let mut end = MAX_INPUT_LENGTH + 1;
+            while !v.is_char_boundary(end) {
+                end -= 1;
+            }
+            v.truncate(end);
+        }
         Ok(v)
     }
 
@@ -270,6 +285,34 @@ mod tests {
     use super::*;
     use crate::server::constants::{ARG_INSULT, THROW_INSULT};
     use serde_json::json;
+
+    #[test]
+    fn visitor_truncates_long_input() {
+        let limit = crate::arena::MAX_INPUT_LENGTH;
+        let long_string = "a".repeat(limit + 100);
+
+        // Test visit_str (via &str)
+        let visitor = LossyStringVisitor;
+        let result = visitor
+            .visit_str::<serde::de::value::Error>(long_string.as_str())
+            .unwrap();
+        assert_eq!(
+            result.len(),
+            limit + 1,
+            "visit_str should truncate to limit + 1"
+        );
+
+        // Test visit_string (via String)
+        let visitor = LossyStringVisitor;
+        let result = visitor
+            .visit_string::<serde::de::value::Error>(long_string)
+            .unwrap();
+        assert_eq!(
+            result.len(),
+            limit + 1,
+            "visit_string should truncate to limit + 1"
+        );
+    }
 
     #[test]
     fn rejects_excessive_input_length_efficiently() {

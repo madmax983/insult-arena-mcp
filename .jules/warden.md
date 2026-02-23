@@ -12,7 +12,7 @@
 **Threat:** Session IDs were stored in `DuelSessions` without length validation. An attacker could provide a massive session ID string (e.g. 100MB), consuming server memory per session.
 **Defense:** Introduced `MAX_SESSION_ID_LENGTH` (128 chars) constant in `src/arena.rs` and enforced it in `Arena::register_*` and `InsultServer` tool handlers.
 
-**2024-11-25 - DoS: Input Allocation Optimization**
+**2024-11-25 - DoS: Unbounded Input Allocation Optimization**
 **Threat:** Although `Arena` checks `MAX_INPUT_LENGTH`, the `InsultServer` was converting the input `serde_json::Value` to `String` *before* calling `Arena`. An attacker sending a large JSON string could cause a large heap allocation before the check rejected it.
 **Defense:** Added pre-allocation validation in `src/server/mod.rs` to check the length of the string slice (`&str`) from the JSON value before calling `to_string()`.
 
@@ -47,3 +47,7 @@
 **2026-03-02 - DoS: Notification Worker Hang**
 **Threat:** Slow clients can block the notification semaphore indefinitely by failing to read from the SSE stream, causing the worker loop to stall waiting for permits and stopping all notifications.
 **Defense:** Added 5s timeout to `notify_custom` calls in `src/server/notifications.rs` to ensure worker tasks eventually release their semaphore permits.
+
+**2026-03-03 - DoS: Unbounded Allocation in ToolAction Deserialization**
+**Threat:** The `LossyStringVisitor` in `src/server/action.rs` blindly allocated full strings from input, even if they exceeded `MAX_INPUT_LENGTH`. This allowed an attacker to cause memory exhaustion by sending a massive JSON string (e.g., 1GB), which would be allocated on the heap before validation could reject it.
+**Defense:** Updated `LossyStringVisitor` to truncate input strings to `MAX_INPUT_LENGTH + 1` during deserialization. This ensures the validation logic still triggers "Input too long" error, but prevents the massive allocation.
