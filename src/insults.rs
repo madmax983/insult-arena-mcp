@@ -123,28 +123,70 @@ pub fn normalized_eq(a: &str, b: &str) -> bool {
     // Avoids UTF-8 decoding overhead and complex iterator state in flat_map(to_lowercase).
     // Uses raw bytes which are faster to iterate and process.
     if a.is_ascii() && b.is_ascii() {
-        let a_iter = a
-            .bytes()
-            .filter(u8::is_ascii_alphanumeric)
-            .map(|b| b.to_ascii_lowercase());
-        let b_iter = b
-            .bytes()
-            .filter(u8::is_ascii_alphanumeric)
-            .map(|b| b.to_ascii_lowercase());
-        return a_iter.eq(b_iter);
+        return iter_normalized_ascii(a).eq(iter_normalized_ascii(b));
     }
 
-    let a_iter = a
-        .chars()
-        .filter(|c| c.is_alphanumeric())
-        .flat_map(char::to_lowercase);
+    iter_normalized(a).eq(iter_normalized(b))
+}
 
-    let b_iter = b
-        .chars()
+/// Returns an iterator over the normalized characters of a string.
+/// Normalization filters for alphanumeric characters and converts them to lowercase.
+fn iter_normalized(s: &str) -> impl Iterator<Item = char> + '_ {
+    s.chars()
         .filter(|c| c.is_alphanumeric())
-        .flat_map(char::to_lowercase);
+        .flat_map(char::to_lowercase)
+}
 
-    a_iter.eq(b_iter)
+/// Returns an iterator over the normalized bytes of an ASCII string.
+/// Normalization filters for alphanumeric bytes and converts them to lowercase.
+fn iter_normalized_ascii(s: &str) -> impl Iterator<Item = u8> + '_ {
+    s.bytes()
+        .filter(u8::is_ascii_alphanumeric)
+        .map(|b| b.to_ascii_lowercase())
+}
+
+/// Fills the buffer with normalized ASCII bytes (lowercase, alphanumeric only).
+/// Returns `Some(len)` if successful, or `None` if the input is too long for the buffer.
+fn fill_buffer_normalized(s: &str, buf: &mut [u8]) -> Option<usize> {
+    let mut len = 0;
+    for b in s.bytes() {
+        if b.is_ascii_alphanumeric() {
+            if len >= buf.len() {
+                return None;
+            }
+            buf[len] = b.to_ascii_lowercase();
+            len += 1;
+        }
+    }
+    Some(len)
+}
+
+/// Fills the buffer with lowercase ASCII bytes (no filtering).
+/// Returns the number of bytes written (truncated if buffer is full).
+fn fill_buffer_lowercase(s: &str, buf: &mut [u8], max_input: usize) -> usize {
+    let mut len = 0;
+    for b in s.bytes().take(max_input) {
+        if len >= buf.len() {
+            break;
+        }
+        buf[len] = b.to_ascii_lowercase();
+        len += 1;
+    }
+    len
+}
+
+/// Fills the buffer with lowercase chars (no filtering, handles Unicode).
+/// Returns the number of chars written (truncated if buffer is full).
+fn fill_buffer_lowercase_chars(s: &str, buf: &mut [char], max_input: usize) -> usize {
+    let mut len = 0;
+    for c in s.chars().take(max_input).flat_map(char::to_lowercase) {
+        if len >= buf.len() {
+            break;
+        }
+        buf[len] = c;
+        len += 1;
+    }
+    len
 }
 
 /// Helper to check if a text matches a normalized ASCII byte slice.
@@ -154,18 +196,7 @@ pub fn normalized_eq(a: &str, b: &str) -> bool {
 ///
 /// Returns true if they match exactly.
 fn matches_normalized_ascii(text: &str, normalized_pattern: &[u8]) -> bool {
-    let mut text_iter = text
-        .bytes()
-        .filter(u8::is_ascii_alphanumeric)
-        .map(|b| b.to_ascii_lowercase());
-
-    for &p in normalized_pattern {
-        if text_iter.next() != Some(p) {
-            return false;
-        }
-    }
-
-    text_iter.next().is_none()
+    iter_normalized_ascii(text).eq(normalized_pattern.iter().copied())
 }
 
 /// Helper to check if a haystack contains a needle, ignoring case.
@@ -175,14 +206,14 @@ fn matches_normalized_ascii(text: &str, normalized_pattern: &[u8]) -> bool {
 fn contains_ignore_case(haystack: &str, needle: &str) -> bool {
     // For tests, heap allocation is acceptable to keep test code simple
     let needle_chars: Vec<char> = needle.chars().flat_map(char::to_lowercase).collect();
-    contains_ignore_case_char_slice(haystack, &needle_chars)
+    contains_lowercase_needle_chars(haystack, &needle_chars)
 }
 
 /// Helper to check if a haystack contains a needle (pre-normalized as byte slice).
 ///
 /// Optimized for ASCII-only haystack and needle.
 /// Avoids `char` decoding overhead.
-fn contains_ignore_case_bytes(haystack: &str, needle: &[u8]) -> bool {
+fn contains_lowercase_needle_bytes(haystack: &str, needle: &[u8]) -> bool {
     if needle.is_empty() {
         return true;
     }
@@ -210,7 +241,7 @@ fn contains_ignore_case_bytes(haystack: &str, needle: &[u8]) -> bool {
 /// Helper to check if a Unicode haystack contains an ASCII needle, ignoring case.
 ///
 /// Avoids allocating a `Vec<char>` for the needle when the query is ASCII.
-fn contains_ignore_case_mixed(haystack: &str, needle: &[u8]) -> bool {
+fn contains_lowercase_needle_mixed(haystack: &str, needle: &[u8]) -> bool {
     if needle.is_empty() {
         return true;
     }
@@ -254,7 +285,7 @@ fn contains_ignore_case_mixed(haystack: &str, needle: &[u8]) -> bool {
 /// Helper to check if a haystack contains a needle (pre-normalized as char slice).
 ///
 /// This avoids re-normalizing the needle for every position in the haystack.
-fn contains_ignore_case_char_slice(haystack: &str, needle: &[char]) -> bool {
+fn contains_lowercase_needle_chars(haystack: &str, needle: &[char]) -> bool {
     if needle.is_empty() {
         return true;
     }
@@ -417,19 +448,7 @@ impl InsultBank {
 
         if insult.is_ascii() {
             let mut buffer = [0u8; NORM_BUFFER_SIZE];
-            let mut len = 0;
-
-            for b in insult.bytes() {
-                if b.is_ascii_alphanumeric() {
-                    if len >= NORM_BUFFER_SIZE {
-                        // Input is way longer than any valid insult (even normalized).
-                        // Fail early.
-                        return None;
-                    }
-                    buffer[len] = b.to_ascii_lowercase();
-                    len += 1;
-                }
-            }
+            let len = fill_buffer_normalized(insult, &mut buffer)?;
             let snapshot = &buffer[..len];
 
             return self
@@ -473,16 +492,7 @@ impl InsultBank {
         // If query is ASCII, we can use a faster byte-based search path.
         if query.is_ascii() {
             let mut buffer = [0u8; BUFFER_SIZE];
-            let mut len = 0;
-
-            for b in query.bytes().take(MAX_SEARCH_QUERY_LENGTH) {
-                if len < BUFFER_SIZE {
-                    buffer[len] = b.to_ascii_lowercase();
-                    len += 1;
-                } else {
-                    break;
-                }
-            }
+            let len = fill_buffer_lowercase(query, &mut buffer, MAX_SEARCH_QUERY_LENGTH);
             let query_bytes = &buffer[..len];
 
             return self
@@ -490,34 +500,21 @@ impl InsultBank {
                 .iter()
                 .filter(|pair| {
                     if pair.insult.is_ascii() {
-                        contains_ignore_case_bytes(pair.insult, query_bytes)
+                        contains_lowercase_needle_bytes(pair.insult, query_bytes)
                     } else {
-                        contains_ignore_case_mixed(pair.insult, query_bytes)
+                        contains_lowercase_needle_mixed(pair.insult, query_bytes)
                     }
                 })
                 .collect();
         }
 
         let mut buffer = ['\0'; BUFFER_SIZE];
-        let mut len = 0;
-
-        for c in query
-            .chars()
-            .take(MAX_SEARCH_QUERY_LENGTH)
-            .flat_map(char::to_lowercase)
-        {
-            if len < BUFFER_SIZE {
-                buffer[len] = c;
-                len += 1;
-            } else {
-                break;
-            }
-        }
+        let len = fill_buffer_lowercase_chars(query, &mut buffer, MAX_SEARCH_QUERY_LENGTH);
         let query_chars = &buffer[..len];
 
         self.pairs
             .iter()
-            .filter(|pair| contains_ignore_case_char_slice(pair.insult, query_chars))
+            .filter(|pair| contains_lowercase_needle_chars(pair.insult, query_chars))
             .collect()
     }
 
