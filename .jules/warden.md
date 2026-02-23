@@ -51,3 +51,11 @@
 **2026-03-03 - DoS: Unbounded Allocation in ToolAction Deserialization**
 **Threat:** The `LossyStringVisitor` in `src/server/action.rs` blindly allocated full strings from input, even if they exceeded `MAX_INPUT_LENGTH`. This allowed an attacker to cause memory exhaustion by sending a massive JSON string (e.g., 1GB), which would be allocated on the heap before validation could reject it.
 **Defense:** Updated `LossyStringVisitor` to truncate input strings to `MAX_INPUT_LENGTH + 1` during deserialization. This ensures the validation logic still triggers "Input too long" error, but prevents the massive allocation.
+
+**2026-03-04 - DoS: CPU Exhaustion in LossyStringVisitor**
+**Threat:** The `LossyStringVisitor` iterated through massive JSON arrays and maps when expecting a string, performing useless work (CPU burn) before returning an empty string. An attacker could send a JSON with 1M+ nulls in a string field to spike CPU usage.
+**Defense:** Updated `visit_seq` and `visit_map` in `src/server/action.rs` to immediately return an empty string without iterating the input. Benchmarks showed a speedup from ~46ms to ~7ms for 1M items.
+
+**2026-03-04 - DoS: Redundant Session ID Allocation**
+**Threat:** `InsultServer` cloned the session ID string from `runtime.session_id()` even though it owned the `Option<String>`, causing an unnecessary allocation per request. While minor, combined with massive session IDs (before validation), this contributed to memory pressure.
+**Defense:** Removed the `.clone()` call in `src/server/mod.rs` and consumed the owned `Option` directly using `unwrap_or_else`.
