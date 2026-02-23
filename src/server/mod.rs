@@ -21,20 +21,17 @@ use rust_mcp_sdk::schema::{
     CallToolRequestParams, CallToolResult, ListToolsResult, PaginatedRequestParams, RpcError,
     TextContent,
 };
-use tokio::sync::Mutex;
-use tracing::{info, warn};
 
-use crate::announcer::Announcer;
-use crate::arena::{Arena, ArenaError, ArenaOutcome, PlayerInput, SessionId};
-use crate::duel::{DuelStateView, Duelist};
+use crate::arena::{ArenaError, SessionId};
 
 pub mod action;
 pub mod constants;
+pub mod controller;
 pub mod notifications;
 pub mod response;
 
 use action::ToolAction;
-use notifications::NotificationManager;
+use controller::GameController;
 pub use response::DuelResponse;
 
 /// MCP server for insult sword fighting with turn notifications.
@@ -89,8 +86,7 @@ pub use response::DuelResponse;
 /// ```
 #[derive(Clone)]
 pub struct InsultServer {
-    arena: Arc<Mutex<Arena>>,
-    notifications: Arc<NotificationManager>,
+    pub(crate) controller: GameController,
 }
 
 impl InsultServer {
@@ -101,54 +97,14 @@ impl InsultServer {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            arena: Arc::new(Mutex::new(Arena::new())),
-            notifications: Arc::new(NotificationManager::new()),
+            controller: GameController::new(),
         }
     }
 
     /// Sets the `HyperRuntime` for sending notifications.
     /// Call this after `server.start_runtime()` returns.
     pub async fn set_runtime(&self, runtime: Arc<HyperRuntime>) {
-        self.notifications.set_runtime(runtime).await;
-    }
-
-    /// Helper to execute a state-changing action on the arena.
-    ///
-    /// Handles locking, error mapping, logging, turn notifications, and response formatting.
-    async fn execute_turn_action<F>(&self, context: &str, action: F) -> DuelResponse
-    where
-        F: FnOnce(&mut Arena) -> Result<(ArenaOutcome, DuelStateView), ArenaError>,
-    {
-        let mut arena = self.arena.lock().await;
-        match action(&mut arena) {
-            Ok((outcome, view)) => {
-                // Specialized logging based on outcome
-                if let ArenaOutcome::InsultThrown { ref insult } = outcome {
-                    info!("🗣️  INSULT: {:?}", insult);
-                }
-
-                let message = Announcer::announce(&outcome, Some(&view));
-
-                // Log result for completed exchanges
-                if let ArenaOutcome::ExchangeProcessed { .. } = outcome {
-                    info!("   Result: {:?}", message);
-                }
-
-                // Release lock before broadcasting to avoid holding it during network IO
-                drop(arena);
-
-                // Only notify if the game is still active
-                if view.phase != "finished" {
-                    self.notifications.notify_turn(&view).await;
-                }
-
-                DuelResponse::success(message, view)
-            }
-            Err(e) => {
-                warn!("❌ {} error: {:?}", context, e);
-                DuelResponse::error(e.to_string())
-            }
-        }
+        self.controller.set_runtime(runtime).await;
     }
 }
 
@@ -163,96 +119,6 @@ use tools::{
     tool_get_duel_state, tool_get_hint, tool_list_insults, tool_register_as_challenger,
     tool_register_as_defender, tool_respond, tool_start_duel, tool_throw_insult,
 };
-
-impl InsultServer {
-    async fn handle_start_duel(&self) -> DuelResponse {
-        info!("⚔️  NEW DUEL STARTED!");
-        info!("   Challenger vs Defender - First to 3 wins!");
-        info!("   Challenger attacks first...");
-
-        self.execute_turn_action("Start duel", Arena::start_duel)
-            .await
-    }
-
-    async fn handle_register(&self, role: Duelist, session_id: SessionId) -> DuelResponse {
-        let mut arena = self.arena.lock().await;
-
-        match arena.register(role, session_id.clone()) {
-            Ok((outcome, state)) => {
-                info!("🎭 Session {:?} registered as {}", session_id, role);
-                DuelResponse::success_with_role(
-                    Announcer::announce(&outcome, Some(&state)),
-                    state,
-                    &role.to_string(),
-                )
-            }
-            Err(e) => DuelResponse::error(e.to_string()),
-        }
-    }
-
-    async fn handle_register_as_challenger(&self, session_id: SessionId) -> DuelResponse {
-        self.handle_register(Duelist::Challenger, session_id).await
-    }
-
-    async fn handle_register_as_defender(&self, session_id: SessionId) -> DuelResponse {
-        self.handle_register(Duelist::Defender, session_id).await
-    }
-
-    async fn handle_get_duel_state(&self, session_id: Option<SessionId>) -> DuelResponse {
-        let arena = self.arena.lock().await;
-
-        match arena.get_duel_state(session_id.as_ref()) {
-            Ok((view, role)) => {
-                if let Some(role_name) = role {
-                    DuelResponse::success_with_role("Current duel state:", view, &role_name)
-                } else {
-                    DuelResponse::success("Current duel state:", view)
-                }
-            }
-            Err(e) => DuelResponse::error(e.to_string()),
-        }
-    }
-
-    async fn handle_list_insults(&self) -> DuelResponse {
-        let arena = self.arena.lock().await;
-        match arena.list_insults() {
-            Ok(insults) => DuelResponse::with_insults(
-                "Available insults for the duel:",
-                insults.into_iter().map(String::from).collect(),
-            ),
-            Err(e) => DuelResponse::error(e.to_string()),
-        }
-    }
-
-    async fn handle_throw_insult(
-        &self,
-        session_id: SessionId,
-        insult: PlayerInput,
-    ) -> DuelResponse {
-        // ⚡ Bolt Optimization: Pass ownership of 'insult' to Arena to avoid allocation.
-        self.execute_turn_action("Insult", |arena| arena.throw_insult(&session_id, insult))
-            .await
-    }
-
-    async fn handle_respond(&self, session_id: SessionId, comeback: PlayerInput) -> DuelResponse {
-        info!("💬 COMEBACK ATTEMPT: {:?}", comeback);
-
-        // ⚡ Bolt Optimization: Pass ownership of 'comeback' to Arena to avoid allocation.
-        self.execute_turn_action("Respond", |arena| arena.respond(&session_id, comeback))
-            .await
-    }
-
-    async fn handle_get_hint(&self, session_id: SessionId) -> DuelResponse {
-        let arena = self.arena.lock().await;
-
-        match arena.get_hint(&session_id) {
-            Ok((hint, insult)) => {
-                DuelResponse::with_hint("Here's a hint for the comeback:", hint, insult)
-            }
-            Err(e) => DuelResponse::error(e.to_string()),
-        }
-    }
-}
 
 #[async_trait]
 impl ServerHandler for InsultServer {
@@ -302,16 +168,16 @@ impl ServerHandler for InsultServer {
 
         // Execute the action
         let response = match action {
-            ToolAction::StartDuel => self.handle_start_duel().await,
-            ToolAction::RegisterChallenger => self.handle_register_as_challenger(session_id).await,
-            ToolAction::RegisterDefender => self.handle_register_as_defender(session_id).await,
-            ToolAction::GetDuelState => self.handle_get_duel_state(Some(session_id)).await,
-            ToolAction::ListInsults => self.handle_list_insults().await,
+            ToolAction::StartDuel => self.controller.start_duel().await,
+            ToolAction::RegisterChallenger => self.controller.register_challenger(session_id).await,
+            ToolAction::RegisterDefender => self.controller.register_defender(session_id).await,
+            ToolAction::GetDuelState => self.controller.get_duel_state(Some(session_id)).await,
+            ToolAction::ListInsults => self.controller.list_insults().await,
             ToolAction::ThrowInsult { insult } => {
-                self.handle_throw_insult(session_id, insult).await
+                self.controller.throw_insult(session_id, insult).await
             }
-            ToolAction::Respond { comeback } => self.handle_respond(session_id, comeback).await,
-            ToolAction::GetHint => self.handle_get_hint(session_id).await,
+            ToolAction::Respond { comeback } => self.controller.respond(session_id, comeback).await,
+            ToolAction::GetHint => self.controller.get_hint(session_id).await,
         };
 
         Ok(CallToolResult {
@@ -327,6 +193,7 @@ impl ServerHandler for InsultServer {
 #[allow(clippy::unwrap_used)]
 mod security_tests {
     use super::*;
+    use crate::arena::PlayerInput;
     use std::sync::{Arc, Mutex};
 
     #[derive(Clone, Default)]
@@ -359,7 +226,7 @@ mod security_tests {
         let _guard = tracing::subscriber::set_default(subscriber);
 
         let server = InsultServer::new();
-        server.handle_start_duel().await;
+        server.controller.start_duel().await;
 
         // Malicious input with newline injection
         // This will fail validation (unknown insult) but be logged in the error path
@@ -368,7 +235,7 @@ mod security_tests {
         let session_id = SessionId::try_from("attacker".to_string()).unwrap();
         let insult = PlayerInput::try_from(malicious_insult.to_string()).unwrap();
 
-        let _ = server.handle_throw_insult(session_id, insult).await;
+        let _ = server.controller.throw_insult(session_id, insult).await;
 
         let logs = buffer.0.lock().unwrap().join("");
 
@@ -386,7 +253,7 @@ mod tests {
     #[tokio::test]
     async fn start_duel_creates_new_game() {
         let server = InsultServer::new();
-        let response = server.handle_start_duel().await;
+        let response = server.controller.start_duel().await;
         assert!(response.message.contains("En garde"));
         assert!(response.success);
     }
@@ -394,7 +261,7 @@ mod tests {
     #[tokio::test]
     async fn get_state_without_duel_returns_error() {
         let server = InsultServer::new();
-        let response = server.handle_get_duel_state(None).await;
+        let response = server.controller.get_duel_state(None).await;
         assert!(!response.success);
         assert!(response.message.contains("No duel in progress"));
     }
