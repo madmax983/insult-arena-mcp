@@ -459,13 +459,12 @@ impl Arena {
             return Err(ArenaError::NoPendingInsult);
         };
 
-        let Some(comeback) = duel.insult_bank().find_comeback(insult) else {
+        let Some(pair) = duel.insult_bank().find_pair(insult) else {
             return Err(ArenaError::ComebackNotFound);
         };
 
-        // Give a masked hint (Hangman style)
-        let hint = crate::InsultBank::get_hint_masked(comeback);
-        Ok((hint, insult.to_string()))
+        // ⚡ Bolt Optimization: Use pre-computed hint (zero allocation masking).
+        Ok((pair.hint.to_string(), insult.to_string()))
     }
 }
 

@@ -18,6 +18,12 @@ pub struct InsultPair {
     pub insult: &'static str,
     /// The correct comeback that defeats the insult.
     pub comeback: &'static str,
+    /// A pre-computed hint for the comeback (masked string).
+    ///
+    /// The hint is masked so that only the first letter of each word is visible.
+    /// This field is skipped during serialization to avoid bloating the API response.
+    #[serde(default, skip)]
+    pub hint: &'static str,
 }
 
 const MAX_SEARCH_QUERY_LENGTH: usize = 128;
@@ -26,66 +32,82 @@ const CLASSIC_INSULTS: &[InsultPair] = &[
     InsultPair {
         insult: "You fight like a dairy farmer!",
         comeback: "How appropriate. You fight like a cow!",
+        hint: "H__ a__________. Y__ f____ l___ a c__!",
     },
     InsultPair {
         insult: "This is the END for you, you gutter-crawling cur!",
         comeback: "And I've got a little TIP for you, get the POINT?",
+        hint: "A__ I'__ g__ a l_____ T__ f__ y__, g__ t__ P____?",
     },
     InsultPair {
         insult: "I've spoken with apes more polite than you!",
         comeback: "I'm glad to hear you attended your family reunion!",
+        hint: "I'_ g___ t_ h___ y__ a_______ y___ f_____ r______!",
     },
     InsultPair {
         insult: "Soon you'll be wearing my sword like a shish kebab!",
         comeback: "First you'd better stop waving it like a feather duster.",
+        hint: "F____ y__'_ b_____ s___ w_____ i_ l___ a f______ d_____.",
     },
     InsultPair {
         insult: "People fall at my feet when they see me coming!",
         comeback: "Even BEFORE they smell your breath?",
+        hint: "E___ B_____ t___ s____ y___ b_____?",
     },
     InsultPair {
         insult: "I'm not going to take your insolence sitting down!",
         comeback: "Your hemorrhoids are flaring up again eh?",
+        hint: "Y___ h__________ a__ f______ u_ a____ e_?",
     },
     InsultPair {
         insult: "I once owned a dog that was smarter than you.",
         comeback: "He must have taught you everything you know.",
+        hint: "H_ m___ h___ t_____ y__ e_________ y__ k___.",
     },
     InsultPair {
         insult: "Nobody's ever drawn blood from me and nobody ever will!",
         comeback: "You run THAT fast?",
+        hint: "Y__ r__ T___ f___?",
     },
     InsultPair {
         insult: "Have you stopped wearing diapers yet?",
         comeback: "Why? Did you want to borrow one?",
+        hint: "W__? D__ y__ w___ t_ b_____ o__?",
     },
     InsultPair {
         insult: "There are no words for how disgusting you are.",
         comeback: "Yes, there are. You just never learned them.",
+        hint: "Y__, t____ a__. Y__ j___ n____ l______ t___.",
     },
     InsultPair {
         insult: "You make me want to puke.",
         comeback: "You make me think somebody already did.",
+        hint: "Y__ m___ m_ t____ s_______ a______ d__.",
     },
     InsultPair {
         insult: "My handkerchief will wipe up your blood!",
         comeback: "So you got that job as a janitor, after all.",
+        hint: "S_ y__ g__ t___ j__ a_ a j______, a____ a__.",
     },
     InsultPair {
         insult: "I got this scar on my face during a mighty struggle!",
         comeback: "I hope now you've learned to stop picking your nose.",
+        hint: "I h___ n__ y__'__ l______ t_ s___ p______ y___ n___.",
     },
     InsultPair {
         insult: "I've heard you are a contemptible sneak.",
         comeback: "Too bad no one's ever heard of YOU at all.",
+        hint: "T__ b__ n_ o__'_ e___ h____ o_ Y__ a_ a__.",
     },
     InsultPair {
         insult: "You're no match for my brains, you poor fool.",
         comeback: "I'd be in real trouble if you ever used them.",
+        hint: "I'_ b_ i_ r___ t______ i_ y__ e___ u___ t___.",
     },
     InsultPair {
         insult: "You have the manners of a beggar.",
         comeback: "I wanted to make sure you'd feel comfortable with me.",
+        hint: "I w_____ t_ m___ s___ y__'_ f___ c__________ w___ m_.",
     },
 ];
 
@@ -808,6 +830,20 @@ mod sentry_tests {
         assert!(!matches_normalized_ascii("ab", pattern));
         assert!(!matches_normalized_ascii("abcd", pattern));
         assert!(!matches_normalized_ascii("xyz", pattern));
+    }
+
+    #[test]
+    fn test_precomputed_hints_match_legacy_logic() {
+        // ⚡ Bolt Verification: Ensure pre-computed hints are correct
+        let bank = InsultBank::new();
+        for pair in bank.all_pairs() {
+            let legacy = InsultBank::get_hint_masked(pair.comeback);
+            assert_eq!(
+                pair.hint, legacy,
+                "Pre-computed hint mismatch for '{}'",
+                pair.comeback
+            );
+        }
     }
 }
 

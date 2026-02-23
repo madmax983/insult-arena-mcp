@@ -58,8 +58,9 @@ impl Parrot {
     /// ```
     #[must_use]
     pub fn hint(&self, insult: &str) -> Option<String> {
-        let comeback = self.bank.find_comeback(insult)?;
-        Some(InsultBank::get_hint_masked(comeback))
+        let pair = self.bank.find_pair(insult)?;
+        // ⚡ Bolt Optimization: Use pre-computed hint (zero allocation masking).
+        Some(pair.hint.to_string())
     }
 
     /// SQUAWK! Returns a random pirate sound.
