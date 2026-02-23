@@ -1,3 +1,8 @@
+//! Tests for `DuelStateView` serialization and correctness.
+//!
+//! Verifies that the public view of the duel state accurately reflects
+//! the internal game state and serializes correctly for the API.
+
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
 

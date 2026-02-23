@@ -1,3 +1,8 @@
+//! Integration tests for the Weather System.
+//!
+//! Verifies that weather conditions correctly modify game mechanics,
+//! specifically audience hype reactions.
+
 #![cfg(feature = "nova")]
 
 use insult_arena_mcp::Duelist;

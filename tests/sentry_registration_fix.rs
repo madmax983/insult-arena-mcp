@@ -1,3 +1,7 @@
+//! Regression test for registration logic.
+//!
+//! Verifies that players cannot register for a duel that hasn't started yet.
+
 #![allow(clippy::unwrap_used)]
 use insult_arena_mcp::{
     Arena,

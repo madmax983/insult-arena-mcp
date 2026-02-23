@@ -1,3 +1,8 @@
+//! Full integration test for a complete duel.
+//!
+//! Simulates a full game from start to finish, checking state transitions,
+//! scores, announcer messages (like Match Point), and victory conditions.
+
 use insult_arena_mcp::arena::{PlayerInput, SessionId};
 use insult_arena_mcp::{Announcer, Arena, ArenaOutcome};
 

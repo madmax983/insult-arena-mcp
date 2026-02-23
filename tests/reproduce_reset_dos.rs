@@ -1,3 +1,8 @@
+//! Regression test for active duel protection.
+//!
+//! Ensures that an active duel cannot be reset by a new `start_duel` call,
+//! preventing Griefing/DoS attacks where a spectator interrupts a game.
+
 use insult_arena_mcp::arena::{ArenaError, PlayerInput, SessionId};
 use insult_arena_mcp::{Arena, ArenaOutcome, Duelist};
 

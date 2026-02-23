@@ -1,3 +1,8 @@
+//! Tests for stale duel cleanup.
+//!
+//! Verifies that duels can be reset after a timeout, preventing the server
+//! from getting stuck in an abandoned state.
+
 use insult_arena_mcp::Arena;
 use insult_arena_mcp::arena::ArenaError;
 use std::thread;
