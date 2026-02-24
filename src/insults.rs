@@ -174,7 +174,12 @@ fn matches_normalized_ascii(text: &str, normalized_pattern: &[u8]) -> bool {
 #[cfg(test)]
 fn contains_ignore_case(haystack: &str, needle: &str) -> bool {
     // For tests, heap allocation is acceptable to keep test code simple
-    let needle_chars: Vec<char> = needle.chars().flat_map(char::to_lowercase).collect();
+    // 🛡️ SENTRY: Normalize needle (filter non-alphanumeric) to match haystack normalization.
+    let needle_chars: Vec<char> = needle
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect();
     contains_ignore_case_char_slice(haystack, &needle_chars)
 }
 
@@ -187,24 +192,24 @@ fn contains_ignore_case_bytes(haystack: &str, needle: &[u8]) -> bool {
         return true;
     }
 
-    let haystack_bytes = haystack.as_bytes();
-    if haystack_bytes.len() < needle.len() {
+    // 🛡️ SENTRY: Normalize haystack (filter non-alphanumeric) to match search query logic.
+    // Buffer size 256 is sufficient for insults (~60 chars).
+    let mut buffer = [0u8; 256];
+    let mut len = 0;
+
+    for b in haystack.bytes() {
+        if b.is_ascii_alphanumeric() && len < 256 {
+            buffer[len] = b.to_ascii_lowercase();
+            len += 1;
+        }
+    }
+    let haystack_norm = &buffer[..len];
+
+    if haystack_norm.len() < needle.len() {
         return false;
     }
 
-    // Manual sliding window to find match
-    for i in 0..=(haystack_bytes.len() - needle.len()) {
-        let sub = &haystack_bytes[i..i + needle.len()];
-        // Check match
-        if sub
-            .iter()
-            .zip(needle)
-            .all(|(h, n)| h.to_ascii_lowercase() == *n)
-        {
-            return true;
-        }
-    }
-    false
+    haystack_norm.windows(needle.len()).any(|w| w == needle)
 }
 
 /// Helper to check if a Unicode haystack contains an ASCII needle, ignoring case.
@@ -215,40 +220,25 @@ fn contains_ignore_case_mixed(haystack: &str, needle: &[u8]) -> bool {
         return true;
     }
 
-    let mut haystack_iter = haystack.chars();
+    // 🛡️ SENTRY: Normalize haystack (filter non-alphanumeric).
+    // Note: ASCII needle can only match ASCII chars in haystack.
+    // So we can just filter for ASCII alphanumeric in haystack too.
+    let mut buffer = [0u8; 256];
+    let mut len = 0;
 
-    loop {
-        let mut check_iter = haystack_iter.clone();
-        let mut matched = true;
-
-        for &n in needle {
-            if let Some(c) = check_iter.next() {
-                if c.is_ascii() {
-                    if c.to_ascii_lowercase() as u8 != n {
-                        matched = false;
-                        break;
-                    }
-                } else {
-                    // Unicode char cannot match ASCII needle byte
-                    matched = false;
-                    break;
-                }
-            } else {
-                matched = false;
-                break;
-            }
-        }
-
-        if matched {
-            return true;
-        }
-
-        if haystack_iter.next().is_none() {
-            break;
+    for c in haystack.chars() {
+        if c.is_ascii_alphanumeric() && len < 256 {
+            buffer[len] = c.to_ascii_lowercase() as u8;
+            len += 1;
         }
     }
+    let haystack_norm = &buffer[..len];
 
-    false
+    if haystack_norm.len() < needle.len() {
+        return false;
+    }
+
+    haystack_norm.windows(needle.len()).any(|w| w == needle)
 }
 
 /// Helper to check if a haystack contains a needle (pre-normalized as char slice).
@@ -259,29 +249,28 @@ fn contains_ignore_case_char_slice(haystack: &str, needle: &[char]) -> bool {
         return true;
     }
 
-    let mut haystack_iter = haystack.chars().flat_map(char::to_lowercase);
+    // 🛡️ SENTRY: Normalize haystack (filter non-alphanumeric).
+    // Buffer for normalized haystack chars.
+    let mut buffer = ['\0'; 256];
+    let mut len = 0;
 
-    loop {
-        let mut check_iter = haystack_iter.clone();
-
-        let mut matched = true;
-        for &n in needle {
-            if check_iter.next() != Some(n) {
-                matched = false;
-                break;
-            }
-        }
-
-        if matched {
-            return true;
-        }
-
-        if haystack_iter.next().is_none() {
-            break;
+    for c in haystack
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+    {
+        if len < 256 {
+            buffer[len] = c;
+            len += 1;
         }
     }
+    let haystack_norm = &buffer[..len];
 
-    false
+    if haystack_norm.len() < needle.len() {
+        return false;
+    }
+
+    haystack_norm.windows(needle.len()).any(|w| w == needle)
 }
 
 /// Bank of classic insults for sword fighting.
@@ -476,11 +465,14 @@ impl InsultBank {
             let mut len = 0;
 
             for b in query.bytes().take(MAX_SEARCH_QUERY_LENGTH) {
-                if len < BUFFER_SIZE {
-                    buffer[len] = b.to_ascii_lowercase();
-                    len += 1;
-                } else {
-                    break;
+                // 🛡️ SENTRY: Filter non-alphanumeric characters to match find_pair logic
+                if b.is_ascii_alphanumeric() {
+                    if len < BUFFER_SIZE {
+                        buffer[len] = b.to_ascii_lowercase();
+                        len += 1;
+                    } else {
+                        break;
+                    }
                 }
             }
             let query_bytes = &buffer[..len];
@@ -504,6 +496,7 @@ impl InsultBank {
         for c in query
             .chars()
             .take(MAX_SEARCH_QUERY_LENGTH)
+            .filter(|c| c.is_alphanumeric())
             .flat_map(char::to_lowercase)
         {
             if len < BUFFER_SIZE {

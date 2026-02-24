@@ -171,3 +171,22 @@ fn test_audience_history_limit_strict() {
         "Should cheer reused insult after eviction"
     );
 }
+
+#[test]
+fn test_search_insults_ignores_punctuation() {
+    use insult_arena_mcp::InsultBank;
+    let bank = InsultBank::new();
+
+    // "dairy-farmer" should match "You fight like a dairy farmer!"
+    // Current logic fails this because it compares raw query "dairy-farmer" against "You fight like a dairy farmer!"
+    // Expected logic: normalize both (strip punctuation) and compare.
+
+    let results = bank.search_insults("dairy-farmer");
+    assert!(
+        !results.is_empty(),
+        "Should find 'dairy farmer' even with hyphen in query"
+    );
+
+    let results = bank.search_insults("dairy farmer");
+    assert!(!results.is_empty(), "Should find 'dairy farmer' with space");
+}
