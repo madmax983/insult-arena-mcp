@@ -284,9 +284,10 @@ impl ServerHandler for InsultServer {
     ) -> Result<CallToolResult, CallToolError> {
         // Get session ID for role tracking
         let session_id_opt = runtime.session_id();
-        let session_id_str = session_id_opt
-            .clone()
-            .unwrap_or_else(|| "unknown".to_string());
+        // 🛡️ HARDENING: Avoid redundant allocation.
+        // session_id_opt is already an owned Option<String>, so we don't need to clone it
+        // before unwrapping. This saves one allocation per request.
+        let session_id_str = session_id_opt.unwrap_or_else(|| "unknown".to_string());
 
         // Validate session ID immediately
         let session_id = SessionId::try_from(session_id_str).map_err(|e| match e {

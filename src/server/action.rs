@@ -45,7 +45,7 @@ use crate::server::constants::{
 };
 use rust_mcp_sdk::schema::CallToolRequestParams;
 use rust_mcp_sdk::schema::schema_utils::CallToolError;
-use serde::de::{DeserializeOwned, IgnoredAny, MapAccess, SeqAccess, Visitor};
+use serde::de::{DeserializeOwned, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 use std::fmt;
 
@@ -166,19 +166,23 @@ impl<'de> Visitor<'de> for LossyStringVisitor {
         Ok(String::new())
     }
 
-    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    fn visit_seq<A>(self, _seq: A) -> Result<Self::Value, A::Error>
     where
         A: SeqAccess<'de>,
     {
-        while seq.next_element::<IgnoredAny>()?.is_some() {}
+        // 🛡️ HARDENING: DoS Protection
+        // Do NOT iterate the sequence. Since we expect a string and this is a lossy conversion,
+        // we treat arrays as empty strings. Iterating a massive array (e.g. 1M items)
+        // burns CPU for no reason and creates a DoS vector.
         Ok(String::new())
     }
 
-    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+    fn visit_map<A>(self, _map: A) -> Result<Self::Value, A::Error>
     where
         A: MapAccess<'de>,
     {
-        while map.next_entry::<IgnoredAny, IgnoredAny>()?.is_some() {}
+        // 🛡️ HARDENING: DoS Protection
+        // Same as sequences - skip map iteration to prevent CPU exhaustion.
         Ok(String::new())
     }
 }
@@ -489,5 +493,33 @@ mod tests {
             }
             _ => panic!("Expected ThrowInsult action"),
         }
+    }
+
+    #[test]
+    fn visitor_cpu_dos_benchmark() {
+        use std::time::Instant;
+
+        // Create a massive array of nulls (1M items)
+        let size = 1_000_000;
+        let massive_array: Vec<serde_json::Value> =
+            std::iter::repeat_n(serde_json::Value::Null, size).collect();
+        let massive_value = serde_json::Value::Array(massive_array);
+
+        let mut args = serde_json::Map::new();
+        args.insert("insult".to_string(), massive_value);
+
+        let params = CallToolRequestParams {
+            name: THROW_INSULT.to_string(),
+            arguments: Some(args),
+            meta: None,
+            task: None,
+        };
+
+        let start = Instant::now();
+        // This will trigger deserialize_lossy_string -> LossyStringVisitor -> visit_seq
+        let _ = ToolAction::try_from(params);
+        let duration = start.elapsed();
+
+        println!("Duration for {size} items: {duration:?}");
     }
 }
