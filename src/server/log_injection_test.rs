@@ -38,10 +38,10 @@ fn test_log_injection_throw_insult() {
 
         rt.block_on(async {
             let server = InsultServer::new();
-            let _ = server.handle_start_duel().await;
+            let _ = server.controller.start_duel().await;
 
             let session = SessionId::try_from("session".to_string()).unwrap();
-            let _ = server.handle_register_as_challenger(session.clone()).await;
+            let _ = server.controller.register_challenger(session.clone()).await;
 
             // We attempt to throw an insult.
             // If the insult is unknown, it returns an error containing the input.
@@ -52,7 +52,7 @@ fn test_log_injection_throw_insult() {
             let input = PlayerInput::try_from(malicious_input.to_string()).unwrap();
 
             tracing::warn!("TEST LOG");
-            let _ = server.handle_throw_insult(session, input).await;
+            let _ = server.controller.throw_insult(session, input).await;
         });
     });
 
