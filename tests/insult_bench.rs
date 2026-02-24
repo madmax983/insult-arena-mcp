@@ -1,3 +1,8 @@
+//! Tests for `InsultBank` search optimizations and correctness.
+//!
+//! Verifies that insult searching works correctly across ASCII, Unicode,
+//! and edge cases, and that optimizations (like fast paths) don't break logic.
+
 use insult_arena_mcp::InsultBank;
 
 #[test]

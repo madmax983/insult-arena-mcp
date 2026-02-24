@@ -1,3 +1,8 @@
+//! Integration tests for the Insult Server.
+//!
+//! Tests the full server stack (except network layer) using a mock MCP runtime.
+//! Verifies tool execution, state management, and error handling.
+
 use async_trait::async_trait;
 use insult_arena_mcp::InsultServer;
 use rust_mcp_sdk::McpServer;

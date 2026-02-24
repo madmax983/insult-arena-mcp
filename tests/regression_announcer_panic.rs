@@ -1,3 +1,8 @@
+//! Regression tests for Announcer.
+//!
+//! Verifies that the Announcer does not panic under edge case conditions,
+//! such as 0 wins needed or malformed states.
+
 use insult_arena_mcp::{Announcer, ArenaOutcome, DuelStateView, Duelist, Exchange, ExchangeResult};
 use std::borrow::Cow;
 

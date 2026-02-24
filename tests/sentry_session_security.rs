@@ -1,3 +1,8 @@
+//! Security tests for session and role enforcement.
+//!
+//! Verifies that only registered sessions can act, and only in their assigned turn.
+//! prevents session hijacking and out-of-turn actions.
+
 #![allow(clippy::unwrap_used)]
 
 use insult_arena_mcp::Arena;

@@ -1,3 +1,7 @@
+//! `DoS` protection tests for the Dojo.
+//!
+//! Verifies that the Dojo mode enforces input limits to prevent memory exhaustion attacks.
+
 #![cfg(feature = "nova")]
 
 use insult_arena_mcp::arena::ArenaError;

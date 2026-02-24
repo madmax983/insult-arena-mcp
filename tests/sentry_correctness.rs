@@ -1,3 +1,8 @@
+//! Correctness tests for experimental features.
+//!
+//! Verifies logic for Audience reactions, history limits, and Duel state transitions
+//! to ensure invariants are maintained.
+
 #![cfg(feature = "nova")]
 #![allow(clippy::unwrap_used)]
 
